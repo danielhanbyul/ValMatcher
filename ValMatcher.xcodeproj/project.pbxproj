@@ -43,6 +43,9 @@
 		A9551D102C12BC4B0002AF0B /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = A9551D0F2C12BC4B0002AF0B /* FirebaseStorage */; };
 		A9551D122C12BC4B0002AF0B /* FirebaseStorageCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = A9551D112C12BC4B0002AF0B /* FirebaseStorageCombine-Community */; };
 		A9551D142C12BC4B0002AF0B /* FirebaseVertexAI-Preview in Frameworks */ = {isa = PBXBuildFile; productRef = A9551D132C12BC4B0002AF0B /* FirebaseVertexAI-Preview */; };
+		A958582E2C13F63D00D68763 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A958582D2C13F63D00D68763 /* LoginView.swift */; };
+		A95858302C13F66000D68763 /* SignUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A958582F2C13F66000D68763 /* SignUpView.swift */; };
+		A95858322C13F76100D68763 /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95858312C13F76100D68763 /* NetworkManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +77,9 @@
 		A9551CC92C12BAF50002AF0B /* ValMatcherUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ValMatcherUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A9551CCD2C12BAF50002AF0B /* ValMatcherUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValMatcherUITests.swift; sourceTree = "<group>"; };
 		A9551CCF2C12BAF50002AF0B /* ValMatcherUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValMatcherUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		A958582D2C13F63D00D68763 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		A958582F2C13F66000D68763 /* SignUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignUpView.swift; sourceTree = "<group>"; };
+		A95858312C13F76100D68763 /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -153,7 +159,9 @@
 			isa = PBXGroup;
 			children = (
 				A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */,
-				A9551CB42C12BAF30002AF0B /* ContentView.swift */,
+				A958582D2C13F63D00D68763 /* LoginView.swift */,
+				A958582F2C13F66000D68763 /* SignUpView.swift */,
+				A95858312C13F76100D68763 /* NetworkManager.swift */,
 				A9551CB62C12BAF40002AF0B /* Assets.xcassets */,
 				A9551CB82C12BAF40002AF0B /* Preview Content */,
 				2726BC6C2C12CA4A001F6885 /* profilequestion .swift */,
@@ -165,6 +173,7 @@
 			isa = PBXGroup;
 			children = (
 				A9551CB92C12BAF40002AF0B /* Preview Assets.xcassets */,
+				A9551CB42C12BAF30002AF0B /* ContentView.swift */,
 			);
 			path = "Preview Content";
 			sourceTree = "<group>";
@@ -349,6 +358,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A95858302C13F66000D68763 /* SignUpView.swift in Sources */,
+				A958582E2C13F63D00D68763 /* LoginView.swift in Sources */,
+				A95858322C13F76100D68763 /* NetworkManager.swift in Sources */,
 				A9551CB52C12BAF30002AF0B /* ContentView.swift in Sources */,
 				2726BC6D2C12CA4A001F6885 /* profilequestion .swift in Sources */,
 				A9551CB32C12BAF30002AF0B /* ValMatcherApp.swift in Sources */,
