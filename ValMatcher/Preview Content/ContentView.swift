@@ -6,10 +6,10 @@
 //
 
 import SwiftUI
+import Foundation
 
-// Model
-struct UserProfile: Identifiable {
-    var id = UUID()
+struct UserProfile: Identifiable, Codable {
+    var id: String = UUID().uuidString
     var name: String
     var rank: String
     var imageName: String
@@ -17,6 +17,7 @@ struct UserProfile: Identifiable {
     var server: String
     var bestClip: String
 }
+
 
 // View
 struct ContentView: View {
