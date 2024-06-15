@@ -30,8 +30,8 @@ struct QuestionsView: View {
         Question(text: "Who's your favorite agent to play in Valorant?", type: .multipleChoice(options: ["Jett", "Sage", "Phoenix", "Brimstone", "Viper", "Omen", "Cypher", "Reyna", "Killjoy", "Skye", "Yoru", "Astra", "KAY/O", "Chamber", "Neon", "Fade", "Harbor", "Gekko"])),
         Question(text: "Do you prefer playing as a Duelist, Initiator, Controller, or Sentinel?", type: .multipleChoice(options: ["Duelist", "Initiator", "Controller", "Sentinel"])),
         Question(text: "What’s your current rank in Valorant?", type: .text),
-        Question(text: "Do you enjoy playing Competitive, Unrated, Spike Rush, or Deathmatch the most?", type: .multipleChoice(options: ["Competitive", "Unrated", "Spike Rush", "Deathmatch"])),
-        Question(text: "How important is team communication to you during matches?", type: .text),
+        Question(text: "Favorite game mode?", type: .multipleChoice(options: ["Competitive", "Unrated", "Spike Rush", "Deathmatch"])),
+        Question(text: "What servers do you play on? (ex: NA, N. California)", type: .text),
         Question(text: "What's your favorite weapon skin in Valorant?", type: .text)
     ]
 
