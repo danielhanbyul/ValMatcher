@@ -26,35 +26,48 @@ struct DMHomeView: View {
                 LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
                     .edgesIgnoringSafeArea(.all)
 
-                List(chats) { chat in
-                    NavigationLink(destination: DM(matchID: chat.id ?? "")) {
-                        VStack(alignment: .leading) {
-                            Text("Chat with \(chat.user2)")
-                                .font(.custom("AvenirNext-Bold", size: 18))
-                                .foregroundColor(.white)
-                            Text("Last message at \(chat.timestamp.dateValue(), formatter: dateFormatter)")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
+                VStack {
+                    Text("Direct Messages")
+                        .font(.custom("AvenirNext-Bold", size: 28))
+                        .foregroundColor(.white)
+                        .padding(.top, 50)
+                        .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
+
+                    ScrollView {
+                        ForEach(chats) { chat in
+                            NavigationLink(destination: DM(matchID: chat.id ?? "")) {
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text("Chat with \(chat.user2)")
+                                            .font(.custom("AvenirNext-Bold", size: 18))
+                                            .foregroundColor(.white)
+                                        Text("Last message at \(chat.timestamp.dateValue(), formatter: dateFormatter)")
+                                            .font(.subheadline)
+                                            .foregroundColor(.gray)
+                                    }
+                                    .padding()
+                                    Spacer()
+                                }
+                                .background(Color.black.opacity(0.7))
+                                .cornerRadius(12)
+                                .padding(.horizontal)
+                                .padding(.vertical, 5)
+                                .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
+                            }
                         }
-                        .padding()
-                        .background(Color(.systemGray6).opacity(0.8))
-                        .cornerRadius(8)
-                        .shadow(radius: 5)
                     }
-                    .listRowBackground(Color.clear)
+                    .padding(.top, 10)
                 }
-                .navigationTitle("Direct Messages")
-                .listStyle(PlainListStyle())
-                .onAppear {
-                    if !isPreview() {
-                        loadChats()
-                    } else {
-                        // Load mock data for preview
-                        self.chats = [
-                            Chat(id: "1", user1: "user1", user2: "user2", timestamp: Timestamp(date: Date())),
-                            Chat(id: "2", user1: "user1", user2: "user3", timestamp: Timestamp(date: Date().addingTimeInterval(-86400)))
-                        ]
-                    }
+            }
+            .onAppear {
+                if !isPreview() {
+                    loadChats()
+                } else {
+                    // Load mock data for preview
+                    self.chats = [
+                        Chat(id: "1", user1: "user1", user2: "user2", timestamp: Timestamp(date: Date())),
+                        Chat(id: "2", user1: "user1", user2: "user3", timestamp: Timestamp(date: Date().addingTimeInterval(-86400)))
+                    ]
                 }
             }
         }

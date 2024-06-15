@@ -10,7 +10,6 @@ import Firebase
 import FirebaseStorage
 import FirebaseFirestore
 
-
 struct ProfileSetupView: View {
     @State private var firstName = ""
     @State private var lastName = ""
@@ -24,56 +23,36 @@ struct ProfileSetupView: View {
         VStack {
             Spacer()
             Text("Complete Your Profile")
-                .font(.custom("AvenirNext-Bold", size: 36))
+                .font(.custom("AvenirNext-Bold", size: 24))
                 .foregroundColor(Color(red: 0.98, green: 0.27, blue: 0.29))
-                .padding(.bottom, 40)
-                .shadow(color: Color(red: 0.86, green: 0.24, blue: 0.29), radius: 10, x: 0, y: 5)
+                .padding(.bottom, 20)
+                .shadow(color: Color(red: 0.86, green: 0.24, blue: 0.29), radius: 5, x: 0, y: 3)
 
             VStack(alignment: .leading, spacing: 15) {
-                Text("First Name")
-                    .foregroundColor(.white)
-                    .font(.headline)
-                TextField("Enter your first name", text: $firstName)
+                TextField("First Name", text: $firstName)
                     .padding()
                     .background(Color(.systemGray6).opacity(0.8))
                     .cornerRadius(8.0)
-                    .padding(.bottom, 20)
 
-                Text("Last Name")
-                    .foregroundColor(.white)
-                    .font(.headline)
-                TextField("Enter your last name", text: $lastName)
+                TextField("Last Name", text: $lastName)
                     .padding()
                     .background(Color(.systemGray6).opacity(0.8))
                     .cornerRadius(8.0)
-                    .padding(.bottom, 20)
 
-                Text("Age")
-                    .foregroundColor(.white)
-                    .font(.headline)
-                TextField("Enter your age", text: $age)
+                TextField("Age", text: $age)
                     .padding()
                     .background(Color(.systemGray6).opacity(0.8))
                     .cornerRadius(8.0)
-                    .padding(.bottom, 20)
 
-                Text("Valorant Rank")
-                    .foregroundColor(.white)
-                    .font(.headline)
-                TextField("Enter your rank", text: $rank)
+                TextField("Valorant Rank", text: $rank)
                     .padding()
                     .background(Color(.systemGray6).opacity(0.8))
                     .cornerRadius(8.0)
-                    .padding(.bottom, 20)
 
-                Text("Server")
-                    .foregroundColor(.white)
-                    .font(.headline)
-                TextField("Enter your server", text: $server)
+                TextField("Server", text: $server)
                     .padding()
                     .background(Color(.systemGray6).opacity(0.8))
                     .cornerRadius(8.0)
-                    .padding(.bottom, 20)
 
                 Button(action: {
                     // Handle image picker action
@@ -82,12 +61,11 @@ struct ProfileSetupView: View {
                         .font(.headline)
                         .foregroundColor(.white)
                         .padding()
-                        .frame(width: 220, height: 60)
+                        .frame(maxWidth: .infinity)
                         .background(Color(red: 0.98, green: 0.27, blue: 0.29))
-                        .cornerRadius(15.0)
-                        .shadow(color: Color(red: 0.98, green: 0.27, blue: 0.29).opacity(0.5), radius: 10, x: 0, y: 10)
+                        .cornerRadius(8.0)
+                        .shadow(color: Color(red: 0.98, green: 0.27, blue: 0.29).opacity(0.5), radius: 5, x: 0, y: 5)
                 }
-                .padding(.top, 20)
             }
             .padding(.horizontal, 30)
 
@@ -96,12 +74,13 @@ struct ProfileSetupView: View {
                     .font(.headline)
                     .foregroundColor(.white)
                     .padding()
-                    .frame(width: 220, height: 60)
+                    .frame(maxWidth: .infinity)
                     .background(Color(red: 0.98, green: 0.27, blue: 0.29))
-                    .cornerRadius(15.0)
-                    .shadow(color: Color(red: 0.98, green: 0.27, blue: 0.29).opacity(0.5), radius: 10, x: 0, y: 10)
+                    .cornerRadius(8.0)
+                    .shadow(color: Color(red: 0.98, green: 0.27, blue: 0.29).opacity(0.5), radius: 5, x: 0, y: 5)
             }
             .padding(.top, 20)
+            .padding(.horizontal, 30)
 
             Spacer()
         }
