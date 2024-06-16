@@ -43,6 +43,9 @@
 		A9551D102C12BC4B0002AF0B /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = A9551D0F2C12BC4B0002AF0B /* FirebaseStorage */; };
 		A9551D122C12BC4B0002AF0B /* FirebaseStorageCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = A9551D112C12BC4B0002AF0B /* FirebaseStorageCombine-Community */; };
 		A9551D142C12BC4B0002AF0B /* FirebaseVertexAI-Preview in Frameworks */ = {isa = PBXBuildFile; productRef = A9551D132C12BC4B0002AF0B /* FirebaseVertexAI-Preview */; };
+		A956FE812C1E78B200C9A8C3 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A956FE802C1E78B200C9A8C3 /* ProfileView.swift */; };
+		A956FE832C1E7B9400C9A8C3 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A956FE822C1E7B9400C9A8C3 /* UserProfile.swift */; };
+		A956FE852C1E7BBF00C9A8C3 /* QuestionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A956FE842C1E7BBF00C9A8C3 /* QuestionModel.swift */; };
 		A958582E2C13F63D00D68763 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A958582D2C13F63D00D68763 /* LoginView.swift */; };
 		A95858302C13F66000D68763 /* SignUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A958582F2C13F66000D68763 /* SignUpView.swift */; };
 		A95858322C13F76100D68763 /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95858312C13F76100D68763 /* NetworkManager.swift */; };
@@ -84,6 +87,9 @@
 		A9551CC92C12BAF50002AF0B /* ValMatcherUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ValMatcherUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A9551CCD2C12BAF50002AF0B /* ValMatcherUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValMatcherUITests.swift; sourceTree = "<group>"; };
 		A9551CCF2C12BAF50002AF0B /* ValMatcherUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValMatcherUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		A956FE802C1E78B200C9A8C3 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		A956FE822C1E7B9400C9A8C3 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
+		A956FE842C1E7BBF00C9A8C3 /* QuestionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionModel.swift; sourceTree = "<group>"; };
 		A958582D2C13F63D00D68763 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		A958582F2C13F66000D68763 /* SignUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignUpView.swift; sourceTree = "<group>"; };
 		A95858312C13F76100D68763 /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkManager.swift; sourceTree = "<group>"; };
@@ -181,6 +187,8 @@
 				A984D4E22C1A28C400BB75DB /* ChatView.swift */,
 				A984D4E42C1A291900BB75DB /* Message.swift */,
 				A984D4E62C1A299500BB75DB /* RandomProfileAlgorithm.swift */,
+				A956FE822C1E7B9400C9A8C3 /* UserProfile.swift */,
+				A956FE842C1E7BBF00C9A8C3 /* QuestionModel.swift */,
 				A9551CB62C12BAF40002AF0B /* Assets.xcassets */,
 				A9551CB82C12BAF40002AF0B /* Preview Content */,
 				2726BC6C2C12CA4A001F6885 /* profilequestion .swift */,
@@ -195,6 +203,7 @@
 				A9551CB42C12BAF30002AF0B /* ContentView.swift */,
 				A984D4E82C1A2A5600BB75DB /* DM.swift */,
 				A984D4EA2C1A2E6300BB75DB /* DMHomeView.swift */,
+				A956FE802C1E78B200C9A8C3 /* ProfileView.swift */,
 			);
 			path = "Preview Content";
 			sourceTree = "<group>";
@@ -381,16 +390,19 @@
 			files = (
 				A95858302C13F66000D68763 /* SignUpView.swift in Sources */,
 				A958582E2C13F63D00D68763 /* LoginView.swift in Sources */,
+				A956FE832C1E7B9400C9A8C3 /* UserProfile.swift in Sources */,
 				A984D4EB2C1A2E6300BB75DB /* DMHomeView.swift in Sources */,
 				A95858322C13F76100D68763 /* NetworkManager.swift in Sources */,
 				A9551CB52C12BAF30002AF0B /* ContentView.swift in Sources */,
 				A984D4E32C1A28C400BB75DB /* ChatView.swift in Sources */,
+				A956FE852C1E7BBF00C9A8C3 /* QuestionModel.swift in Sources */,
 				A984D4DB2C1A222800BB75DB /* MatchView.swift in Sources */,
 				2726BC6D2C12CA4A001F6885 /* profilequestion .swift in Sources */,
 				A984D4E52C1A291900BB75DB /* Message.swift in Sources */,
 				A984D4E92C1A2A5600BB75DB /* DM.swift in Sources */,
 				A984D4E72C1A299500BB75DB /* RandomProfileAlgorithm.swift in Sources */,
 				A984D4DF2C1A23A500BB75DB /* ProfileSetupView.swift in Sources */,
+				A956FE812C1E78B200C9A8C3 /* ProfileView.swift in Sources */,
 				A9551CB32C12BAF30002AF0B /* ValMatcherApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

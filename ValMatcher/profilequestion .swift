@@ -7,20 +7,7 @@
 
 import SwiftUI
 
-// Model for questions
-enum QuestionType {
-    case text
-    case multipleChoice(options: [String])
-}
-
-struct Question: Identifiable {
-    var id = UUID()
-    var text: String
-    var type: QuestionType
-    var answer: String?
-}
-
-// View
+// View for answering questions
 struct QuestionsView: View {
     @State private var currentQuestionIndex = 0
     @State private var answer = ""
@@ -35,6 +22,16 @@ struct QuestionsView: View {
         Question(text: "What's your favorite weapon skin in Valorant?", type: .text)
     ]
 
+    @State private var userProfile = UserProfile(
+        name: "John Doe",
+        rank: "Platinum 1",
+        imageName: "john",
+        age: "25",
+        server: "NA",
+        bestClip: "clip1",
+        answers: [:]
+    )
+
     var body: some View {
         NavigationView {
             VStack {
@@ -43,7 +40,7 @@ struct QuestionsView: View {
                         Text(questions[currentQuestionIndex].text)
                             .font(.custom("AvenirNext-Bold", size: 24))
                             .padding(.top, 20)
-                        
+
                         if case .multipleChoice(let options) = questions[currentQuestionIndex].type {
                             Picker("Select an option", selection: $selectedOption) {
                                 ForEach(options, id: \.self) { option in
@@ -63,7 +60,7 @@ struct QuestionsView: View {
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .padding(.horizontal)
                         }
-                        
+
                         if !errorMessage.isEmpty {
                             Text(errorMessage)
                                 .foregroundColor(.red)
@@ -85,7 +82,16 @@ struct QuestionsView: View {
                     }
                     .padding()
                 } else {
-                    SummaryView(questions: questions)
+                    NavigationLink(destination: ProfileView(user: userProfile)) {
+                        Text("View Profile")
+                            .foregroundColor(.white)
+                            .font(.custom("AvenirNext-Bold", size: 18))
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.green)
+                            .cornerRadius(8)
+                            .padding(.horizontal)
+                    }
                 }
             }
             .navigationBarTitle("Valorant Questions", displayMode: .inline)
@@ -95,7 +101,7 @@ struct QuestionsView: View {
 
     private func answerQuestion() {
         let currentQuestion = questions[currentQuestionIndex]
-        
+
         if isValidAnswer(for: currentQuestion) {
             // Store the answer
             if case .multipleChoice(_) = currentQuestion.type {
@@ -103,13 +109,16 @@ struct QuestionsView: View {
             } else {
                 questions[currentQuestionIndex].answer = answer
             }
-            
+
+            // Save the answer to the user profile
+            userProfile.answers[currentQuestion.text] = questions[currentQuestionIndex].answer
+
             // Proceed to the next question
             answer = ""
             selectedOption = ""
             errorMessage = ""
             currentQuestionIndex += 1
-            
+
             // Set the default value for the next question if it's multiple choice
             if currentQuestionIndex < questions.count,
                case .multipleChoice(let options) = questions[currentQuestionIndex].type {
@@ -127,33 +136,6 @@ struct QuestionsView: View {
             return !answer.isEmpty
         case .multipleChoice:
             return !selectedOption.isEmpty
-        }
-    }
-}
-
-// Summary view
-struct SummaryView: View {
-    var questions: [Question]
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Summary")
-                    .font(.largeTitle)
-                    .padding(.bottom)
-                
-                ForEach(questions) { question in
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(question.text)
-                            .font(.headline)
-                        Text(question.answer ?? "No answer provided")
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                    }
-                    .padding(.bottom)
-                }
-            }
-            .padding()
         }
     }
 }
