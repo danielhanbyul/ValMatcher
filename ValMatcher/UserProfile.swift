@@ -6,10 +6,11 @@
 //
 
 import SwiftUI
-import Foundation
+import FirebaseFirestore
+import FirebaseFirestoreSwift
 
 struct UserProfile: Identifiable, Codable {
-    var id: String = UUID().uuidString
+    @DocumentID var id: String? = UUID().uuidString
     var name: String
     var rank: String
     var imageName: String

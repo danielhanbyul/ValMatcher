@@ -7,11 +7,9 @@
 
 import SwiftUI
 import Firebase
-import FirebaseFirestore
-import FirebaseFirestoreSwift
 
 struct MatchView: View {
-    @State private var users = [UserProfile]()
+    @StateObject private var firestoreManager = FirestoreManager()
     @State private var currentIndex = 0
     @State private var offset = CGSize.zero
     @State private var showAlert = false
@@ -31,8 +29,8 @@ struct MatchView: View {
                 .edgesIgnoringSafeArea(.all)
 
             VStack {
-                if currentIndex < users.count {
-                    UserCardView(user: users[currentIndex])
+                if currentIndex < firestoreManager.users.count {
+                    UserCardView(user: firestoreManager.users[currentIndex])
                         .gesture(
                             DragGesture()
                                 .onChanged { gesture in
@@ -53,7 +51,15 @@ struct MatchView: View {
                 }
             }
             .onAppear {
-                loadUsers()
+                if !isPreview() {
+                    firestoreManager.loadUsers()
+                } else {
+                    // Load mock data for preview
+                    self.firestoreManager.users = [
+                        UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", bestClip: "clip1", answers: [:]),
+                        UserProfile(name: "Bob", rank: "Silver 2", imageName: "bob", age: "22", server: "EU", bestClip: "clip2", answers: [:])
+                    ]
+                }
             }
             .alert(isPresented: $showAlert) {
                 Alert(title: Text("Match!"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
@@ -61,25 +67,9 @@ struct MatchView: View {
         }
     }
 
-    func loadUsers() {
-        let db = Firestore.firestore()
-        db.collection("users").getDocuments { snapshot, error in
-            if let error = error {
-                print("Error loading users: \(error.localizedDescription)")
-                return
-            }
-
-            self.users = snapshot?.documents.compactMap { document in
-                try? document.data(as: UserProfile.self)
-            } ?? []
-            
-            self.users.shuffle() // Shuffle the profiles randomly
-        }
-    }
-
     func likeAction() {
-        let currentUserID = Auth.auth().currentUser?.uid ?? ""
-        let likedUserID = users[currentIndex].id
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+        guard let likedUserID = firestoreManager.users[currentIndex].id else { return }
 
         let db = Firestore.firestore()
         db.collection("users").document(currentUserID).collection("likes").document(likedUserID).setData([:]) { error in
@@ -97,7 +87,7 @@ struct MatchView: View {
     }
 
     func checkForMatch(likedUserID: String) {
-        let currentUserID = Auth.auth().currentUser?.uid ?? ""
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
 
         let db = Firestore.firestore()
         db.collection("users").document(likedUserID).collection("likes").document(currentUserID).getDocument { document, error in
@@ -115,29 +105,24 @@ struct MatchView: View {
     }
 
     func createMatch(likedUserID: String) {
-        let currentUserID = Auth.auth().currentUser?.uid ?? ""
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
 
-        let db = Firestore.firestore()
-        let matchData: [String: Any] = [
-            "user1": currentUserID,
-            "user2": likedUserID,
-            "timestamp": FieldValue.serverTimestamp()
-        ]
-
-        var ref: DocumentReference? = nil
-        ref = db.collection("matches").addDocument(data: matchData) { error in
-            if let error = error {
-                print("Error creating match: \(error.localizedDescription)")
-            } else {
-                print("Match created!")
+        firestoreManager.createMatch(user1: currentUserID, user2: likedUserID) { matchID in
+            if let matchID = matchID {
                 self.alertMessage = "You have matched with \(likedUserID)!"
                 self.showAlert = true
-                self.newMatchID = ref?.documentID
-
-                // Optional automatic navigation
+                self.newMatchID = matchID
                 self.navigateToChat = true
             }
             self.currentIndex += 1
         }
+    }
+}
+
+// Preview for MatchView
+struct MatchView_Previews: PreviewProvider {
+    static var previews: some View {
+        MatchView()
+            .environmentObject(FirestoreManager())
     }
 }

@@ -15,8 +15,8 @@ struct Message: Identifiable, Codable {
     var senderID: String
     var content: String
     var timestamp: Timestamp
-
+    
     var isCurrentUser: Bool {
-        return Auth.auth().currentUser?.uid == senderID
+        return senderID == Auth.auth().currentUser?.uid
     }
 }

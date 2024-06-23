@@ -6,9 +6,10 @@
 //
 
 import SwiftUI
-import Foundation
+import Firebase
+import FirebaseFirestore
+import FirebaseFirestoreSwift
 
-// View
 struct ContentView: View {
     @State private var users = [
         UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", bestClip: "clip1", answers: [:]),
@@ -25,6 +26,10 @@ struct ContentView: View {
     @State private var currentIndex = 0
     @State private var offset = CGSize.zero
     @State private var interactionResult: InteractionResult? = nil
+    @State private var showAlert = false
+    @State private var alertMessage = ""
+    @State private var navigateToChat = false
+    @State private var newMatchID: String?
 
     enum InteractionResult {
         case liked
@@ -103,11 +108,59 @@ struct ContentView: View {
                     }
                 }
             }
+            .alert(isPresented: $showAlert) {
+                Alert(title: Text("Match!"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+            }
         }
     }
 
     private func likeAction() {
         interactionResult = .liked
+        let matchedUser = users[currentIndex]
+
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("Error: User not authenticated")
+            return
+        }
+
+        guard let matchedUserID = matchedUser.id else {
+            print("Error: Matched user does not have an ID")
+            return
+        }
+
+        // Check if they already have a chat
+        let db = Firestore.firestore()
+        
+        print("Checking for existing chat...")
+        db.collection("matches")
+            .whereField("user1", isEqualTo: currentUserID)
+            .whereField("user2", isEqualTo: matchedUserID)
+            .getDocuments { (querySnapshot, error) in
+                if let error = error {
+                    print("Error checking existing chat: \(error.localizedDescription)")
+                    return
+                }
+
+                if querySnapshot?.isEmpty ?? true {
+                    // No existing chat, create a new one
+                    print("No existing chat, creating a new one...")
+                    let chat = Chat(user1: currentUserID, user2: matchedUserID, timestamp: Timestamp())
+                    do {
+                        try db.collection("matches").addDocument(from: chat) { error in
+                            if let error = error {
+                                print("Error creating chat: \(error.localizedDescription)")
+                            } else {
+                                print("Chat created successfully")
+                            }
+                        }
+                    } catch {
+                        print("Error creating chat: \(error.localizedDescription)")
+                    }
+                } else {
+                    print("Existing chat found")
+                }
+            }
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             interactionResult = nil
             currentIndex += 1
@@ -189,6 +242,9 @@ struct UserCardView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
-            .preferredColorScheme(.dark) // Assuming dark mode preference
+            .environment(\.colorScheme, .dark)
+            .environmentObject(FirestoreManager())
     }
 }
+
+

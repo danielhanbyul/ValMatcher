@@ -10,15 +10,10 @@ import Firebase
 import FirebaseFirestore
 import FirebaseFirestoreSwift
 
-struct Chat: Identifiable, Codable {
-    @DocumentID var id: String?
-    var user1: String
-    var user2: String
-    var timestamp: Timestamp
-}
-
 struct DMHomeView: View {
-    @State private var chats = [Chat]()
+    @StateObject private var firestoreManager = FirestoreManager()
+    @State private var navigateToChat = false
+    @State private var newMatchID: String?
 
     var body: some View {
         NavigationView {
@@ -34,7 +29,7 @@ struct DMHomeView: View {
                         .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
 
                     ScrollView {
-                        ForEach(chats) { chat in
+                        ForEach(firestoreManager.chats) { chat in
                             NavigationLink(destination: DM(matchID: chat.id ?? "")) {
                                 HStack {
                                     VStack(alignment: .leading) {
@@ -58,13 +53,21 @@ struct DMHomeView: View {
                     }
                     .padding(.top, 10)
                 }
+                
+                if navigateToChat, let newMatchID = newMatchID {
+                    NavigationLink(destination: DM(matchID: newMatchID), isActive: $navigateToChat) {
+                        EmptyView()
+                    }
+                }
             }
             .onAppear {
                 if !isPreview() {
-                    loadChats()
+                    if let currentUserID = Auth.auth().currentUser?.uid {
+                        firestoreManager.loadChats(forUserID: currentUserID)
+                    }
                 } else {
                     // Load mock data for preview
-                    self.chats = [
+                    self.firestoreManager.chats = [
                         Chat(id: "1", user1: "user1", user2: "user2", timestamp: Timestamp(date: Date())),
                         Chat(id: "2", user1: "user1", user2: "user3", timestamp: Timestamp(date: Date().addingTimeInterval(-86400)))
                     ]
@@ -73,38 +76,18 @@ struct DMHomeView: View {
         }
     }
 
-    func loadChats() {
-        let currentUserID = Auth.auth().currentUser?.uid ?? ""
-        let db = Firestore.firestore()
-        db.collection("matches")
-            .whereField("user1", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error loading chats: \(error.localizedDescription)")
-                    return
-                }
-
-                self.chats = snapshot?.documents.compactMap { document in
-                    try? document.data(as: Chat.self)
-                } ?? []
-            }
-    }
-
-    private func isPreview() -> Bool {
-        return ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-    }
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
 }
 
-let dateFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .medium
-    formatter.timeStyle = .short
-    return formatter
-}()
-
+// Preview for DMHomeView
 struct DMHomeView_Previews: PreviewProvider {
     static var previews: some View {
         DMHomeView()
-            .preferredColorScheme(.dark)
+            .environmentObject(FirestoreManager())
     }
 }
