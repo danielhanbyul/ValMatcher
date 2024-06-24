@@ -23,7 +23,7 @@ struct ContentView: View {
     @State private var alertMessage = ""
     @State private var navigateToChat = false
     @State private var newMatchID: String?
-    @State private var isShowingSignInView = false
+    @State private var notifications: [String] = []
 
     enum InteractionResult {
         case liked
@@ -33,128 +33,124 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                if isShowingSignInView {
-                    SignUpView()
-                } else {
-                    LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
-                        .edgesIgnoringSafeArea(.all)
+                LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
+                    .edgesIgnoringSafeArea(.all)
 
-                    VStack {
-                        if currentIndex < users.count {
-                            ZStack {
-                                UserCardView(user: users[currentIndex])
-                                    .gesture(
-                                        DragGesture()
-                                            .onChanged { gesture in
-                                                self.offset = gesture.translation
+                VStack {
+                    if currentIndex < users.count {
+                        ZStack {
+                            UserCardView(user: users[currentIndex])
+                                .gesture(
+                                    DragGesture()
+                                        .onChanged { gesture in
+                                            self.offset = gesture.translation
+                                        }
+                                        .onEnded { gesture in
+                                            if self.offset.width < -100 {
+                                                self.dislikeAction()
+                                            } else if self.offset.width > 100 {
+                                                self.likeAction()
                                             }
-                                            .onEnded { gesture in
-                                                if self.offset.width < -100 {
-                                                    self.dislikeAction()
-                                                } else if self.offset.width > 100 {
-                                                    self.likeAction()
-                                                }
-                                                self.offset = .zero
-                                            }
-                                    )
-                                    .offset(x: self.offset.width * 1.5, y: self.offset.height)
-                                    .animation(.spring())
-                                    .transition(.slide)
+                                            self.offset = .zero
+                                        }
+                                )
+                                .offset(x: self.offset.width * 1.5, y: self.offset.height)
+                                .animation(.spring())
+                                .transition(.slide)
 
-                                if let result = interactionResult {
-                                    if result == .liked {
-                                        Image(systemName: "heart.fill")
-                                            .resizable()
-                                            .frame(width: 100, height: 100)
-                                            .foregroundColor(.green)
-                                            .transition(.opacity)
-                                    } else if result == .passed {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .resizable()
-                                            .frame(width: 100, height: 100)
-                                            .foregroundColor(.red)
-                                            .transition(.opacity)
-                                    }
-                                }
-                            }
-                            .padding()
-                        } else {
-                            VStack {
-                                Text("No more users")
-                                    .font(.largeTitle)
-                                    .foregroundColor(.white)
-                                    .padding()
-
-                                NavigationLink(destination: QuestionsView()) {
-                                    Text("Answer Questions")
-                                        .foregroundColor(.white)
-                                        .font(.custom("AvenirNext-Bold", size: 18))
-                                        .padding()
-                                        .frame(maxWidth: .infinity)
-                                        .background(Color.blue)
-                                        .cornerRadius(8)
-                                        .padding(.horizontal)
+                            if let result = interactionResult {
+                                if result == .liked {
+                                    Image(systemName: "heart.fill")
+                                        .resizable()
+                                        .frame(width: 100, height: 100)
+                                        .foregroundColor(.green)
+                                        .transition(.opacity)
+                                } else if result == .passed {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .resizable()
+                                        .frame(width: 100, height: 100)
+                                        .foregroundColor(.red)
+                                        .transition(.opacity)
                                 }
                             }
                         }
-                    }
+                        .padding()
+                    } else {
+                        VStack {
+                            Text("No more users")
+                                .font(.largeTitle)
+                                .foregroundColor(.white)
+                                .padding()
 
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            NavigationLink(destination: DMHomeView()) {
-                                Text("DM Home")
+                            NavigationLink(destination: QuestionsView()) {
+                                Text("Answer Questions")
                                     .foregroundColor(.white)
                                     .font(.custom("AvenirNext-Bold", size: 18))
                                     .padding()
+                                    .frame(maxWidth: .infinity)
                                     .background(Color.blue)
                                     .cornerRadius(8)
-                                    .padding(.trailing)
+                                    .padding(.horizontal)
                             }
                         }
                     }
                 }
+
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        NavigationLink(destination: DMHomeView()) {
+                            Text("DM Home")
+                                .foregroundColor(.white)
+                                .font(.custom("AvenirNext-Bold", size: 18))
+                                .padding()
+                                .background(Color.blue)
+                                .cornerRadius(8)
+                                .padding(.trailing)
+                        }
+                    }
+                }
             }
-            .onAppear {
-                checkAuthentication()
-            }
+            .navigationBarTitle("Home", displayMode: .inline)
+            .navigationBarItems(trailing: HStack {
+                NavigationLink(destination: NotificationsView(notifications: $notifications)) {
+                    Image(systemName: "bell.fill")
+                        .foregroundColor(.white)
+                        .imageScale(.large)
+                        .padding()
+                }
+            })
             .alert(isPresented: $showAlert) {
                 Alert(title: Text("Match!"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
             }
         }
     }
 
-    private func checkAuthentication() {
-        if Auth.auth().currentUser == nil {
-            self.isShowingSignInView = true
-        } else {
-            self.isShowingSignInView = false
-        }
-    }
-
     private func likeAction() {
-        guard Auth.auth().currentUser != nil else {
-            self.isShowingSignInView = true
-            return
-        }
-
         interactionResult = .liked
-        let matchedUser = users[currentIndex]
+        let likedUser = users[currentIndex]
 
+        // Add the liked user to the notifications
+        notifications.append("You have liked \(likedUser.name)'s profile.")
+
+        // Move to the next user
+        moveToNextUser()
+
+        // If authenticated, handle match creation
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
             return
         }
 
-        guard let matchedUserID = matchedUser.id else {
-            print("Error: Matched user does not have an ID")
+        guard let likedUserID = likedUser.id else {
+            print("Error: Liked user does not have an ID")
             return
         }
 
         if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
             // Handle preview scenario
-            self.alertMessage = "You have matched with \(matchedUser.name)!"
+            self.alertMessage = "You have matched with \(likedUser.name)!"
             self.showAlert = true
             return
         }
@@ -164,7 +160,7 @@ struct ContentView: View {
         
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
-            .whereField("user2", isEqualTo: matchedUserID)
+            .whereField("user2", isEqualTo: likedUserID)
             .getDocuments { (querySnapshot, error) in
                 if let error = error {
                     print("Error checking existing chat: \(error.localizedDescription)")
@@ -173,13 +169,14 @@ struct ContentView: View {
 
                 if querySnapshot?.isEmpty ?? true {
                     // No existing chat, create a new one
-                    let chat = Chat(user1: currentUserID, user2: matchedUserID, timestamp: Timestamp())
+                    let chat = Chat(user1: currentUserID, user2: likedUserID, timestamp: Timestamp())
                     do {
                         try db.collection("matches").addDocument(from: chat) { error in
                             if let error = error {
                                 print("Error creating chat: \(error.localizedDescription)")
                             } else {
-                                self.alertMessage = "You have matched with \(matchedUser.name)!"
+                                self.alertMessage = "You have matched with \(likedUser.name)!"
+                                self.notifications.append("You have matched with \(likedUser.name)!")
                                 self.showAlert = true
                                 self.newMatchID = chat.id
                                 self.navigateToChat = true
@@ -189,22 +186,26 @@ struct ContentView: View {
                         print("Error creating chat: \(error.localizedDescription)")
                     }
                 } else {
-                    self.alertMessage = "You have matched with \(matchedUser.name)!"
+                    self.alertMessage = "You have matched with \(likedUser.name)!"
+                    self.notifications.append("You have matched with \(likedUser.name)!")
                     self.showAlert = true
                 }
             }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            interactionResult = nil
-            currentIndex += 1
-        }
     }
 
     private func dislikeAction() {
         interactionResult = .passed
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            interactionResult = nil
-            currentIndex += 1
+        moveToNextUser()
+    }
+
+    private func moveToNextUser() {
+        DispatchQueue.main.async {
+            self.interactionResult = nil
+            if self.currentIndex < self.users.count - 1 {
+                self.currentIndex += 1
+            } else {
+                self.currentIndex += 1
+            }
         }
     }
 }
@@ -268,6 +269,27 @@ struct UserCardView: View {
                 .shadow(radius: 5)
         )
         .padding()
+    }
+}
+
+// View for Notifications
+struct NotificationsView: View {
+    @Binding var notifications: [String]
+
+    var body: some View {
+        VStack {
+            if notifications.isEmpty {
+                Text("No notifications")
+                    .foregroundColor(.white)
+            } else {
+                List(notifications, id: \.self) { notification in
+                    Text(notification)
+                        .foregroundColor(.white)
+                }
+            }
+        }
+        .navigationBarTitle("Notifications", displayMode: .inline)
+        .background(Color(red: 0.02, green: 0.18, blue: 0.15).edgesIgnoringSafeArea(.all))
     }
 }
 
