@@ -51,15 +51,7 @@ struct MatchView: View {
                 }
             }
             .onAppear {
-                if !isPreview() {
-                    firestoreManager.loadUsers()
-                } else {
-                    // Load mock data for preview
-                    self.firestoreManager.users = [
-                        UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", bestClip: "clip1", answers: [:]),
-                        UserProfile(name: "Bob", rank: "Silver 2", imageName: "bob", age: "22", server: "EU", bestClip: "clip2", answers: [:])
-                    ]
-                }
+                firestoreManager.loadUsers()
             }
             .alert(isPresented: $showAlert) {
                 Alert(title: Text("Match!"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
@@ -119,7 +111,6 @@ struct MatchView: View {
     }
 }
 
-// Preview for MatchView
 struct MatchView_Previews: PreviewProvider {
     static var previews: some View {
         MatchView()

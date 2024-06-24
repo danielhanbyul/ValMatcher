@@ -10,6 +10,8 @@
 		2726BC6D2C12CA4A001F6885 /* profilequestion .swift in Sources */ = {isa = PBXBuildFile; fileRef = 2726BC6C2C12CA4A001F6885 /* profilequestion .swift */; };
 		A91470AE2C28076000380D39 /* FirestoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91470AD2C28076000380D39 /* FirestoreManager.swift */; };
 		A91470B02C280B3200380D39 /* Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91470AF2C280B3200380D39 /* Chat.swift */; };
+		A932AF642C291FD40012A9D0 /* MatchNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = A932AF632C291FD40012A9D0 /* MatchNotification.swift */; };
+		A932AF662C2932D50012A9D0 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A932AF652C2932D50012A9D0 /* GoogleService-Info.plist */; };
 		A9551CB32C12BAF30002AF0B /* ValMatcherApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */; };
 		A9551CB52C12BAF30002AF0B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9551CB42C12BAF30002AF0B /* ContentView.swift */; };
 		A9551CB72C12BAF40002AF0B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A9551CB62C12BAF40002AF0B /* Assets.xcassets */; };
@@ -81,6 +83,8 @@
 		2726BC6C2C12CA4A001F6885 /* profilequestion .swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "profilequestion .swift"; sourceTree = "<group>"; };
 		A91470AD2C28076000380D39 /* FirestoreManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreManager.swift; sourceTree = "<group>"; };
 		A91470AF2C280B3200380D39 /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
+		A932AF632C291FD40012A9D0 /* MatchNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchNotification.swift; sourceTree = "<group>"; };
+		A932AF652C2932D50012A9D0 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A9551CAF2C12BAF30002AF0B /* ValMatcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ValMatcher.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValMatcherApp.swift; sourceTree = "<group>"; };
 		A9551CB42C12BAF30002AF0B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -162,6 +166,7 @@
 		A9551CA62C12BAF30002AF0B = {
 			isa = PBXGroup;
 			children = (
+				A932AF652C2932D50012A9D0 /* GoogleService-Info.plist */,
 				A9551CB12C12BAF30002AF0B /* ValMatcher */,
 				A9551CC22C12BAF50002AF0B /* ValMatcherTests */,
 				A9551CCC2C12BAF50002AF0B /* ValMatcherUITests */,
@@ -188,6 +193,7 @@
 				A984D4DE2C1A23A500BB75DB /* ProfileSetupView.swift */,
 				A95858312C13F76100D68763 /* NetworkManager.swift */,
 				A984D4DA2C1A222800BB75DB /* MatchView.swift */,
+				A932AF632C291FD40012A9D0 /* MatchNotification.swift */,
 				A984D4E22C1A28C400BB75DB /* ChatView.swift */,
 				A984D4E42C1A291900BB75DB /* Message.swift */,
 				A984D4E62C1A299500BB75DB /* RandomProfileAlgorithm.swift */,
@@ -368,6 +374,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A932AF662C2932D50012A9D0 /* GoogleService-Info.plist in Resources */,
 				A9551CBA2C12BAF40002AF0B /* Preview Assets.xcassets in Resources */,
 				A9551CB72C12BAF40002AF0B /* Assets.xcassets in Resources */,
 			);
@@ -409,6 +416,7 @@
 				A984D4E72C1A299500BB75DB /* RandomProfileAlgorithm.swift in Sources */,
 				A91470B02C280B3200380D39 /* Chat.swift in Sources */,
 				A984D4DF2C1A23A500BB75DB /* ProfileSetupView.swift in Sources */,
+				A932AF642C291FD40012A9D0 /* MatchNotification.swift in Sources */,
 				A956FE812C1E78B200C9A8C3 /* ProfileView.swift in Sources */,
 				A91470AE2C28076000380D39 /* FirestoreManager.swift in Sources */,
 				A9551CB32C12BAF30002AF0B /* ValMatcherApp.swift in Sources */,

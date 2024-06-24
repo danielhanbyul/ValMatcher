@@ -6,9 +6,17 @@
 //
 
 import SwiftUI
+import Firebase
+
+import SwiftUI
+import Firebase
 
 @main
 struct ValMatcherApp: App {
+    init() {
+        FirebaseApp.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -16,9 +24,10 @@ struct ValMatcherApp: App {
     }
 }
 
-// Utility.swift
-import Foundation
 
-func isPreview() -> Bool {
-    return ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        FirebaseApp.configure()
+        return true
+    }
 }

@@ -16,50 +16,58 @@ struct DM: View {
     @State private var newMessage = ""
 
     var body: some View {
-        VStack {
-            ScrollView {
-                ForEach(messages) { message in
-                    HStack {
-                        if message.isCurrentUser {
-                            Spacer()
-                            Text(message.content)
-                                .padding()
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(10)
-                                .padding(.trailing, 10)
-                        } else {
-                            Text(message.content)
-                                .padding()
-                                .background(Color.gray)
-                                .foregroundColor(.white)
-                                .cornerRadius(10)
-                                .padding(.leading, 10)
-                            Spacer()
+        ZStack {
+            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
+                .edgesIgnoringSafeArea(.all)
+
+            VStack {
+                ScrollView {
+                    VStack(spacing: 10) {
+                        ForEach(messages) { message in
+                            HStack {
+                                if message.isCurrentUser {
+                                    Spacer()
+                                    Text(message.content)
+                                        .padding()
+                                        .background(Color.blue)
+                                        .foregroundColor(.white)
+                                        .cornerRadius(10)
+                                        .padding(.trailing, 10)
+                                } else {
+                                    Text(message.content)
+                                        .padding()
+                                        .background(Color.gray)
+                                        .foregroundColor(.white)
+                                        .cornerRadius(10)
+                                        .padding(.leading, 10)
+                                    Spacer()
+                                }
+                            }
                         }
                     }
                 }
-            }
-            .padding(.top, 10)
+                .padding(.top, 10)
 
-            HStack {
-                TextField("Enter message...", text: $newMessage)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .frame(minHeight: CGFloat(30))
+                HStack {
+                    TextField("Enter message...", text: $newMessage)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .frame(minHeight: CGFloat(30))
+                        .padding(.horizontal)
 
-                Button(action: sendMessage) {
-                    Text("Send")
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color.blue)
-                        .cornerRadius(8)
-                        .padding(.trailing, 10)
+                    Button(action: sendMessage) {
+                        Text("Send")
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.blue)
+                            .cornerRadius(8)
+                            .padding(.trailing, 10)
+                    }
                 }
+                .padding()
             }
-            .padding()
-        }
-        .onAppear {
-            loadMessages()
+            .onAppear {
+                loadMessages()
+            }
         }
     }
 
@@ -91,12 +99,7 @@ struct DM: View {
             print("Error sending message: \(error.localizedDescription)")
         }
     }
-
-    private func isPreview() -> Bool {
-        return ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-    }
 }
-
 
 struct DM_Previews: PreviewProvider {
     static var previews: some View {
