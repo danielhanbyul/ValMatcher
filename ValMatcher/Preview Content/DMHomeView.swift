@@ -20,12 +20,6 @@ struct DMHomeView: View {
                     .edgesIgnoringSafeArea(.all)
 
                 VStack {
-                    Text("Direct Messages")
-                        .font(.custom("AvenirNext-Bold", size: 28))
-                        .foregroundColor(.white)
-                        .padding(.top, 50)
-                        .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
-
                     ScrollView {
                         ForEach(chats) { chat in
                             NavigationLink(destination: DM(matchID: chat.id ?? "")) {

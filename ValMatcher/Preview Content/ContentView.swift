@@ -54,6 +54,12 @@ struct ContentView: View {
                                             self.offset = .zero
                                         }
                                 )
+                                .gesture(
+                                    TapGesture(count: 2)
+                                        .onEnded {
+                                            self.likeAction()
+                                        }
+                                )
                                 .offset(x: self.offset.width * 1.5, y: self.offset.height)
                                 .animation(.spring())
                                 .transition(.slide)
@@ -95,30 +101,18 @@ struct ContentView: View {
                         }
                     }
                 }
-
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        NavigationLink(destination: DMHomeView()) {
-                            Text("DM Home")
-                                .foregroundColor(.white)
-                                .font(.custom("AvenirNext-Bold", size: 18))
-                                .padding()
-                                .background(Color.blue)
-                                .cornerRadius(8)
-                                .padding(.trailing)
-                        }
-                    }
-                }
             }
             .navigationBarTitle("Home", displayMode: .inline)
-            .navigationBarItems(trailing: HStack {
+            .navigationBarItems(trailing: HStack(spacing: 20) {
                 NavigationLink(destination: NotificationsView(notifications: $notifications)) {
                     Image(systemName: "bell.fill")
                         .foregroundColor(.white)
                         .imageScale(.large)
-                        .padding()
+                }
+                NavigationLink(destination: DMHomeView()) {
+                    Image(systemName: "message.fill")
+                        .foregroundColor(.white)
+                        .imageScale(.large)
                 }
             })
             .alert(isPresented: $showAlert) {
