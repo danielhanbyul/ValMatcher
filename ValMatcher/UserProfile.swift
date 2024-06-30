@@ -9,13 +9,16 @@ import SwiftUI
 import FirebaseFirestore
 import FirebaseFirestoreSwift
 
+import Foundation
+
 struct UserProfile: Identifiable, Codable {
-    @DocumentID var id: String? = UUID().uuidString
+    var id: String? = UUID().uuidString
     var name: String
     var rank: String
     var imageName: String
     var age: String
     var server: String
     var bestClip: String
-    var answers: [String: String] // Dictionary to store question text and corresponding answer
+    var answers: [String: String] = [:]
+    var hasAnsweredQuestions: Bool = false
 }

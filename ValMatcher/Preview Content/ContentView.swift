@@ -11,11 +11,73 @@ import FirebaseFirestore
 import FirebaseFirestoreSwift
 
 struct ContentView: View {
-    @State private var users = [
-        UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", bestClip: "clip1", answers: [:]),
-        UserProfile(name: "Bob", rank: "Silver 2", imageName: "bob", age: "22", server: "EU", bestClip: "clip2", answers: [:]),
-        // Add more users...
-    ]
+    @State private var currentUser: UserProfile?
+    @State private var notifications: [String] = []
+
+    var body: some View {
+        NavigationView {
+            VStack {
+                if let user = currentUser {
+                    if user.hasAnsweredQuestions {
+                        MainView(currentUser: $currentUser, notifications: $notifications)
+                    } else {
+                        QuestionsView(userProfile: Binding(
+                            get: { self.currentUser ?? UserProfile(name: "", rank: "", imageName: "", age: "", server: "", bestClip: "", answers: [:], hasAnsweredQuestions: false) },
+                            set: { self.currentUser = $0 }
+                        ))
+                    }
+                } else {
+                    LoginView(currentUser: $currentUser)
+                }
+            }
+            .padding()
+            .onAppear {
+                loadUserData()
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Text("ValMatcher")
+                        .font(.title2)
+                        .bold()
+                        .foregroundColor(.white)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    HStack(spacing: 15) {
+                        NavigationLink(destination: NotificationsView(notifications: $notifications)) {
+                            Image(systemName: "bell.fill")
+                                .foregroundColor(.white)
+                                .imageScale(.medium)
+                        }
+                        NavigationLink(destination: DMHomeView()) {
+                            Image(systemName: "message.fill")
+                                .foregroundColor(.white)
+                                .imageScale(.medium)
+                        }
+                        if let currentUser = currentUser {
+                            NavigationLink(destination: ProfileView(user: currentUser)) {
+                                Image(systemName: "person.crop.circle.fill")
+                                    .foregroundColor(.white)
+                                    .imageScale(.medium)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func loadUserData() {
+        // Replace this with your actual user loading logic
+        // For example, fetching user data from Firebase
+        currentUser = UserProfile(name: "John Doe", rank: "Platinum 1", imageName: "john", age: "25", server: "NA", bestClip: "clip1", answers: [:], hasAnsweredQuestions: false)
+    }
+}
+
+struct MainView: View {
+    @Binding var currentUser: UserProfile?
+    @Binding var notifications: [String]
+    @State private var users: [UserProfile] = []
     @State private var currentIndex = 0
     @State private var offset = CGSize.zero
     @State private var interactionResult: InteractionResult? = nil
@@ -23,7 +85,6 @@ struct ContentView: View {
     @State private var alertMessage = ""
     @State private var navigateToChat = false
     @State private var newMatchID: String?
-    @State private var notifications: [String] = []
 
     enum InteractionResult {
         case liked
@@ -31,64 +92,64 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
-                    .edgesIgnoringSafeArea(.all)
+        ZStack {
+            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
+                .edgesIgnoringSafeArea(.all)
 
-                VStack {
-                    if currentIndex < users.count {
-                        ZStack {
-                            UserCardView(user: users[currentIndex])
-                                .gesture(
-                                    DragGesture()
-                                        .onChanged { gesture in
-                                            self.offset = gesture.translation
-                                        }
-                                        .onEnded { gesture in
-                                            if self.offset.width < -100 {
-                                                self.dislikeAction()
-                                            } else if self.offset.width > 100 {
-                                                self.likeAction()
-                                            }
-                                            self.offset = .zero
-                                        }
-                                )
-                                .gesture(
-                                    TapGesture(count: 2)
-                                        .onEnded {
+            VStack {
+                if currentIndex < users.count {
+                    ZStack {
+                        UserCardView(user: users[currentIndex])
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { gesture in
+                                        self.offset = gesture.translation
+                                    }
+                                    .onEnded { gesture in
+                                        if self.offset.width < -100 {
+                                            self.dislikeAction()
+                                        } else if self.offset.width > 100 {
                                             self.likeAction()
                                         }
-                                )
-                                .offset(x: self.offset.width * 1.5, y: self.offset.height)
-                                .animation(.spring())
-                                .transition(.slide)
+                                        self.offset = .zero
+                                    }
+                            )
+                            .gesture(
+                                TapGesture(count: 2)
+                                    .onEnded {
+                                        self.likeAction()
+                                    }
+                            )
+                            .offset(x: self.offset.width * 1.5, y: self.offset.height)
+                            .animation(.spring())
+                            .transition(.slide)
 
-                            if let result = interactionResult {
-                                if result == .liked {
-                                    Image(systemName: "heart.fill")
-                                        .resizable()
-                                        .frame(width: 100, height: 100)
-                                        .foregroundColor(.green)
-                                        .transition(.opacity)
-                                } else if result == .passed {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .resizable()
-                                        .frame(width: 100, height: 100)
-                                        .foregroundColor(.red)
-                                        .transition(.opacity)
-                                }
+                        if let result = interactionResult {
+                            if result == .liked {
+                                Image(systemName: "heart.fill")
+                                    .resizable()
+                                    .frame(width: 100, height: 100)
+                                    .foregroundColor(.green)
+                                    .transition(.opacity)
+                            } else if result == .passed {
+                                Image(systemName: "xmark.circle.fill")
+                                    .resizable()
+                                    .frame(width: 100, height: 100)
+                                    .foregroundColor(.red)
+                                    .transition(.opacity)
                             }
                         }
-                        .padding()
-                    } else {
-                        VStack {
-                            Text("No more users")
-                                .font(.largeTitle)
-                                .foregroundColor(.white)
-                                .padding()
+                    }
+                    .padding()
+                } else {
+                    VStack {
+                        Text("No more users")
+                            .font(.largeTitle)
+                            .foregroundColor(.white)
+                            .padding()
 
-                            NavigationLink(destination: QuestionsView()) {
+                        if let currentUser = currentUser {
+                            NavigationLink(destination: QuestionsView(userProfile: .constant(currentUser))) {
                                 Text("Answer Questions")
                                     .foregroundColor(.white)
                                     .font(.custom("AvenirNext-Bold", size: 18))
@@ -102,23 +163,52 @@ struct ContentView: View {
                     }
                 }
             }
-            .navigationBarTitle("Home", displayMode: .inline)
-            .navigationBarItems(trailing: HStack(spacing: 20) {
-                NavigationLink(destination: NotificationsView(notifications: $notifications)) {
-                    Image(systemName: "bell.fill")
-                        .foregroundColor(.white)
-                        .imageScale(.large)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Text("ValMatcher")
+                    .font(.title2)
+                    .bold()
+                    .foregroundColor(.white)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                HStack(spacing: 15) {
+                    NavigationLink(destination: NotificationsView(notifications: $notifications)) {
+                        Image(systemName: "bell.fill")
+                            .foregroundColor(.white)
+                            .imageScale(.medium)
+                    }
+                    NavigationLink(destination: DMHomeView()) {
+                        Image(systemName: "message.fill")
+                            .foregroundColor(.white)
+                            .imageScale(.medium)
+                    }
+                    if let currentUser = currentUser {
+                        NavigationLink(destination: ProfileView(user: currentUser)) {
+                            Image(systemName: "person.crop.circle.fill")
+                                .foregroundColor(.white)
+                                .imageScale(.medium)
+                        }
+                    }
                 }
-                NavigationLink(destination: DMHomeView()) {
-                    Image(systemName: "message.fill")
-                        .foregroundColor(.white)
-                        .imageScale(.large)
-                }
-            })
-            .alert(isPresented: $showAlert) {
-                Alert(title: Text("Match!"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
             }
         }
+        .alert(isPresented: $showAlert) {
+            Alert(title: Text("Match!"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+        }
+        .onAppear {
+            fetchUsers()
+        }
+    }
+
+    private func fetchUsers() {
+        // Simulate fetching users from Firestore
+        self.users = [
+            UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", bestClip: "clip1", answers: [:], hasAnsweredQuestions: true),
+            UserProfile(name: "Bob", rank: "Silver 2", imageName: "bob", age: "22", server: "EU", bestClip: "clip2", answers: [:], hasAnsweredQuestions: true),
+            // Add more users...
+        ]
     }
 
     private func likeAction() {
@@ -204,7 +294,7 @@ struct ContentView: View {
     }
 }
 
-// Subview for User Cards
+
 struct UserCardView: View {
     var user: UserProfile
 
@@ -266,7 +356,6 @@ struct UserCardView: View {
     }
 }
 
-// View for Notifications
 struct NotificationsView: View {
     @Binding var notifications: [String]
 
@@ -287,10 +376,8 @@ struct NotificationsView: View {
     }
 }
 
-// Preview
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
-            .environment(\.colorScheme, .dark)
     }
 }

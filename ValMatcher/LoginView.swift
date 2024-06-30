@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct LoginView: View {
+    @Binding var currentUser: UserProfile?
     @State private var email = ""
     @State private var password = ""
     @State private var showingSignUp = false
@@ -80,7 +81,7 @@ struct LoginView: View {
                             .fontWeight(.bold)
                     }
                     .sheet(isPresented: $showingSignUp) {
-                        SignUpView()
+                        SignUpView(currentUser: $currentUser)
                     }
                 }
                 .padding(.bottom, 30)
@@ -95,8 +96,10 @@ struct LoginView: View {
 }
 
 struct LoginView_Previews: PreviewProvider {
+    @State static var currentUser: UserProfile? = nil
+
     static var previews: some View {
-        LoginView()
+        LoginView(currentUser: $currentUser)
             .preferredColorScheme(.dark) // Assuming dark mode preference
     }
 }

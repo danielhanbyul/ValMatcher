@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-// View for answering questions
 struct QuestionsView: View {
     @State private var currentQuestionIndex = 0
     @State private var answer = ""
@@ -22,81 +21,87 @@ struct QuestionsView: View {
         Question(text: "What's your favorite weapon skin in Valorant?", type: .text)
     ]
 
-    @State private var userProfile = UserProfile(
-        name: "John Doe",
-        rank: "Platinum 1",
-        imageName: "john",
-        age: "25",
-        server: "NA",
-        bestClip: "clip1",
-        answers: [:]
-    )
+    @Binding var userProfile: UserProfile
+    @State private var navigateToMain = false  // State to control navigation
+
+    init(userProfile: Binding<UserProfile>) {
+        self._userProfile = userProfile
+    }
 
     var body: some View {
-        NavigationView {
-            VStack {
-                if currentQuestionIndex < questions.count {
-                    VStack(alignment: .leading, spacing: 20) {
-                        Text(questions[currentQuestionIndex].text)
-                            .font(.custom("AvenirNext-Bold", size: 24))
-                            .padding(.top, 20)
+        VStack {
+            if currentQuestionIndex < questions.count {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text(questions[currentQuestionIndex].text)
+                        .font(.custom("AvenirNext-Bold", size: 24))
+                        .padding(.top, 20)
 
-                        if case .multipleChoice(let options) = questions[currentQuestionIndex].type {
-                            Picker("Select an option", selection: $selectedOption) {
-                                ForEach(options, id: \.self) { option in
-                                    Text(option)
-                                        .font(.custom("AvenirNext-Regular", size: 18))
-                                }
+                    if case .multipleChoice(let options) = questions[currentQuestionIndex].type {
+                        Picker("Select an option", selection: $selectedOption) {
+                            ForEach(options, id: \.self) { option in
+                                Text(option)
+                                    .font(.custom("AvenirNext-Regular", size: 18))
                             }
-                            .pickerStyle(WheelPickerStyle())
+                        }
+                        .pickerStyle(WheelPickerStyle())
+                        .padding(.horizontal)
+                        .onAppear {
+                            if selectedOption.isEmpty {
+                                selectedOption = options.first ?? ""
+                            }
+                        }
+                    } else {
+                        TextField("Your answer", text: $answer)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
                             .padding(.horizontal)
-                            .onAppear {
-                                if selectedOption.isEmpty {
-                                    selectedOption = options.first ?? ""
-                                }
-                            }
-                        } else {
-                            TextField("Your answer", text: $answer)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .padding(.horizontal)
-                        }
-
-                        if !errorMessage.isEmpty {
-                            Text(errorMessage)
-                                .foregroundColor(.red)
-                                .padding(.horizontal)
-                        }
-
-                        Button(action: {
-                            answerQuestion()
-                        }) {
-                            Text("Next")
-                                .foregroundColor(.white)
-                                .font(.custom("AvenirNext-Bold", size: 18))
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(Color.blue)
-                                .cornerRadius(8)
-                                .padding(.horizontal)
-                        }
                     }
-                    .padding()
-                } else {
-                    NavigationLink(destination: ProfileView(user: userProfile)) {
-                        Text("View Profile")
+
+                    if !errorMessage.isEmpty {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .padding(.horizontal)
+                    }
+
+                    Button(action: {
+                        answerQuestion()
+                    }) {
+                        Text("Next")
                             .foregroundColor(.white)
                             .font(.custom("AvenirNext-Bold", size: 18))
                             .padding()
                             .frame(maxWidth: .infinity)
-                            .background(Color.green)
+                            .background(Color.blue)
                             .cornerRadius(8)
                             .padding(.horizontal)
                     }
                 }
+                .padding()
+            } else {
+                Button(action: {
+                    userProfile.hasAnsweredQuestions = true
+                    // Save userProfile to persistent storage if needed
+                    navigateToMain = true // Set flag to navigate to ContentView
+                }) {
+                    Text("Finish")
+                        .foregroundColor(.white)
+                        .font(.custom("AvenirNext-Bold", size: 18))
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.green)
+                        .cornerRadius(8)
+                        .padding(.horizontal)
+                }
+                .background(
+                    NavigationLink(
+                        destination: ContentView(),
+                        isActive: $navigateToMain,
+                        label: { EmptyView() }
+                    ).hidden() // Hide the actual NavigationLink view
+                )
             }
-            .navigationBarTitle("Valorant Questions", displayMode: .inline)
-            .padding()
         }
+        .navigationBarTitle("Valorant Questions", displayMode: .inline)
+        .padding()
     }
 
     private func answerQuestion() {
@@ -143,6 +148,6 @@ struct QuestionsView: View {
 // Preview
 struct QuestionsView_Previews: PreviewProvider {
     static var previews: some View {
-        QuestionsView()
+        QuestionsView(userProfile: .constant(UserProfile(name: "John Doe", rank: "Platinum 1", imageName: "john", age: "25", server: "NA", bestClip: "clip1", answers: [:], hasAnsweredQuestions: false)))
     }
 }

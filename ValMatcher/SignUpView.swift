@@ -9,6 +9,7 @@ import SwiftUI
 import Firebase
 
 struct SignUpView: View {
+    @Binding var currentUser: UserProfile?
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -20,10 +21,10 @@ struct SignUpView: View {
         VStack {
             Spacer()
             Text("Sign Up")
-                .font(.custom("AvenirNext-Bold", size: 36)) // Using the custom font
-                .foregroundColor(Color(red: 0.98, green: 0.27, blue: 0.29)) // #na4454 equivalent
+                .font(.custom("AvenirNext-Bold", size: 36))
+                .foregroundColor(Color(red: 0.98, green: 0.27, blue: 0.29))
                 .padding(.bottom, 40)
-                .shadow(color: Color(red: 0.86, green: 0.24, blue: 0.29), radius: 10, x: 0, y: 5) // #dc3d4b equivalent
+                .shadow(color: Color(red: 0.86, green: 0.24, blue: 0.29), radius: 10, x: 0, y: 5)
 
             VStack(alignment: .leading, spacing: 15) {
                 Text("Username")
@@ -35,7 +36,7 @@ struct SignUpView: View {
                     .cornerRadius(8.0)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8.0)
-                            .stroke(Color(red: 0.86, green: 0.24, blue: 0.29), lineWidth: 1.0) // #dc3d4b equivalent
+                            .stroke(Color(red: 0.86, green: 0.24, blue: 0.29), lineWidth: 1.0)
                     )
                     .padding(.bottom, 20)
 
@@ -48,7 +49,7 @@ struct SignUpView: View {
                     .cornerRadius(8.0)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8.0)
-                            .stroke(Color(red: 0.86, green: 0.24, blue: 0.29), lineWidth: 1.0) // #dc3d4b equivalent
+                            .stroke(Color(red: 0.86, green: 0.24, blue: 0.29), lineWidth: 1.0)
                     )
                     .padding(.bottom, 20)
 
@@ -61,7 +62,7 @@ struct SignUpView: View {
                     .cornerRadius(8.0)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8.0)
-                            .stroke(Color(red: 0.86, green: 0.24, blue: 0.29), lineWidth: 1.0) // #dc3d4b equivalent
+                            .stroke(Color(red: 0.86, green: 0.24, blue: 0.29), lineWidth: 1.0)
                     )
                     .padding(.bottom, 20)
 
@@ -74,7 +75,7 @@ struct SignUpView: View {
                     .cornerRadius(8.0)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8.0)
-                            .stroke(Color(red: 0.86, green: 0.24, blue: 0.29), lineWidth: 1.0) // #dc3d4b equivalent
+                            .stroke(Color(red: 0.86, green: 0.24, blue: 0.29), lineWidth: 1.0)
                     )
                     .padding(.bottom, 20)
             }
@@ -86,9 +87,9 @@ struct SignUpView: View {
                     .foregroundColor(.white)
                     .padding()
                     .frame(width: 220, height: 60)
-                    .background(Color(red: 0.98, green: 0.27, blue: 0.29)) // #na4454 equivalent
+                    .background(Color(red: 0.98, green: 0.27, blue: 0.29))
                     .cornerRadius(15.0)
-                    .shadow(color: Color(red: 0.98, green: 0.27, blue: 0.29).opacity(0.5), radius: 10, x: 0, y: 10) // #na4454 equivalent
+                    .shadow(color: Color(red: 0.98, green: 0.27, blue: 0.29).opacity(0.5), radius: 10, x: 0, y: 10)
             }
             .padding(.top, 20)
             .alert(isPresented: .constant(!errorMessage.isEmpty)) {
@@ -98,7 +99,7 @@ struct SignUpView: View {
             Spacer()
         }
         .background(
-            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom) // #042e27 and #364966 equivalent
+            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
         )
         .sheet(isPresented: $isProfileSetupPresented) {
@@ -118,6 +119,7 @@ struct SignUpView: View {
                 case .success(let token):
                     // Handle successful registration (store token if needed)
                     print("User registered with token: \(token)")
+                    currentUser = UserProfile(name: userName, rank: "Unranked", imageName: "default", age: "Unknown", server: "Unknown", bestClip: "none", answers: [:], hasAnsweredQuestions: false)
                     isProfileSetupPresented = true
                 case .failure(let error):
                     errorMessage = error.localizedDescription
@@ -128,8 +130,10 @@ struct SignUpView: View {
 }
 
 struct SignUpView_Previews: PreviewProvider {
+    @State static var currentUser: UserProfile? = nil
+
     static var previews: some View {
-        SignUpView()
-            .preferredColorScheme(.dark) // Assuming dark mode preference
+        SignUpView(currentUser: $currentUser)
+            .preferredColorScheme(.dark)
     }
 }
