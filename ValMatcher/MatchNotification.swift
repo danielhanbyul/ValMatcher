@@ -16,7 +16,7 @@ struct MatchNotificationView: View {
                 .font(.title)
                 .foregroundColor(.white)
                 .padding()
-            
+
             Image(matchedUser.imageName)
                 .resizable()
                 .aspectRatio(contentMode: .fill)

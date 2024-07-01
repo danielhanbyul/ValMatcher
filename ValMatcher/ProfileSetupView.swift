@@ -11,6 +11,7 @@ import FirebaseStorage
 import FirebaseFirestore
 
 struct ProfileSetupView: View {
+    @Binding var userProfile: UserProfile
     @State private var firstName = ""
     @State private var lastName = ""
     @State private var age = ""
@@ -137,8 +138,10 @@ struct ProfileSetupView: View {
 }
 
 struct ProfileSetupView_Previews: PreviewProvider {
+    @State static var userProfile = UserProfile(name: "John", rank: "Bronze", imageName: "profile", age: "25", server: "NA", bestClip: "clip1", answers: [:], hasAnsweredQuestions: false)
+
     static var previews: some View {
-        ProfileSetupView()
-            .preferredColorScheme(.dark) // Assuming dark mode preference
+        ProfileSetupView(userProfile: $userProfile)
+            .preferredColorScheme(.dark)
     }
 }

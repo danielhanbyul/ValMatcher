@@ -60,6 +60,7 @@
 		A984D4E72C1A299500BB75DB /* RandomProfileAlgorithm.swift in Sources */ = {isa = PBXBuildFile; fileRef = A984D4E62C1A299500BB75DB /* RandomProfileAlgorithm.swift */; };
 		A984D4E92C1A2A5600BB75DB /* DM.swift in Sources */ = {isa = PBXBuildFile; fileRef = A984D4E82C1A2A5600BB75DB /* DM.swift */; };
 		A984D4EB2C1A2E6300BB75DB /* DMHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A984D4EA2C1A2E6300BB75DB /* DMHomeView.swift */; };
+		A9A63DF92C3245EA00F6198E /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9A63DF82C3245EA00F6198E /* MainView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -108,6 +109,7 @@
 		A984D4E62C1A299500BB75DB /* RandomProfileAlgorithm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandomProfileAlgorithm.swift; sourceTree = "<group>"; };
 		A984D4E82C1A2A5600BB75DB /* DM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DM.swift; sourceTree = "<group>"; };
 		A984D4EA2C1A2E6300BB75DB /* DMHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMHomeView.swift; sourceTree = "<group>"; };
+		A9A63DF82C3245EA00F6198E /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -213,6 +215,7 @@
 			children = (
 				A9551CB92C12BAF40002AF0B /* Preview Assets.xcassets */,
 				A9551CB42C12BAF30002AF0B /* ContentView.swift */,
+				A9A63DF82C3245EA00F6198E /* MainView.swift */,
 				A984D4E82C1A2A5600BB75DB /* DM.swift */,
 				A984D4EA2C1A2E6300BB75DB /* DMHomeView.swift */,
 				A956FE802C1E78B200C9A8C3 /* ProfileView.swift */,
@@ -414,6 +417,7 @@
 				A984D4E52C1A291900BB75DB /* Message.swift in Sources */,
 				A984D4E92C1A2A5600BB75DB /* DM.swift in Sources */,
 				A984D4E72C1A299500BB75DB /* RandomProfileAlgorithm.swift in Sources */,
+				A9A63DF92C3245EA00F6198E /* MainView.swift in Sources */,
 				A91470B02C280B3200380D39 /* Chat.swift in Sources */,
 				A984D4DF2C1A23A500BB75DB /* ProfileSetupView.swift in Sources */,
 				A932AF642C291FD40012A9D0 /* MatchNotification.swift in Sources */,

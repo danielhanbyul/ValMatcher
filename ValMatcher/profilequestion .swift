@@ -6,6 +6,8 @@
 //
 
 import SwiftUI
+import FirebaseFirestore
+import Firebase
 
 struct QuestionsView: View {
     @State private var currentQuestionIndex = 0
@@ -21,12 +23,7 @@ struct QuestionsView: View {
         Question(text: "What's your favorite weapon skin in Valorant?", type: .text)
     ]
 
-    @Binding var userProfile: UserProfile
-    @State private var navigateToMain = false  // State to control navigation
-
-    init(userProfile: Binding<UserProfile>) {
-        self._userProfile = userProfile
-    }
+    @Binding var userProfile: UserProfile?
 
     var body: some View {
         VStack {
@@ -78,9 +75,8 @@ struct QuestionsView: View {
                 .padding()
             } else {
                 Button(action: {
-                    userProfile.hasAnsweredQuestions = true
-                    // Save userProfile to persistent storage if needed
-                    navigateToMain = true // Set flag to navigate to ContentView
+                    userProfile?.hasAnsweredQuestions = true
+                    saveUserProfile()
                 }) {
                     Text("Finish")
                         .foregroundColor(.white)
@@ -91,13 +87,6 @@ struct QuestionsView: View {
                         .cornerRadius(8)
                         .padding(.horizontal)
                 }
-                .background(
-                    NavigationLink(
-                        destination: ContentView(),
-                        isActive: $navigateToMain,
-                        label: { EmptyView() }
-                    ).hidden() // Hide the actual NavigationLink view
-                )
             }
         }
         .navigationBarTitle("Valorant Questions", displayMode: .inline)
@@ -116,7 +105,7 @@ struct QuestionsView: View {
             }
 
             // Save the answer to the user profile
-            userProfile.answers[currentQuestion.text] = questions[currentQuestionIndex].answer
+            userProfile?.answers[currentQuestion.text] = questions[currentQuestionIndex].answer
 
             // Proceed to the next question
             answer = ""
@@ -143,11 +132,23 @@ struct QuestionsView: View {
             return !selectedOption.isEmpty
         }
     }
+
+    private func saveUserProfile() {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        do {
+            try db.collection("users").document(uid).setData(from: userProfile)
+        } catch let error {
+            print("Error writing user to Firestore: \(error)")
+        }
+    }
 }
 
 // Preview
 struct QuestionsView_Previews: PreviewProvider {
+    @State static var userProfile: UserProfile? = UserProfile(name: "John Doe", rank: "Platinum 1", imageName: "john", age: "25", server: "NA", bestClip: "clip1", answers: [:], hasAnsweredQuestions: false)
+
     static var previews: some View {
-        QuestionsView(userProfile: .constant(UserProfile(name: "John Doe", rank: "Platinum 1", imageName: "john", age: "25", server: "NA", bestClip: "clip1", answers: [:], hasAnsweredQuestions: false)))
+        QuestionsView(userProfile: $userProfile)
     }
 }

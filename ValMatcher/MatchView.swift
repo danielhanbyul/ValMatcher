@@ -16,6 +16,7 @@ struct MatchView: View {
     @State private var alertMessage = ""
     @State private var navigateToChat = false
     @State private var newMatchID: String?
+    @State private var matchedUser: UserProfile?
 
     var body: some View {
         ZStack {
@@ -55,6 +56,15 @@ struct MatchView: View {
             }
             .alert(isPresented: $showAlert) {
                 Alert(title: Text("Match!"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+            }
+
+            if let matchedUser = matchedUser {
+                MatchNotificationView(matchedUser: matchedUser)
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            self.matchedUser = nil
+                        }
+                    }
             }
         }
     }
@@ -101,10 +111,11 @@ struct MatchView: View {
 
         firestoreManager.createMatch(user1: currentUserID, user2: likedUserID) { matchID in
             if let matchID = matchID {
-                self.alertMessage = "You have matched with \(likedUserID)!"
+                self.alertMessage = "You have matched with \(self.firestoreManager.users[self.currentIndex].name)!"
                 self.showAlert = true
                 self.newMatchID = matchID
                 self.navigateToChat = true
+                self.matchedUser = self.firestoreManager.users[self.currentIndex]
             }
             self.currentIndex += 1
         }

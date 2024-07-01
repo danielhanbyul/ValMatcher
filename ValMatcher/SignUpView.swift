@@ -10,6 +10,7 @@ import Firebase
 
 struct SignUpView: View {
     @Binding var currentUser: UserProfile?
+    @Binding var isSignedIn: Bool
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -103,7 +104,9 @@ struct SignUpView: View {
                 .edgesIgnoringSafeArea(.all)
         )
         .sheet(isPresented: $isProfileSetupPresented) {
-            ProfileSetupView()
+            if let profile = currentUser {
+                ProfileSetupView(userProfile: .constant(profile))
+            }
         }
     }
 
@@ -120,6 +123,7 @@ struct SignUpView: View {
                     // Handle successful registration (store token if needed)
                     print("User registered with token: \(token)")
                     currentUser = UserProfile(name: userName, rank: "Unranked", imageName: "default", age: "Unknown", server: "Unknown", bestClip: "none", answers: [:], hasAnsweredQuestions: false)
+                    isSignedIn = true
                     isProfileSetupPresented = true
                 case .failure(let error):
                     errorMessage = error.localizedDescription
@@ -131,9 +135,10 @@ struct SignUpView: View {
 
 struct SignUpView_Previews: PreviewProvider {
     @State static var currentUser: UserProfile? = nil
+    @State static var isSignedIn: Bool = false
 
     static var previews: some View {
-        SignUpView(currentUser: $currentUser)
+        SignUpView(currentUser: $currentUser, isSignedIn: $isSignedIn)
             .preferredColorScheme(.dark)
     }
 }
