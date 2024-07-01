@@ -12,8 +12,20 @@ import FirebaseFirestoreSwift
 
 struct ContentView: View {
     @State private var users = [
-        UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", bestClip: "clip1"),
-        UserProfile(name: "Bob", rank: "Silver 2", imageName: "bob", age: "22", server: "EU", bestClip: "clip2"),
+        UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", bestClip: "clip1", answers: [
+            "Favorite agent to play in Valorant?": "Jett",
+            "Preferred role?": "Duelist",
+            "Favorite game mode?": "Competitive",
+            "Servers?": "NA",
+            "Favorite weapon skin?": "Phantom"
+        ]),
+        UserProfile(name: "Bob", rank: "Silver 2", imageName: "bob", age: "22", server: "EU", bestClip: "clip2", answers: [
+            "Favorite agent to play in Valorant?": "Sage",
+            "Preferred role?": "Controller",
+            "Favorite game mode?": "Unrated",
+            "Servers?": "EU",
+            "Favorite weapon skin?": "Vandal"
+        ]),
         // Add more users...
     ]
     @State private var currentIndex = 0
@@ -36,67 +48,94 @@ struct ContentView: View {
                 LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
                     .edgesIgnoringSafeArea(.all)
 
-                VStack {
-                    if currentIndex < users.count {
-                        ZStack {
-                            UserCardView(user: users[currentIndex])
-                                .gesture(
-                                    DragGesture()
-                                        .onChanged { gesture in
-                                            self.offset = gesture.translation
-                                        }
-                                        .onEnded { gesture in
-                                            if self.offset.width < -100 {
-                                                self.dislikeAction()
-                                            } else if self.offset.width > 100 {
-                                                self.likeAction()
-                                            }
-                                            self.offset = .zero
-                                        }
-                                )
-                                .gesture(
-                                    TapGesture(count: 2)
-                                        .onEnded {
-                                            self.likeAction()
-                                        }
-                                )
-                                .offset(x: self.offset.width * 1.5, y: self.offset.height)
-                                .animation(.spring())
-                                .transition(.slide)
+                ScrollView {
+                    VStack {
+                        if currentIndex < users.count {
+                            VStack {
+                                ZStack {
+                                    UserCardView(user: users[currentIndex])
+                                        .gesture(
+                                            DragGesture()
+                                                .onChanged { gesture in
+                                                    self.offset = gesture.translation
+                                                }
+                                                .onEnded { gesture in
+                                                    if self.offset.width < -100 {
+                                                        self.dislikeAction()
+                                                    } else if self.offset.width > 100 {
+                                                        self.likeAction()
+                                                    }
+                                                    self.offset = .zero
+                                                }
+                                        )
+                                        .gesture(
+                                            TapGesture(count: 2)
+                                                .onEnded {
+                                                    self.likeAction()
+                                                }
+                                        )
+                                        .offset(x: self.offset.width * 1.5, y: self.offset.height)
+                                        .animation(.spring())
+                                        .transition(.slide)
 
-                            if let result = interactionResult {
-                                if result == .liked {
-                                    Image(systemName: "heart.fill")
-                                        .resizable()
-                                        .frame(width: 100, height: 100)
-                                        .foregroundColor(.green)
-                                        .transition(.opacity)
-                                } else if result == .passed {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .resizable()
-                                        .frame(width: 100, height: 100)
-                                        .foregroundColor(.red)
-                                        .transition(.opacity)
+                                    if let result = interactionResult {
+                                        if result == .liked {
+                                            Image(systemName: "heart.fill")
+                                                .resizable()
+                                                .frame(width: 100, height: 100)
+                                                .foregroundColor(.green)
+                                                .transition(.opacity)
+                                        } else if result == .passed {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .resizable()
+                                                .frame(width: 100, height: 100)
+                                                .foregroundColor(.red)
+                                                .transition(.opacity)
+                                        }
+                                    }
                                 }
-                            }
-                        }
-                        .padding()
-                    } else {
-                        VStack {
-                            Text("No more users")
-                                .font(.largeTitle)
-                                .foregroundColor(.white)
                                 .padding()
 
-                            NavigationLink(destination: QuestionsView(userProfile: .constant(users[currentIndex]))) {
-                                Text("Answer Questions")
+                                VStack(alignment: .leading, spacing: 20) {
+                                    ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text(key)
+                                                    .font(.headline)
+                                                    .fontWeight(.bold)
+                                                    .foregroundColor(.white)
+                                                Text(users[currentIndex].answers[key] ?? "")
+                                                    .font(.body)
+                                                    .fontWeight(.regular)
+                                                    .foregroundColor(.gray)
+                                            }
+                                            Spacer()
+                                        }
+                                        .padding(.horizontal)
+                                        .padding(.vertical, 8)
+                                        .background(Color.black.opacity(0.1))
+                                        .cornerRadius(8)
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        } else {
+                            VStack {
+                                Text("No more users")
+                                    .font(.largeTitle)
                                     .foregroundColor(.white)
-                                    .font(.custom("AvenirNext-Bold", size: 18))
                                     .padding()
-                                    .frame(maxWidth: .infinity)
-                                    .background(Color.blue)
-                                    .cornerRadius(8)
-                                    .padding(.horizontal)
+
+                                NavigationLink(destination: QuestionsView(userProfile: .constant(users[currentIndex]))) {
+                                    Text("Answer Questions")
+                                        .foregroundColor(.white)
+                                        .font(.custom("AvenirNext-Bold", size: 18))
+                                        .padding()
+                                        .frame(maxWidth: .infinity)
+                                        .background(Color.blue)
+                                        .cornerRadius(8)
+                                        .padding(.horizontal)
+                                }
                             }
                         }
                     }
@@ -106,26 +145,26 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Text("ValMatcher")
-                        .font(.title2)  // Slightly smaller font size
-                        .bold()  // Bold font weight
+                        .font(.title2)
+                        .bold()
                         .foregroundColor(.white)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 15) {  // Reduce spacing for a more compact look
+                    HStack(spacing: 15) {
                         NavigationLink(destination: NotificationsView(notifications: $notifications)) {
                             Image(systemName: "bell.fill")
                                 .foregroundColor(.white)
-                                .imageScale(.medium)  // Smaller icon size
+                                .imageScale(.medium)
                         }
                         NavigationLink(destination: DMHomeView()) {
                             Image(systemName: "message.fill")
                                 .foregroundColor(.white)
-                                .imageScale(.medium)  // Smaller icon size
+                                .imageScale(.medium)
                         }
                         NavigationLink(destination: ProfileView(user: UserProfile(name: "Your Name", rank: "Your Rank", imageName: "yourImage", age: "Your Age", server: "Your Server", bestClip: "Your Clip", answers: [:], hasAnsweredQuestions: true))) {
                             Image(systemName: "person.crop.circle.fill")
                                 .foregroundColor(.white)
-                                .imageScale(.medium)  // Smaller icon size
+                                .imageScale(.medium)
                         }
                     }
                 }
