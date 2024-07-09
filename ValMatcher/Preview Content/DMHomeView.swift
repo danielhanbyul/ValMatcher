@@ -14,47 +14,45 @@ struct DMHomeView: View {
     @State private var chats = [Chat]()
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
-                    .edgesIgnoringSafeArea(.all)
+        ZStack {
+            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
+                .edgesIgnoringSafeArea(.all)
 
-                VStack {
-                    ScrollView {
-                        ForEach(chats) { chat in
-                            NavigationLink(destination: DM(matchID: chat.id ?? "")) {
-                                HStack {
-                                    VStack(alignment: .leading) {
-                                        Text("Chat with \(chat.user2)")
-                                            .font(.custom("AvenirNext-Bold", size: 18))
-                                            .foregroundColor(.white)
-                                        Text("Last message at \(chat.timestamp.dateValue(), formatter: dateFormatter)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.gray)
-                                    }
-                                    .padding()
-                                    Spacer()
+            VStack {
+                ScrollView {
+                    ForEach(chats) { chat in
+                        NavigationLink(destination: DM(matchID: chat.id ?? "")) {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text("Chat with \(chat.user2)")
+                                        .font(.custom("AvenirNext-Bold", size: 18))
+                                        .foregroundColor(.white)
+                                    Text("Last message at \(chat.timestamp.dateValue(), formatter: dateFormatter)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
                                 }
-                                .background(Color.black.opacity(0.7))
-                                .cornerRadius(12)
-                                .padding(.horizontal)
-                                .padding(.vertical, 5)
-                                .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
+                                .padding()
+                                Spacer()
                             }
+                            .background(Color.black.opacity(0.7))
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+                            .padding(.vertical, 5)
+                            .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
                         }
                     }
-                    .padding(.top, 10)
                 }
+                .padding(.top, 10)
             }
-            .onAppear {
-                if isPreview() {
-                    self.chats = [
-                        Chat(id: "1", user1: "user1", user2: "user2", timestamp: Timestamp(date: Date())),
-                        Chat(id: "2", user1: "user1", user2: "user3", timestamp: Timestamp(date: Date().addingTimeInterval(-86400)))
-                    ]
-                } else {
-                    loadChats()
-                }
+        }
+        .onAppear {
+            if isPreview() {
+                self.chats = [
+                    Chat(id: "1", user1: "user1", user2: "user2", timestamp: Timestamp(date: Date())),
+                    Chat(id: "2", user1: "user1", user2: "user3", timestamp: Timestamp(date: Date().addingTimeInterval(-86400)))
+                ]
+            } else {
+                loadChats()
             }
         }
     }

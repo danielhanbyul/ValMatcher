@@ -9,7 +9,6 @@ import SwiftUI
 import Firebase
 import FirebaseFirestore
 import FirebaseFirestoreSwift
-import SwiftUI
 
 struct ContentView: View {
     @State private var users = [
@@ -112,6 +111,7 @@ struct ContentView: View {
                                                 .foregroundColor(.black)
                                                 .padding(.top, 2)
                                         }
+                                        .frame(width: UIScreen.main.bounds.width * 0.85, alignment: .leading)
                                         .padding()
                                         .background(Color.white)
                                         .cornerRadius(10)
@@ -398,3 +398,4 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
     }
 }
+
