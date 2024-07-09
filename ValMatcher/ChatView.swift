@@ -16,16 +16,32 @@ struct ChatView: View {
     var body: some View {
         VStack {
             ScrollView {
-                ForEach(messages) { message in
-                    Text(message.content)
-                        .padding()
-                        .background(message.isCurrentUser ? Color.blue : Color.gray)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                        .frame(maxWidth: .infinity, alignment: message.isCurrentUser ? .trailing : .leading)
-                        .padding(message.isCurrentUser ? .leading : .trailing, 50)
-                        .padding(.vertical, 2)
+                VStack(spacing: 10) {
+                    ForEach(messages) { message in
+                        HStack {
+                            if message.isCurrentUser {
+                                Text(message.content)
+                                    .padding()
+                                    .background(Color.blue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                                    .frame(maxWidth: 300, alignment: .leading)
+                                    .padding(.trailing, 50)
+                                Spacer()
+                            } else {
+                                Spacer()
+                                Text(message.content)
+                                    .padding()
+                                    .background(Color.gray)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                                    .frame(maxWidth: 300, alignment: .trailing)
+                                    .padding(.leading, 50)
+                            }
+                        }
+                    }
                 }
+                .padding(.horizontal)
             }
             .padding(.top, 10)
 
@@ -74,4 +90,3 @@ struct ChatView: View {
         }
     }
 }
-
