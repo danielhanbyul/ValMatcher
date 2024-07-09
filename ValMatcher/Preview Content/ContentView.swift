@@ -10,6 +10,8 @@ import Firebase
 import FirebaseFirestore
 import FirebaseFirestoreSwift
 
+import SwiftUI
+
 struct ContentView: View {
     @State private var users = [
         UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", bestClip: "clip1", answers: [
@@ -379,8 +381,17 @@ struct NotificationsView: View {
     var body: some View {
         VStack {
             if notifications.isEmpty {
-                Text("No notifications")
-                    .foregroundColor(.white)
+                VStack {
+                    Image(systemName: "bell.slash.fill")
+                        .resizable()
+                        .frame(width: 50, height: 50)
+                        .foregroundColor(.white)
+                        .padding(.bottom, 10)
+                    Text("No notifications")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                .padding()
             } else {
                 List(notifications, id: \.self) { notification in
                     Text(notification)
@@ -393,9 +404,9 @@ struct NotificationsView: View {
     }
 }
 
+
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
     }
 }
-
