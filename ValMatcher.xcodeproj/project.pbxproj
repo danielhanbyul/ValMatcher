@@ -12,7 +12,6 @@
 		A91470B02C280B3200380D39 /* Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91470AF2C280B3200380D39 /* Chat.swift */; };
 		A932AF642C291FD40012A9D0 /* MatchNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = A932AF632C291FD40012A9D0 /* MatchNotification.swift */; };
 		A932AF662C2932D50012A9D0 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A932AF652C2932D50012A9D0 /* GoogleService-Info.plist */; };
-		A94EF2382C3CCCEE00942318 /* Image:VideoPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94EF2372C3CCCEE00942318 /* Image:VideoPicker.swift */; };
 		A9551CB32C12BAF30002AF0B /* ValMatcherApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */; };
 		A9551CB52C12BAF30002AF0B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9551CB42C12BAF30002AF0B /* ContentView.swift */; };
 		A9551CB72C12BAF40002AF0B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A9551CB62C12BAF40002AF0B /* Assets.xcassets */; };
@@ -87,7 +86,6 @@
 		A91470AF2C280B3200380D39 /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
 		A932AF632C291FD40012A9D0 /* MatchNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchNotification.swift; sourceTree = "<group>"; };
 		A932AF652C2932D50012A9D0 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
-		A94EF2372C3CCCEE00942318 /* Image:VideoPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Image:VideoPicker.swift"; sourceTree = "<group>"; };
 		A9551CAF2C12BAF30002AF0B /* ValMatcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ValMatcher.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValMatcherApp.swift; sourceTree = "<group>"; };
 		A9551CB42C12BAF30002AF0B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -167,25 +165,10 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		A94EF2362C3CCCAD00942318 /* Backend */ = {
-			isa = PBXGroup;
-			children = (
-				A94EF2372C3CCCEE00942318 /* Image:VideoPicker.swift */,
-				A984D4E42C1A291900BB75DB /* Message.swift */,
-				A91470AD2C28076000380D39 /* FirestoreManager.swift */,
-				A95858312C13F76100D68763 /* NetworkManager.swift */,
-				A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */,
-				A91470AF2C280B3200380D39 /* Chat.swift */,
-				A984D4E62C1A299500BB75DB /* RandomProfileAlgorithm.swift */,
-			);
-			path = Backend;
-			sourceTree = "<group>";
-		};
 		A9551CA62C12BAF30002AF0B = {
 			isa = PBXGroup;
 			children = (
 				A932AF652C2932D50012A9D0 /* GoogleService-Info.plist */,
-				A94EF2362C3CCCAD00942318 /* Backend */,
 				A9551CB12C12BAF30002AF0B /* ValMatcher */,
 				A9551CC22C12BAF50002AF0B /* ValMatcherTests */,
 				A9551CCC2C12BAF50002AF0B /* ValMatcherUITests */,
@@ -206,14 +189,20 @@
 		A9551CB12C12BAF30002AF0B /* ValMatcher */ = {
 			isa = PBXGroup;
 			children = (
+				A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */,
 				A958582D2C13F63D00D68763 /* LoginView.swift */,
 				A958582F2C13F66000D68763 /* SignUpView.swift */,
 				A984D4DE2C1A23A500BB75DB /* ProfileSetupView.swift */,
+				A95858312C13F76100D68763 /* NetworkManager.swift */,
 				A984D4DA2C1A222800BB75DB /* MatchView.swift */,
 				A932AF632C291FD40012A9D0 /* MatchNotification.swift */,
 				A984D4E22C1A28C400BB75DB /* ChatView.swift */,
+				A984D4E42C1A291900BB75DB /* Message.swift */,
+				A984D4E62C1A299500BB75DB /* RandomProfileAlgorithm.swift */,
 				A956FE822C1E7B9400C9A8C3 /* UserProfile.swift */,
+				A91470AF2C280B3200380D39 /* Chat.swift */,
 				A956FE842C1E7BBF00C9A8C3 /* QuestionModel.swift */,
+				A91470AD2C28076000380D39 /* FirestoreManager.swift */,
 				A9551CB62C12BAF40002AF0B /* Assets.xcassets */,
 				A9551CB82C12BAF40002AF0B /* Preview Content */,
 				2726BC6C2C12CA4A001F6885 /* profilequestion .swift */,
@@ -431,7 +420,6 @@
 				A9A63DF92C3245EA00F6198E /* MainView.swift in Sources */,
 				A91470B02C280B3200380D39 /* Chat.swift in Sources */,
 				A984D4DF2C1A23A500BB75DB /* ProfileSetupView.swift in Sources */,
-				A94EF2382C3CCCEE00942318 /* Image:VideoPicker.swift in Sources */,
 				A932AF642C291FD40012A9D0 /* MatchNotification.swift in Sources */,
 				A956FE812C1E78B200C9A8C3 /* ProfileView.swift in Sources */,
 				A91470AE2C28076000380D39 /* FirestoreManager.swift in Sources */,
