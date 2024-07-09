@@ -9,6 +9,7 @@ import SwiftUI
 import Firebase
 import FirebaseFirestore
 import FirebaseFirestoreSwift
+import SwiftUI
 
 struct ContentView: View {
     @State private var users = [
@@ -98,23 +99,23 @@ struct ContentView: View {
 
                                 VStack(alignment: .leading, spacing: 20) {
                                     ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 3) {
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            HStack {
+                                                Image(systemName: "questionmark.circle")
+                                                    .foregroundColor(.blue)
                                                 Text(key)
-                                                    .font(.headline)
-                                                    .fontWeight(.bold)
-                                                    .foregroundColor(.white)
-                                                Text(users[currentIndex].answers[key] ?? "")
-                                                    .font(.body)
-                                                    .fontWeight(.regular)
-                                                    .foregroundColor(.gray)
+                                                    .font(.custom("AvenirNext-Bold", size: 18))
+                                                    .foregroundColor(.black)
                                             }
-                                            Spacer()
+                                            Text(users[currentIndex].answers[key] ?? "")
+                                                .font(.custom("AvenirNext-Regular", size: 22))
+                                                .foregroundColor(.black)
+                                                .padding(.top, 2)
                                         }
+                                        .padding()
+                                        .background(Color.white)
+                                        .cornerRadius(10)
                                         .padding(.horizontal)
-                                        .padding(.vertical, 8)
-                                        .background(Color.black.opacity(0.1))
-                                        .cornerRadius(8)
                                     }
                                 }
                                 .padding(.horizontal)
@@ -359,15 +360,13 @@ struct UserCardView: View {
             }
             .frame(width: UIScreen.main.bounds.width * 0.85)
             .padding()
-            .background(Color(.systemGray6).opacity(0.8))
+            .background(Color(.systemGray5))
             .cornerRadius(20)
-            .shadow(radius: 5)
             .padding(.top, 5)
         }
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white.opacity(0.9))
-                .shadow(radius: 5)
+                .fill(Color(.systemGray4))
         )
         .padding()
     }
