@@ -206,10 +206,8 @@ struct ContentView: View {
 
         // Add the liked user to the notifications
         let notificationMessage = "\(likedUser.name) wants to play with you!"
-        notifications.append(notificationMessage)
-        notificationCount += 1
-        showBanner(with: notificationMessage)
-
+        sendNotification(to: likedUser.id!, message: notificationMessage)
+        
         // Move to the next user
         moveToNextUser()
 
@@ -259,7 +257,6 @@ struct ContentView: View {
                 print("Error saving like: \(error.localizedDescription)")
             } else {
                 print("Like saved successfully")
-                self.sendNotification(to: likedUserID, message: "\(likedUser.name) liked your profile.")
             }
         }
     }
@@ -280,6 +277,7 @@ struct ContentView: View {
                 self.notifications.append("You have matched with \(likedUser.name)!")
                 notificationCount += 1
                 self.sendNotification(to: likedUserID, message: "You have matched with \(likedUser.name)!")
+                self.sendNotification(to: currentUserID, message: "You have matched with \(likedUser.name)!")
                 self.showAlert = true
 
                 // Create a DM chat between the two users
@@ -492,3 +490,4 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
     }
 }
+
