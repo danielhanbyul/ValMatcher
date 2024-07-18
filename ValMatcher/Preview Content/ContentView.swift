@@ -10,8 +10,6 @@ import Firebase
 import FirebaseFirestore
 import FirebaseFirestoreSwift
 
-import SwiftUI
-
 struct ContentView: View {
     @State private var users = [
         UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", bestClip: "clip1", answers: [
@@ -38,10 +36,24 @@ struct ContentView: View {
     @State private var navigateToChat = false
     @State private var newMatchID: String?
     @State private var notifications: [String] = []
+    @State private var showNotificationBanner = false
+    @State private var bannerMessage = ""
+    @State private var notificationCount = 0
 
     enum InteractionResult {
         case liked
         case passed
+    }
+
+    init() {
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor(red: 0.02, green: 0.18, blue: 0.15, alpha: 1.0)
+        appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+        
+        UINavigationBar.appearance().standardAppearance = appearance
+        UINavigationBar.appearance().scrollEdgeAppearance = appearance
     }
 
     var body: some View {
@@ -143,6 +155,12 @@ struct ContentView: View {
                         }
                     }
                 }
+                
+                if showNotificationBanner {
+                    NotificationBanner(message: bannerMessage, showBanner: $showNotificationBanner)
+                        .transition(.move(edge: .top))
+                        .animation(.easeInOut)
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -154,10 +172,14 @@ struct ContentView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 15) {
-                        NavigationLink(destination: NotificationsView(notifications: $notifications)) {
+                        NavigationLink(destination: NotificationsView(notifications: $notifications, notificationCount: $notificationCount)) {
                             Image(systemName: "bell.fill")
                                 .foregroundColor(.white)
                                 .imageScale(.medium)
+                                .overlay(
+                                    BadgeView(count: notificationCount)
+                                        .offset(x: 12, y: -12)
+                                )
                         }
                         NavigationLink(destination: DMHomeView()) {
                             Image(systemName: "message.fill")
@@ -183,7 +205,10 @@ struct ContentView: View {
         let likedUser = users[currentIndex]
 
         // Add the liked user to the notifications
-        notifications.append("You have liked \(likedUser.name)'s profile.")
+        let notificationMessage = "\(likedUser.name) wants to play with you!"
+        notifications.append(notificationMessage)
+        notificationCount += 1
+        showBanner(with: notificationMessage)
 
         // Move to the next user
         moveToNextUser()
@@ -253,6 +278,7 @@ struct ContentView: View {
             } else {
                 self.alertMessage = "You have matched with \(likedUser.name)!"
                 self.notifications.append("You have matched with \(likedUser.name)!")
+                notificationCount += 1
                 self.sendNotification(to: likedUserID, message: "You have matched with \(likedUser.name)!")
                 self.showAlert = true
 
@@ -293,6 +319,18 @@ struct ContentView: View {
                 print("Error sending notification: \(error.localizedDescription)")
             } else {
                 print("Notification sent successfully")
+            }
+        }
+    }
+
+    private func showBanner(with message: String) {
+        bannerMessage = message
+        withAnimation {
+            showNotificationBanner = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            withAnimation {
+                showNotificationBanner = false
             }
         }
     }
@@ -374,36 +412,80 @@ struct UserCardView: View {
     }
 }
 
+// BadgeView Definition
+struct BadgeView: View {
+    let count: Int
+
+    var body: some View {
+        if count > 0 {
+            Text("\(count)")
+                .font(.caption2)
+                .foregroundColor(.white)
+                .padding(5)
+                .background(Color.red)
+                .clipShape(Circle())
+                .offset(x: 10, y: -10)
+        }
+    }
+}
+
 // NotificationsView Definition
 struct NotificationsView: View {
     @Binding var notifications: [String]
+    @Binding var notificationCount: Int
 
     var body: some View {
         VStack {
             if notifications.isEmpty {
-                VStack {
-                    Image(systemName: "bell.slash.fill")
-                        .resizable()
-                        .frame(width: 50, height: 50)
-                        .foregroundColor(.white)
-                        .padding(.bottom, 10)
-                    Text("No notifications")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                }
-                .padding()
+                Text("No notifications")
+                    .foregroundColor(.white)
             } else {
-                List(notifications, id: \.self) { notification in
-                    Text(notification)
-                        .foregroundColor(.white)
+                ScrollView {
+                    VStack(alignment: .leading) {
+                        ForEach(notifications, id: \.self) { notification in
+                            Text(notification)
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color(.systemGray5))
+                                .cornerRadius(10)
+                                .padding(.horizontal)
+                                .padding(.vertical, 5)
+                        }
+                    }
                 }
+                .padding(.top)
             }
+        }
+        .onAppear {
+            notificationCount = 0
         }
         .navigationBarTitle("Notifications", displayMode: .inline)
         .background(Color(red: 0.02, green: 0.18, blue: 0.15).edgesIgnoringSafeArea(.all))
     }
 }
 
+// NotificationBanner Definition
+struct NotificationBanner: View {
+    var message: String
+    @Binding var showBanner: Bool
+
+    var body: some View {
+        VStack {
+            if showBanner {
+                HStack {
+                    Text(message)
+                        .foregroundColor(.white)
+                        .padding()
+                    Spacer()
+                }
+                .background(Color.blue)
+                .cornerRadius(8)
+                .padding()
+                Spacer()
+            }
+        }
+    }
+}
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
