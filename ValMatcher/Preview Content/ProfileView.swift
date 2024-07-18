@@ -8,21 +8,34 @@
 import SwiftUI
 
 struct ProfileView: View {
-    var user: UserProfile
+    @Binding var user: UserProfile
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // Profile Picture
-                Image(user.imageName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 150, height: 150)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.white, lineWidth: 4))
-                    .shadow(radius: 10)
-                    .padding(.top, 20)
-                    .padding(.bottom, 10)
+                // Profile Picture and Edit Button
+                HStack {
+                    Image(user.imageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 150, height: 150)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.white, lineWidth: 4))
+                        .shadow(radius: 10)
+                        .padding(.top, 20)
+                        .padding(.bottom, 10)
+                    
+                    Spacer()
+                    
+                    NavigationLink(destination: EditProfileView(user: $user)) {
+                        Text("Edit")
+                            .foregroundColor(.blue)
+                            .padding()
+                            .background(Color.white)
+                            .cornerRadius(8)
+                    }
+                }
+                .padding(.horizontal)
 
                 // User Information
                 VStack(alignment: .leading, spacing: 5) {
@@ -76,7 +89,7 @@ struct ProfileView: View {
 // Preview
 struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
-        ProfileView(user: UserProfile(
+        ProfileView(user: .constant(UserProfile(
             name: "John Doe",
             rank: "Platinum 1",
             imageName: "john",
@@ -91,7 +104,7 @@ struct ProfileView_Previews: PreviewProvider {
                 "What servers do you play on? (ex: NA, N. California)": "NA",
                 "What's your favorite weapon skin in Valorant?": "Oni Phantom"
             ]
-        ))
+        )))
         .preferredColorScheme(.dark) // Assuming dark mode preference
     }
 }

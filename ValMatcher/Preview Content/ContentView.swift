@@ -186,7 +186,7 @@ struct ContentView: View {
                                 .foregroundColor(.white)
                                 .imageScale(.medium)
                         }
-                        NavigationLink(destination: ProfileView(user: UserProfile(name: "Your Name", rank: "Your Rank", imageName: "yourImage", age: "Your Age", server: "Your Server", bestClip: "Your Clip", answers: [:], hasAnsweredQuestions: true))) {
+                        NavigationLink(destination: ProfileView(user: .constant(UserProfile(name: "Your Name", rank: "Your Rank", imageName: "yourImage", age: "Your Age", server: "Your Server", bestClip: "Your Clip", answers: [:], hasAnsweredQuestions: true)))) {
                             Image(systemName: "person.crop.circle.fill")
                                 .foregroundColor(.white)
                                 .imageScale(.medium)
@@ -350,34 +350,29 @@ struct ContentView: View {
     }
 }
 
-// UserCardView Definition
 struct UserCardView: View {
     var user: UserProfile
-
+    
+    @State private var currentMediaIndex = 0
+    
     var body: some View {
         VStack(spacing: 0) {
-            Image(user.imageName)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                .clipped()
-                .cornerRadius(20)
-                .shadow(radius: 10)
-                .overlay(
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Text("\(user.name), \(user.rank)")
-                                .font(.title)
-                                .foregroundColor(.white)
-                                .padding([.leading, .bottom], 10)
-                                .shadow(radius: 5)
-                            Spacer()
-                        }
-                    }
-                )
-                .padding(.bottom, 5)
-
+            TabView(selection: $currentMediaIndex) {
+                ForEach(user.media.indices, id: \.self) { index in
+                    Image(user.media[index])
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                        .clipped()
+                        .cornerRadius(20)
+                        .shadow(radius: 10)
+                        .tag(index)
+                }
+            }
+            .tabViewStyle(PageTabViewStyle())
+            .frame(height: UIScreen.main.bounds.height * 0.5)
+            .padding(.bottom, 5)
+            
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Age: \(user.age)")
@@ -387,7 +382,7 @@ struct UserCardView: View {
                 .foregroundColor(.white)
                 .font(.subheadline)
                 .padding(.horizontal)
-
+                
                 HStack {
                     Text("Best Clip: \(user.bestClip)")
                         .font(.caption)
@@ -409,6 +404,7 @@ struct UserCardView: View {
         .padding()
     }
 }
+
 
 // BadgeView Definition
 struct BadgeView: View {
@@ -490,4 +486,3 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
     }
 }
-

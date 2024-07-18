@@ -12,6 +12,8 @@
 		A91470B02C280B3200380D39 /* Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91470AF2C280B3200380D39 /* Chat.swift */; };
 		A932AF642C291FD40012A9D0 /* MatchNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = A932AF632C291FD40012A9D0 /* MatchNotification.swift */; };
 		A932AF662C2932D50012A9D0 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A932AF652C2932D50012A9D0 /* GoogleService-Info.plist */; };
+		A950C2382C49DE52001BA6B5 /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A950C2372C49DE52001BA6B5 /* EditProfileView.swift */; };
+		A950C23A2C49DF21001BA6B5 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A950C2392C49DF21001BA6B5 /* ImagePicker.swift */; };
 		A9551CB32C12BAF30002AF0B /* ValMatcherApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */; };
 		A9551CB52C12BAF30002AF0B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9551CB42C12BAF30002AF0B /* ContentView.swift */; };
 		A9551CB72C12BAF40002AF0B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A9551CB62C12BAF40002AF0B /* Assets.xcassets */; };
@@ -86,6 +88,8 @@
 		A91470AF2C280B3200380D39 /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
 		A932AF632C291FD40012A9D0 /* MatchNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchNotification.swift; sourceTree = "<group>"; };
 		A932AF652C2932D50012A9D0 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		A950C2372C49DE52001BA6B5 /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
+		A950C2392C49DF21001BA6B5 /* ImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
 		A9551CAF2C12BAF30002AF0B /* ValMatcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ValMatcher.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValMatcherApp.swift; sourceTree = "<group>"; };
 		A9551CB42C12BAF30002AF0B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -190,6 +194,7 @@
 			isa = PBXGroup;
 			children = (
 				A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */,
+				A950C2392C49DF21001BA6B5 /* ImagePicker.swift */,
 				A958582D2C13F63D00D68763 /* LoginView.swift */,
 				A958582F2C13F66000D68763 /* SignUpView.swift */,
 				A984D4DE2C1A23A500BB75DB /* ProfileSetupView.swift */,
@@ -219,6 +224,7 @@
 				A984D4E82C1A2A5600BB75DB /* DM.swift */,
 				A984D4EA2C1A2E6300BB75DB /* DMHomeView.swift */,
 				A956FE802C1E78B200C9A8C3 /* ProfileView.swift */,
+				A950C2372C49DE52001BA6B5 /* EditProfileView.swift */,
 			);
 			path = "Preview Content";
 			sourceTree = "<group>";
@@ -404,12 +410,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A950C2382C49DE52001BA6B5 /* EditProfileView.swift in Sources */,
 				A95858302C13F66000D68763 /* SignUpView.swift in Sources */,
 				A958582E2C13F63D00D68763 /* LoginView.swift in Sources */,
 				A956FE832C1E7B9400C9A8C3 /* UserProfile.swift in Sources */,
 				A984D4EB2C1A2E6300BB75DB /* DMHomeView.swift in Sources */,
 				A95858322C13F76100D68763 /* NetworkManager.swift in Sources */,
 				A9551CB52C12BAF30002AF0B /* ContentView.swift in Sources */,
+				A950C23A2C49DF21001BA6B5 /* ImagePicker.swift in Sources */,
 				A984D4E32C1A28C400BB75DB /* ChatView.swift in Sources */,
 				A956FE852C1E7BBF00C9A8C3 /* QuestionModel.swift in Sources */,
 				A984D4DB2C1A222800BB75DB /* MatchView.swift in Sources */,

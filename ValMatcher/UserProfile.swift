@@ -19,6 +19,7 @@ struct UserProfile: Identifiable, Codable {
     var age: String
     var server: String
     var bestClip: String
-    var answers: [String: String] = [:]
+    var answers: [String: String]
     var hasAnsweredQuestions: Bool = false
+    var media: [String] = [] // Add this line
 }
