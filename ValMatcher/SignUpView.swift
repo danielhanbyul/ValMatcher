@@ -116,18 +116,50 @@ struct SignUpView: View {
             return
         }
 
-        NetworkManager.shared.registerUser(userName: userName, email: email, password: password) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let token):
-                    // Handle successful registration (store token if needed)
-                    print("User registered with token: \(token)")
-                    currentUser = UserProfile(name: userName, rank: "Unranked", imageName: "default", age: "Unknown", server: "Unknown", bestClip: "none", answers: [:], hasAnsweredQuestions: false)
-                    isSignedIn = true
-                    isProfileSetupPresented = true
-                case .failure(let error):
-                    errorMessage = error.localizedDescription
+        Auth.auth().createUser(withEmail: email, password: password) { authResult, error in
+            if let error = error {
+                self.errorMessage = "Error: \(error.localizedDescription)"
+                print("Error creating user: \(error.localizedDescription)")
+                return
+            }
+
+            guard let uid = authResult?.user.uid else {
+                self.errorMessage = "Failed to retrieve user ID."
+                return
+            }
+
+            let db = Firestore.firestore()
+            let userData: [String: Any] = [
+                "name": userName,
+                "email": email,
+                "rank": "Unranked",
+                "imageName": "default",
+                "age": "Unknown",
+                "server": "Unknown",
+                "bestClip": "none",
+                "answers": [:],
+                "hasAnsweredQuestions": false
+            ]
+            db.collection("users").document(uid).setData(userData) { error in
+                if let error = error {
+                    self.errorMessage = "Error saving user data: \(error.localizedDescription)"
+                    print("Error saving user data: \(error.localizedDescription)")
+                    return
                 }
+                self.currentUser = UserProfile(
+                    id: uid,
+                    name: self.userName,
+                    rank: "Unranked",
+                    imageName: "default",
+                    age: "Unknown",
+                    server: "Unknown",
+                    bestClip: "none",
+                    answers: [:],
+                    hasAnsweredQuestions: false,
+                    media: []
+                )
+                self.isSignedIn = true
+                self.isProfileSetupPresented = true
             }
         }
     }
