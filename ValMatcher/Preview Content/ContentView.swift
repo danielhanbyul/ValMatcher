@@ -6,9 +6,8 @@
 //
 
 import SwiftUI
-import Firebase
 import FirebaseFirestore
-import FirebaseFirestoreSwift
+import Firebase
 
 struct ContentView: View {
     @State private var users = [
@@ -41,6 +40,7 @@ struct ContentView: View {
     @State private var notificationCount = 0
     @State private var currentUser: UserProfile? = nil
     @State private var isSignedIn = false
+    @State private var hasAnsweredQuestions = false
 
     enum InteractionResult {
         case liked
@@ -153,7 +153,7 @@ struct ContentView: View {
                                 .foregroundColor(.white)
                                 .padding()
 
-                            NavigationLink(destination: QuestionsView(userProfile: .constant(users[currentIndex]))) {
+                            NavigationLink(destination: QuestionsView(userProfile: .constant(users[currentIndex]), hasAnsweredQuestions: $hasAnsweredQuestions)) {
                                 Text("Answer Questions")
                                     .foregroundColor(.white)
                                     .font(.custom("AvenirNext-Bold", size: 18))
@@ -236,6 +236,7 @@ struct ContentView: View {
                         answers: data["answers"] as? [String: String] ?? [:],
                         hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false
                     )
+                    self.hasAnsweredQuestions = self.currentUser?.hasAnsweredQuestions ?? false
                 }
             }
         }

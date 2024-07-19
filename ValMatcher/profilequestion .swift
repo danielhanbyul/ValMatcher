@@ -19,11 +19,13 @@ struct QuestionsView: View {
         Question(text: "Do you prefer playing as a Duelist, Initiator, Controller, or Sentinel?", type: .multipleChoice(options: ["Duelist", "Initiator", "Controller", "Sentinel"])),
         Question(text: "What’s your current rank in Valorant?", type: .text),
         Question(text: "Favorite game mode?", type: .multipleChoice(options: ["Competitive", "Unrated", "Spike Rush", "Deathmatch"])),
-        Question(text: "What servers do you play on? (ex: NA, N. California)", type: .text),
+        Question(text: "What servers do you play on?", type: .text),
         Question(text: "What's your favorite weapon skin in Valorant?", type: .text)
     ]
 
-    @Binding var userProfile: UserProfile?
+    @Binding var userProfile: UserProfile
+    @Binding var hasAnsweredQuestions: Bool
+    @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
         VStack {
@@ -75,7 +77,7 @@ struct QuestionsView: View {
                 .padding()
             } else {
                 Button(action: {
-                    userProfile?.hasAnsweredQuestions = true
+                    userProfile.hasAnsweredQuestions = true
                     saveUserProfile()
                 }) {
                     Text("Finish")
@@ -97,29 +99,24 @@ struct QuestionsView: View {
         let currentQuestion = questions[currentQuestionIndex]
 
         if isValidAnswer(for: currentQuestion) {
-            // Store the answer
             if case .multipleChoice(_) = currentQuestion.type {
                 questions[currentQuestionIndex].answer = selectedOption
             } else {
                 questions[currentQuestionIndex].answer = answer
             }
 
-            // Save the answer to the user profile
-            userProfile?.answers[currentQuestion.text] = questions[currentQuestionIndex].answer
+            userProfile.answers[currentQuestion.text] = questions[currentQuestionIndex].answer
 
-            // Proceed to the next question
             answer = ""
             selectedOption = ""
             errorMessage = ""
             currentQuestionIndex += 1
 
-            // Set the default value for the next question if it's multiple choice
             if currentQuestionIndex < questions.count,
                case .multipleChoice(let options) = questions[currentQuestionIndex].type {
                 selectedOption = options.first ?? ""
             }
         } else {
-            // Show error message
             errorMessage = "Please provide a valid answer."
         }
     }
@@ -137,18 +134,26 @@ struct QuestionsView: View {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
         do {
-            try db.collection("users").document(uid).setData(from: userProfile)
+            try db.collection("users").document(uid).setData(from: userProfile) { err in
+                if let err = err {
+                    print("Error writing user to Firestore: \(err)")
+                } else {
+                    self.hasAnsweredQuestions = true
+                    self.presentationMode.wrappedValue.dismiss()  // Navigate back to MainView
+                }
+            }
         } catch let error {
             print("Error writing user to Firestore: \(error)")
         }
     }
 }
 
-// Preview
+
 struct QuestionsView_Previews: PreviewProvider {
-    @State static var userProfile: UserProfile? = UserProfile(name: "John Doe", rank: "Platinum 1", imageName: "john", age: "25", server: "NA", bestClip: "clip1", answers: [:], hasAnsweredQuestions: false)
+    @State static var userProfile: UserProfile = UserProfile(name: "John Doe", rank: "Platinum 1", imageName: "john", age: "25", server: "NA", bestClip: "clip1", answers: [:], hasAnsweredQuestions: false)
+    @State static var hasAnsweredQuestions: Bool = false
 
     static var previews: some View {
-        QuestionsView(userProfile: $userProfile)
+        QuestionsView(userProfile: $userProfile, hasAnsweredQuestions: $hasAnsweredQuestions)
     }
 }

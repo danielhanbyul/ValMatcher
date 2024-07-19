@@ -13,7 +13,7 @@ struct ValMatcherApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainView()  // Ensure MainView is used here for handling navigation
         }
     }
 }

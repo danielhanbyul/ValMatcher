@@ -18,9 +18,13 @@ struct MainView: View {
             if !isSignedIn {
                 SignUpView(currentUser: $currentUser, isSignedIn: $isSignedIn)
             } else if !hasAnsweredQuestions {
-                QuestionsView(userProfile: $currentUser)
+                if let user = currentUser {
+                    QuestionsView(userProfile: Binding(get: { user }, set: { currentUser = $0 }), hasAnsweredQuestions: $hasAnsweredQuestions)
+                }
             } else {
-                ContentView()
+                if let user = currentUser {
+                    ProfileView(user: Binding(get: { user }, set: { currentUser = $0 }))
+                }
             }
         }
         .onAppear {
