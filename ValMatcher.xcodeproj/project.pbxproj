@@ -11,9 +11,9 @@
 		A91470AE2C28076000380D39 /* FirestoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91470AD2C28076000380D39 /* FirestoreManager.swift */; };
 		A91470B02C280B3200380D39 /* Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91470AF2C280B3200380D39 /* Chat.swift */; };
 		A932AF642C291FD40012A9D0 /* MatchNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = A932AF632C291FD40012A9D0 /* MatchNotification.swift */; };
-		A932AF662C2932D50012A9D0 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A932AF652C2932D50012A9D0 /* GoogleService-Info.plist */; };
 		A950C2382C49DE52001BA6B5 /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A950C2372C49DE52001BA6B5 /* EditProfileView.swift */; };
 		A950C23A2C49DF21001BA6B5 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A950C2392C49DF21001BA6B5 /* ImagePicker.swift */; };
+		A950C2402C49EDB8001BA6B5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A950C23F2C49EDB8001BA6B5 /* GoogleService-Info.plist */; };
 		A9551CB32C12BAF30002AF0B /* ValMatcherApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */; };
 		A9551CB52C12BAF30002AF0B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9551CB42C12BAF30002AF0B /* ContentView.swift */; };
 		A9551CB72C12BAF40002AF0B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A9551CB62C12BAF40002AF0B /* Assets.xcassets */; };
@@ -87,9 +87,9 @@
 		A91470AD2C28076000380D39 /* FirestoreManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreManager.swift; sourceTree = "<group>"; };
 		A91470AF2C280B3200380D39 /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
 		A932AF632C291FD40012A9D0 /* MatchNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchNotification.swift; sourceTree = "<group>"; };
-		A932AF652C2932D50012A9D0 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A950C2372C49DE52001BA6B5 /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
 		A950C2392C49DF21001BA6B5 /* ImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
+		A950C23F2C49EDB8001BA6B5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A9551CAF2C12BAF30002AF0B /* ValMatcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ValMatcher.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValMatcherApp.swift; sourceTree = "<group>"; };
 		A9551CB42C12BAF30002AF0B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -172,7 +172,7 @@
 		A9551CA62C12BAF30002AF0B = {
 			isa = PBXGroup;
 			children = (
-				A932AF652C2932D50012A9D0 /* GoogleService-Info.plist */,
+				A950C23F2C49EDB8001BA6B5 /* GoogleService-Info.plist */,
 				A9551CB12C12BAF30002AF0B /* ValMatcher */,
 				A9551CC22C12BAF50002AF0B /* ValMatcherTests */,
 				A9551CCC2C12BAF50002AF0B /* ValMatcherUITests */,
@@ -383,9 +383,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A932AF662C2932D50012A9D0 /* GoogleService-Info.plist in Resources */,
 				A9551CBA2C12BAF40002AF0B /* Preview Assets.xcassets in Resources */,
 				A9551CB72C12BAF40002AF0B /* Assets.xcassets in Resources */,
+				A950C2402C49EDB8001BA6B5 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
