@@ -12,18 +12,23 @@ struct MainView: View {
     @State private var currentUser: UserProfile? = nil
     @State private var isSignedIn = false
     @State private var hasAnsweredQuestions = false
+    @State private var isShowingLoginView = true // Track whether to show Login or Signup view
 
     var body: some View {
         NavigationView {
             if !isSignedIn {
-                SignUpView(currentUser: $currentUser, isSignedIn: $isSignedIn)
+                if isShowingLoginView {
+                    LoginView(isSignedIn: $isSignedIn, currentUser: $currentUser, isShowingLoginView: $isShowingLoginView)
+                } else {
+                    SignUpView(currentUser: $currentUser, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
+                }
             } else if !hasAnsweredQuestions {
                 if let user = currentUser {
                     QuestionsView(userProfile: Binding(get: { user }, set: { currentUser = $0 }), hasAnsweredQuestions: $hasAnsweredQuestions)
                 }
             } else {
                 if let user = currentUser {
-                    ProfileView(user: Binding(get: { user }, set: { currentUser = $0 }), isSignedIn: $isSignedIn) // Pass isSignedIn
+                    ProfileView(user: Binding(get: { user }, set: { currentUser = $0 }), isSignedIn: $isSignedIn)
                 }
             }
         }
@@ -55,6 +60,9 @@ struct MainView: View {
                     }
                 }
             }
+        } else {
+            self.isSignedIn = false
+            self.isShowingLoginView = true
         }
     }
 }

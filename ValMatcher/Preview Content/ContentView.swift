@@ -6,10 +6,8 @@
 //
 
 import SwiftUI
+import Firebase
 import FirebaseFirestore
-import Firebase
-import SwiftUI
-import Firebase
 
 struct ContentView: View {
     @State private var users: [UserProfile] = [
@@ -26,8 +24,7 @@ struct ContentView: View {
             "Favorite game mode?": "Unrated",
             "Servers?": "EU",
             "Favorite weapon skin?": "Vandal"
-        ]),
-        // Add more users...
+        ])
     ]
     @State private var currentIndex = 0
     @State private var offset = CGSize.zero
@@ -43,6 +40,7 @@ struct ContentView: View {
     @State private var currentUser: UserProfile? = nil
     @State private var isSignedIn = false
     @State private var hasAnsweredQuestions = false
+    @State private var isShowingLoginView = true
 
     enum InteractionResult {
         case liked
@@ -65,7 +63,11 @@ struct ContentView: View {
             if isSignedIn {
                 mainView
             } else {
-                LoginView(currentUser: $currentUser, isSignedIn: $isSignedIn)
+                if isShowingLoginView {
+                    LoginView(isSignedIn: $isSignedIn, currentUser: $currentUser, isShowingLoginView: $isShowingLoginView)
+                } else {
+                    SignUpView(currentUser: $currentUser, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
+                }
             }
         }
         .onAppear(perform: checkUser)
@@ -530,3 +532,4 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
     }
 }
+
