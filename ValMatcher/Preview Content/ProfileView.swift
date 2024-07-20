@@ -6,14 +6,16 @@
 //
 
 import SwiftUI
+import FirebaseAuth
 
 struct ProfileView: View {
     @Binding var user: UserProfile
+    @Binding var isSignedIn: Bool
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // Profile Picture and Edit Button
+                // Profile Picture
                 HStack {
                     Image(user.imageName)
                         .resizable()
@@ -26,14 +28,6 @@ struct ProfileView: View {
                         .padding(.bottom, 10)
                     
                     Spacer()
-                    
-                    NavigationLink(destination: EditProfileView(user: $user)) {
-                        Text("Edit")
-                            .foregroundColor(.blue)
-                            .padding()
-                            .background(Color.white)
-                            .cornerRadius(8)
-                    }
                 }
                 .padding(.horizontal)
 
@@ -83,10 +77,18 @@ struct ProfileView: View {
                 .edgesIgnoringSafeArea(.all)
         )
         .navigationBarTitle("Profile", displayMode: .inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink(destination: SettingsView(user: $user, isSignedIn: $isSignedIn)) {
+                    Image(systemName: "gearshape.fill")
+                        .foregroundColor(.white)
+                        .imageScale(.medium)
+                }
+            }
+        }
     }
 }
 
-// Preview
 struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
         ProfileView(user: .constant(UserProfile(
@@ -104,7 +106,7 @@ struct ProfileView_Previews: PreviewProvider {
                 "What servers do you play on? (ex: NA, N. California)": "NA",
                 "What's your favorite weapon skin in Valorant?": "Oni Phantom"
             ]
-        )))
+        )), isSignedIn: .constant(true)) // Add this line
         .preferredColorScheme(.dark) // Assuming dark mode preference
     }
 }

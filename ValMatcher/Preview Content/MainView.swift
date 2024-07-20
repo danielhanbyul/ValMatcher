@@ -23,7 +23,7 @@ struct MainView: View {
                 }
             } else {
                 if let user = currentUser {
-                    ProfileView(user: Binding(get: { user }, set: { currentUser = $0 }))
+                    ProfileView(user: Binding(get: { user }, set: { currentUser = $0 }), isSignedIn: $isSignedIn) // Pass isSignedIn
                 }
             }
         }

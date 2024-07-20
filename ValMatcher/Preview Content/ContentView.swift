@@ -8,9 +8,11 @@
 import SwiftUI
 import FirebaseFirestore
 import Firebase
+import SwiftUI
+import Firebase
 
 struct ContentView: View {
-    @State private var users = [
+    @State private var users: [UserProfile] = [
         UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", bestClip: "clip1", answers: [
             "Favorite agent to play in Valorant?": "Jett",
             "Preferred role?": "Duelist",
@@ -198,7 +200,7 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .imageScale(.medium)
                     }
-                    NavigationLink(destination: ProfileView(user: .constant(UserProfile(name: "Your Name", rank: "Your Rank", imageName: "yourImage", age: "Your Age", server: "Your Server", bestClip: "Your Clip", answers: [:], hasAnsweredQuestions: true)))) {
+                    NavigationLink(destination: ProfileView(user: .constant(currentUser ?? UserProfile(name: "", rank: "", imageName: "", age: "", server: "", bestClip: "", answers: [:])), isSignedIn: $isSignedIn)) { // Ensure currentUser is correctly passed here
                         Image(systemName: "person.crop.circle.fill")
                             .foregroundColor(.white)
                             .imageScale(.medium)
@@ -391,6 +393,7 @@ struct ContentView: View {
         }
     }
 }
+
 
 struct UserCardView: View {
     var user: UserProfile
