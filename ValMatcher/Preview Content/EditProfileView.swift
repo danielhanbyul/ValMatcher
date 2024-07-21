@@ -17,7 +17,6 @@ struct EditProfileView: View {
     @State private var newAge = ""
     @State private var newRank = ""
     @State private var newServer = ""
-    @State private var newBestClip = ""
     
     var body: some View {
         VStack(spacing: 20) {
@@ -57,9 +56,6 @@ struct EditProfileView: View {
             TextField("Server", text: $newServer)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding(.horizontal)
-            TextField("Best Clip", text: $newBestClip)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding(.horizontal)
             
             Button(action: saveProfile) {
                 Text("Save")
@@ -74,7 +70,6 @@ struct EditProfileView: View {
             self.newAge = user.age
             self.newRank = user.rank
             self.newServer = user.server
-            self.newBestClip = user.bestClip
         }
         .padding()
         .navigationBarTitle("Edit Profile", displayMode: .inline)
@@ -92,7 +87,6 @@ struct EditProfileView: View {
         user.age = newAge
         user.rank = newRank
         user.server = newServer
-        user.bestClip = newBestClip
         // Save updated profile to Firestore
         let db = Firestore.firestore()
         do {

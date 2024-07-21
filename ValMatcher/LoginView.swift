@@ -125,7 +125,6 @@ struct LoginView: View {
                         imageName: data["imageName"] as? String ?? "",
                         age: data["age"] as? String ?? "",
                         server: data["server"] as? String ?? "",
-                        bestClip: data["bestClip"] as? String ?? "",
                         answers: data["answers"] as? [String: String] ?? [:],
                         hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false
                     )

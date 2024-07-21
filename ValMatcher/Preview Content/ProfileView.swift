@@ -67,9 +67,6 @@ struct ProfileView: View {
                             .font(.custom("AvenirNext-Regular", size: 18))
                             .foregroundColor(.gray)
                         
-                        Text("Best Clip: \(user.bestClip)")
-                            .font(.custom("AvenirNext-Regular", size: 18))
-                            .foregroundColor(.gray)
                     }
                     .padding(.horizontal)
 
@@ -130,7 +127,6 @@ struct ProfileView_Previews: PreviewProvider {
             imageName: "john",
             age: "25",
             server: "NA",
-            bestClip: "clip1",
             answers: [
                 "Who's your favorite agent to play in Valorant?": "Jett",
                 "Do you prefer playing as a Duelist, Initiator, Controller, or Sentinel?": "Duelist",

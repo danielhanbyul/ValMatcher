@@ -10,15 +10,18 @@ import Firebase
 import FirebaseFirestore
 
 struct ContentView: View {
+    @Binding var currentUser: UserProfile?
+    @Binding var isSignedIn: Bool
+    @State private var hasAnsweredQuestions = false
     @State private var users: [UserProfile] = [
-        UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", bestClip: "clip1", answers: [
+        UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", answers: [
             "Favorite agent to play in Valorant?": "Jett",
             "Preferred role?": "Duelist",
             "Favorite game mode?": "Competitive",
             "Servers?": "NA",
             "Favorite weapon skin?": "Phantom"
         ]),
-        UserProfile(name: "Bob", rank: "Silver 2", imageName: "bob", age: "22", server: "EU", bestClip: "clip2", answers: [
+        UserProfile(name: "Bob", rank: "Silver 2", imageName: "bob", age: "22", server: "EU", answers: [
             "Favorite agent to play in Valorant?": "Sage",
             "Preferred role?": "Controller",
             "Favorite game mode?": "Unrated",
@@ -37,43 +40,13 @@ struct ContentView: View {
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
     @State private var notificationCount = 0
-    @State private var currentUser: UserProfile? = nil
-    @State private var isSignedIn = false
-    @State private var hasAnsweredQuestions = false
-    @State private var isShowingLoginView = true
 
     enum InteractionResult {
         case liked
         case passed
     }
 
-    init() {
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(red: 0.02, green: 0.18, blue: 0.15, alpha: 1.0)
-        appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-        
-        UINavigationBar.appearance().standardAppearance = appearance
-        UINavigationBar.appearance().scrollEdgeAppearance = appearance
-    }
-
     var body: some View {
-        NavigationView {
-            if isSignedIn {
-                mainView
-            } else {
-                if isShowingLoginView {
-                    LoginView(isSignedIn: $isSignedIn, currentUser: $currentUser, isShowingLoginView: $isShowingLoginView)
-                } else {
-                    SignUpView(currentUser: $currentUser, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
-                }
-            }
-        }
-        .onAppear(perform: checkUser)
-    }
-
-    private var mainView: some View {
         ZStack {
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
@@ -202,7 +175,7 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .imageScale(.medium)
                     }
-                    NavigationLink(destination: ProfileView(user: .constant(currentUser ?? UserProfile(name: "", rank: "", imageName: "", age: "", server: "", bestClip: "", answers: [:])), isSignedIn: $isSignedIn)) {
+                    NavigationLink(destination: ProfileView(user: .constant(currentUser ?? UserProfile(name: "", rank: "", imageName: "", age: "", server: "", answers: [:])), isSignedIn: $isSignedIn)) {
                         Image(systemName: "person.crop.circle.fill")
                             .foregroundColor(.white)
                             .imageScale(.medium)
@@ -236,7 +209,6 @@ struct ContentView: View {
                         imageName: data["imageName"] as? String ?? "",
                         age: data["age"] as? String ?? "",
                         server: data["server"] as? String ?? "",
-                        bestClip: data["bestClip"] as? String ?? "",
                         answers: data["answers"] as? [String: String] ?? [:],
                         hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false
                     )
@@ -397,6 +369,7 @@ struct ContentView: View {
 }
 
 
+
 struct UserCardView: View {
     var user: UserProfile
     
@@ -428,14 +401,6 @@ struct UserCardView: View {
                 }
                 .foregroundColor(.white)
                 .font(.subheadline)
-                .padding(.horizontal)
-                
-                HStack {
-                    Text("Best Clip: \(user.bestClip)")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                    Spacer()
-                }
                 .padding(.horizontal)
             }
             .frame(width: UIScreen.main.bounds.width * 0.85)
@@ -527,8 +492,15 @@ struct NotificationBanner: View {
     }
 }
 
+// Previews for ContentView
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView()
+        ContentView(currentUser: .constant(UserProfile(name: "Preview User", rank: "Gold 3", imageName: "preview", age: "24", server: "NA", answers: [
+            "Favorite agent to play in Valorant?": "Jett",
+            "Preferred role?": "Duelist",
+            "Favorite game mode?": "Competitive",
+            "Servers?": "NA",
+            "Favorite weapon skin?": "Phantom"
+        ])), isSignedIn: .constant(true))
     }
 }

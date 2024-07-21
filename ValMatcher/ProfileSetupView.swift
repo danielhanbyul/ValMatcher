@@ -138,7 +138,7 @@ struct ProfileSetupView: View {
 }
 
 struct ProfileSetupView_Previews: PreviewProvider {
-    @State static var userProfile = UserProfile(name: "John", rank: "Bronze", imageName: "profile", age: "25", server: "NA", bestClip: "clip1", answers: [:], hasAnsweredQuestions: false)
+    @State static var userProfile = UserProfile(name: "John", rank: "Bronze", imageName: "profile", age: "25", server: "NA", answers: [:], hasAnsweredQuestions: false)
 
     static var previews: some View {
         ProfileSetupView(userProfile: $userProfile)

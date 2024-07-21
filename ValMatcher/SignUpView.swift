@@ -147,7 +147,6 @@ struct SignUpView: View {
                 "imageName": "default",
                 "age": "Unknown",
                 "server": "Unknown",
-                "bestClip": "none",
                 "answers": [:],
                 "hasAnsweredQuestions": false
             ]
@@ -164,10 +163,8 @@ struct SignUpView: View {
                     imageName: "default",
                     age: "Unknown",
                     server: "Unknown",
-                    bestClip: "none",
                     answers: [:],
-                    hasAnsweredQuestions: false,
-                    media: []
+                    hasAnsweredQuestions: false
                 )
                 self.isSignedIn = true
             }

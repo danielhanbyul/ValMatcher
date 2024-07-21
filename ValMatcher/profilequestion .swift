@@ -150,7 +150,7 @@ struct QuestionsView: View {
 
 
 struct QuestionsView_Previews: PreviewProvider {
-    @State static var userProfile: UserProfile = UserProfile(name: "John Doe", rank: "Platinum 1", imageName: "john", age: "25", server: "NA", bestClip: "clip1", answers: [:], hasAnsweredQuestions: false)
+    @State static var userProfile: UserProfile = UserProfile(name: "John Doe", rank: "Platinum 1", imageName: "john", age: "25", server: "NA", answers: [:], hasAnsweredQuestions: false)
     @State static var hasAnsweredQuestions: Bool = false
 
     static var previews: some View {
