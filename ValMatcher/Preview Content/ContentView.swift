@@ -202,7 +202,7 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .imageScale(.medium)
                     }
-                    NavigationLink(destination: ProfileView(user: .constant(currentUser ?? UserProfile(name: "", rank: "", imageName: "", age: "", server: "", bestClip: "", answers: [:])), isSignedIn: $isSignedIn)) { // Ensure currentUser is correctly passed here
+                    NavigationLink(destination: ProfileView(user: .constant(currentUser ?? UserProfile(name: "", rank: "", imageName: "", age: "", server: "", bestClip: "", answers: [:])), isSignedIn: $isSignedIn)) {
                         Image(systemName: "person.crop.circle.fill")
                             .foregroundColor(.white)
                             .imageScale(.medium)
@@ -532,4 +532,3 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
     }
 }
-
