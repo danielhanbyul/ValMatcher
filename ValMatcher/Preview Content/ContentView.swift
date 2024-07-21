@@ -51,94 +51,98 @@ struct ContentView: View {
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
 
-            ScrollView {
-                VStack {
-                    if currentIndex < users.count {
-                        VStack {
-                            ZStack {
-                                UserCardView(user: users[currentIndex])
-                                    .gesture(
-                                        DragGesture()
-                                            .onChanged { gesture in
-                                                self.offset = gesture.translation
-                                            }
-                                            .onEnded { gesture in
-                                                if self.offset.width < -100 {
-                                                    self.dislikeAction()
-                                                } else if self.offset.width > 100 {
+            if !hasAnsweredQuestions {
+                QuestionsView(userProfile: $currentUser.unwrap(defaultValue: UserProfile(name: "", rank: "", imageName: "", age: "", server: "", answers: [:])), hasAnsweredQuestions: $hasAnsweredQuestions)
+            } else {
+                ScrollView {
+                    VStack {
+                        if currentIndex < users.count {
+                            VStack {
+                                ZStack {
+                                    UserCardView(user: users[currentIndex])
+                                        .gesture(
+                                            DragGesture()
+                                                .onChanged { gesture in
+                                                    self.offset = gesture.translation
+                                                }
+                                                .onEnded { gesture in
+                                                    if self.offset.width < -100 {
+                                                        self.dislikeAction()
+                                                    } else if self.offset.width > 100 {
+                                                        self.likeAction()
+                                                    }
+                                                    self.offset = .zero
+                                                }
+                                        )
+                                        .gesture(
+                                            TapGesture(count: 2)
+                                                .onEnded {
                                                     self.likeAction()
                                                 }
-                                                self.offset = .zero
-                                            }
-                                    )
-                                    .gesture(
-                                        TapGesture(count: 2)
-                                            .onEnded {
-                                                self.likeAction()
-                                            }
-                                    )
-                                    .offset(x: self.offset.width * 1.5, y: self.offset.height)
-                                    .animation(.spring())
-                                    .transition(.slide)
+                                        )
+                                        .offset(x: self.offset.width * 1.5, y: self.offset.height)
+                                        .animation(.spring())
+                                        .transition(.slide)
 
-                                if let result = interactionResult {
-                                    if result == .liked {
-                                        Image(systemName: "heart.fill")
-                                            .resizable()
-                                            .frame(width: 100, height: 100)
-                                            .foregroundColor(.green)
-                                            .transition(.opacity)
-                                    } else if result == .passed {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .resizable()
-                                            .frame(width: 100, height: 100)
-                                            .foregroundColor(.red)
-                                            .transition(.opacity)
-                                    }
-                                }
-                            }
-                            .padding()
-
-                            VStack(alignment: .leading, spacing: 20) {
-                                ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        HStack {
-                                            Image(systemName: "questionmark.circle")
-                                                .foregroundColor(.blue)
-                                            Text(key)
-                                                .font(.custom("AvenirNext-Bold", size: 18))
-                                                .foregroundColor(.black)
+                                    if let result = interactionResult {
+                                        if result == .liked {
+                                            Image(systemName: "heart.fill")
+                                                .resizable()
+                                                .frame(width: 100, height: 100)
+                                                .foregroundColor(.green)
+                                                .transition(.opacity)
+                                        } else if result == .passed {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .resizable()
+                                                .frame(width: 100, height: 100)
+                                                .foregroundColor(.red)
+                                                .transition(.opacity)
                                         }
-                                        Text(users[currentIndex].answers[key] ?? "")
-                                            .font(.custom("AvenirNext-Regular", size: 22))
-                                            .foregroundColor(.black)
-                                            .padding(.top, 2)
                                     }
-                                    .frame(width: UIScreen.main.bounds.width * 0.85, alignment: .leading)
-                                    .padding()
-                                    .background(Color.white)
-                                    .cornerRadius(10)
-                                    .padding(.horizontal)
                                 }
-                            }
-                            .padding(.horizontal)
-                        }
-                    } else {
-                        VStack {
-                            Text("No more users")
-                                .font(.largeTitle)
-                                .foregroundColor(.white)
                                 .padding()
 
-                            NavigationLink(destination: QuestionsView(userProfile: .constant(users[currentIndex]), hasAnsweredQuestions: $hasAnsweredQuestions)) {
-                                Text("Answer Questions")
+                                VStack(alignment: .leading, spacing: 20) {
+                                    ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            HStack {
+                                                Image(systemName: "questionmark.circle")
+                                                    .foregroundColor(.blue)
+                                                Text(key)
+                                                    .font(.custom("AvenirNext-Bold", size: 18))
+                                                    .foregroundColor(.black)
+                                            }
+                                            Text(users[currentIndex].answers[key] ?? "")
+                                                .font(.custom("AvenirNext-Regular", size: 22))
+                                                .foregroundColor(.black)
+                                                .padding(.top, 2)
+                                        }
+                                        .frame(width: UIScreen.main.bounds.width * 0.85, alignment: .leading)
+                                        .padding()
+                                        .background(Color.white)
+                                        .cornerRadius(10)
+                                        .padding(.horizontal)
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        } else {
+                            VStack {
+                                Text("No more users")
+                                    .font(.largeTitle)
                                     .foregroundColor(.white)
-                                    .font(.custom("AvenirNext-Bold", size: 18))
                                     .padding()
-                                    .frame(maxWidth: .infinity)
-                                    .background(Color.blue)
-                                    .cornerRadius(8)
-                                    .padding(.horizontal)
+
+                                NavigationLink(destination: QuestionsView(userProfile: .constant(users[currentIndex]), hasAnsweredQuestions: $hasAnsweredQuestions)) {
+                                    Text("Answer Questions")
+                                        .foregroundColor(.white)
+                                        .font(.custom("AvenirNext-Bold", size: 18))
+                                        .padding()
+                                        .frame(maxWidth: .infinity)
+                                        .background(Color.blue)
+                                        .cornerRadius(8)
+                                        .padding(.horizontal)
+                                }
                             }
                         }
                     }
@@ -185,6 +189,9 @@ struct ContentView: View {
         }
         .alert(isPresented: $showAlert) {
             Alert(title: Text("Match!"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+        }
+        .onAppear {
+            checkUser()
         }
     }
 
@@ -368,8 +375,6 @@ struct ContentView: View {
     }
 }
 
-
-
 struct UserCardView: View {
     var user: UserProfile
     
@@ -502,5 +507,14 @@ struct ContentView_Previews: PreviewProvider {
             "Servers?": "NA",
             "Favorite weapon skin?": "Phantom"
         ])), isSignedIn: .constant(true))
+    }
+}
+
+extension Binding {
+    func unwrap<T>(defaultValue: T) -> Binding<T> where Value == T? {
+        return Binding<T>(
+            get: { self.wrappedValue ?? defaultValue },
+            set: { self.wrappedValue = $0 }
+        )
     }
 }
