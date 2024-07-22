@@ -91,8 +91,8 @@ struct QuestionsView: View {
                 }
             }
         }
-        .navigationBarTitle("Valorant Questions", displayMode: .inline)
         .padding()
+        .navigationBarHidden(true)
     }
 
     private func answerQuestion() {
@@ -139,21 +139,11 @@ struct QuestionsView: View {
                     print("Error writing user to Firestore: \(err)")
                 } else {
                     self.hasAnsweredQuestions = true
-                    self.presentationMode.wrappedValue.dismiss()  // Navigate back to MainView
+                    self.presentationMode.wrappedValue.dismiss()
                 }
             }
         } catch let error {
             print("Error writing user to Firestore: \(error)")
         }
-    }
-}
-
-
-struct QuestionsView_Previews: PreviewProvider {
-    @State static var userProfile: UserProfile = UserProfile(name: "John Doe", rank: "Platinum 1", imageName: "john", age: "25", server: "NA", answers: [:], hasAnsweredQuestions: false)
-    @State static var hasAnsweredQuestions: Bool = false
-
-    static var previews: some View {
-        QuestionsView(userProfile: $userProfile, hasAnsweredQuestions: $hasAnsweredQuestions)
     }
 }

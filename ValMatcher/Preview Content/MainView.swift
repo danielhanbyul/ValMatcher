@@ -17,7 +17,18 @@ struct MainView: View {
     var body: some View {
         NavigationView {
             if isSignedIn {
-                ContentView(currentUser: $currentUser, isSignedIn: $isSignedIn)
+                if let user = currentUser {
+                    if user.hasAnsweredQuestions {
+                        ContentView(currentUser: $currentUser, isSignedIn: $isSignedIn)
+                    } else {
+                        QuestionsView(userProfile: Binding(
+                            get: { self.currentUser ?? UserProfile(name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, additionalImages: []) },
+                            set: { self.currentUser = $0 }
+                        ), hasAnsweredQuestions: $hasAnsweredQuestions)
+                    }
+                } else {
+                    Text("Loading...")
+                }
             } else {
                 if isShowingLoginView {
                     LoginView(isSignedIn: $isSignedIn, currentUser: $currentUser, isShowingLoginView: $isShowingLoginView)
@@ -27,15 +38,12 @@ struct MainView: View {
             }
         }
         .onAppear {
-            print("MainView appeared")
             checkUserStatus()
         }
     }
 
     func checkUserStatus() {
-        print("Checking user status")
         if let user = Auth.auth().currentUser {
-            print("User is signed in with UID: \(user.uid)")
             self.isSignedIn = true
             let db = Firestore.firestore()
             db.collection("users").document(user.uid).getDocument { document, error in
@@ -51,20 +59,15 @@ struct MainView: View {
                             age: data["age"] as? String ?? "",
                             server: data["server"] as? String ?? "",
                             answers: data["answers"] as? [String: String] ?? [:],
-                            hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false
+                            hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false,
+                            additionalImages: data["additionalImages"] as? [String] ?? []
                         )
                         self.hasAnsweredQuestions = self.currentUser?.hasAnsweredQuestions ?? false
-                        print("User profile set")
                     }
-                } else {
-                    print("User document does not exist or there was an error: \(String(describing: error))")
                 }
             }
         } else {
-            print("User is not signed in")
             self.isSignedIn = false
-            self.isShowingLoginView = true
         }
     }
 }
-

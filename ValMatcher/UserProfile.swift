@@ -17,5 +17,5 @@ struct UserProfile: Identifiable, Codable {
     var server: String
     var answers: [String: String]
     var hasAnsweredQuestions: Bool = false
-    var media: [String] = []
+    var additionalImages: [String] = []
 }

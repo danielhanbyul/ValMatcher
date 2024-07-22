@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import FirebaseAuth
 
 struct ProfileView: View {
     @Binding var user: UserProfile
@@ -88,6 +87,31 @@ struct ProfileView: View {
                         }
                     }
                     .padding(.horizontal)
+                    
+                    // Display Additional Images
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Additional Images")
+                            .font(.headline)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack {
+                                ForEach(user.additionalImages.indices, id: \.self) { index in
+                                    let urlString = user.additionalImages[index]
+                                    if let url = URL(string: urlString),
+                                       let data = try? Data(contentsOf: url),
+                                       let image = UIImage(data: data) {
+                                        Image(uiImage: image)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 100, height: 100)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                            .shadow(radius: 5)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
                 }
                 .padding()
             }
@@ -116,26 +140,5 @@ struct ProfileView: View {
                 }
             }
         }
-    }
-}
-
-struct ProfileView_Previews: PreviewProvider {
-    static var previews: some View {
-        ProfileView(user: .constant(UserProfile(
-            name: "John Doe",
-            rank: "Platinum 1",
-            imageName: "john",
-            age: "25",
-            server: "NA",
-            answers: [
-                "Who's your favorite agent to play in Valorant?": "Jett",
-                "Do you prefer playing as a Duelist, Initiator, Controller, or Sentinel?": "Duelist",
-                "What’s your current rank in Valorant?": "Platinum",
-                "Favorite game mode?": "Competitive",
-                "What servers do you play on? (ex: NA, N. California)": "NA",
-                "What's your favorite weapon skin in Valorant?": "Oni Phantom"
-            ]
-        )), isSignedIn: .constant(true))
-        .preferredColorScheme(.dark)
     }
 }

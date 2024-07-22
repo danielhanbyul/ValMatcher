@@ -139,3 +139,4 @@ struct LoginView_Previews: PreviewProvider {
         LoginView(isSignedIn: .constant(false), currentUser: .constant(nil), isShowingLoginView: .constant(true))
     }
 }
+

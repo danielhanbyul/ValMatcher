@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Firebase
+import FirebaseAuth
 
 struct SignUpView: View {
     @Binding var currentUser: UserProfile?
@@ -18,6 +19,7 @@ struct SignUpView: View {
     @State private var confirmPassword = ""
     @State private var userName = ""
     @State private var errorMessage = ""
+    @State private var showAlert = false
 
     var body: some View {
         ZStack {
@@ -99,8 +101,10 @@ struct SignUpView: View {
                         .shadow(color: Color(red: 0.98, green: 0.27, blue: 0.29).opacity(0.5), radius: 10, x: 0, y: 10)
                 }
                 .padding(.top, 20)
-                .alert(isPresented: .constant(!errorMessage.isEmpty)) {
-                    Alert(title: Text("Error"), message: Text(errorMessage), dismissButton: .default(Text("OK")))
+                .alert(isPresented: $showAlert) {
+                    Alert(title: Text("Success"), message: Text("Your account has been created. Please log in."), dismissButton: .default(Text("OK")) {
+                        isShowingLoginView = true
+                    })
                 }
 
                 Spacer()
@@ -124,18 +128,21 @@ struct SignUpView: View {
     func signUp() {
         guard password == confirmPassword else {
             errorMessage = "Passwords do not match"
+            showAlert = true
             return
         }
 
         Auth.auth().createUser(withEmail: email, password: password) { authResult, error in
             if let error = error {
                 self.errorMessage = "Error: \(error.localizedDescription)"
+                self.showAlert = true
                 print("Error creating user: \(error.localizedDescription)")
                 return
             }
 
             guard let uid = authResult?.user.uid else {
                 self.errorMessage = "Failed to retrieve user ID."
+                self.showAlert = true
                 return
             }
 
@@ -148,25 +155,17 @@ struct SignUpView: View {
                 "age": "Unknown",
                 "server": "Unknown",
                 "answers": [:],
-                "hasAnsweredQuestions": false
+                "hasAnsweredQuestions": false,
+                "additionalImages": []
             ]
             db.collection("users").document(uid).setData(userData) { error in
                 if let error = error {
                     self.errorMessage = "Error saving user data: \(error.localizedDescription)"
+                    self.showAlert = true
                     print("Error saving user data: \(error.localizedDescription)")
                     return
                 }
-                self.currentUser = UserProfile(
-                    id: uid,
-                    name: self.userName,
-                    rank: "Unranked",
-                    imageName: "default",
-                    age: "Unknown",
-                    server: "Unknown",
-                    answers: [:],
-                    hasAnsweredQuestions: false
-                )
-                self.isSignedIn = true
+                self.showAlert = true
             }
         }
     }

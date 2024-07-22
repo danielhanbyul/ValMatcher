@@ -13,22 +13,7 @@ struct ContentView: View {
     @Binding var currentUser: UserProfile?
     @Binding var isSignedIn: Bool
     @State private var hasAnsweredQuestions = false
-    @State private var users: [UserProfile] = [
-        UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", answers: [
-            "Favorite agent to play in Valorant?": "Jett",
-            "Preferred role?": "Duelist",
-            "Favorite game mode?": "Competitive",
-            "Servers?": "NA",
-            "Favorite weapon skin?": "Phantom"
-        ]),
-        UserProfile(name: "Bob", rank: "Silver 2", imageName: "bob", age: "22", server: "EU", answers: [
-            "Favorite agent to play in Valorant?": "Sage",
-            "Preferred role?": "Controller",
-            "Favorite game mode?": "Unrated",
-            "Servers?": "EU",
-            "Favorite weapon skin?": "Vandal"
-        ])
-    ]
+    @State private var users: [UserProfile] = []
     @State private var currentIndex = 0
     @State private var offset = CGSize.zero
     @State private var interactionResult: InteractionResult? = nil
@@ -51,99 +36,104 @@ struct ContentView: View {
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
 
-            if !hasAnsweredQuestions {
-                QuestionsView(userProfile: $currentUser.unwrap(defaultValue: UserProfile(name: "", rank: "", imageName: "", age: "", server: "", answers: [:])), hasAnsweredQuestions: $hasAnsweredQuestions)
-            } else {
-                ScrollView {
-                    VStack {
-                        if currentIndex < users.count {
-                            VStack {
-                                ZStack {
-                                    UserCardView(user: users[currentIndex])
-                                        .gesture(
-                                            DragGesture()
-                                                .onChanged { gesture in
-                                                    self.offset = gesture.translation
-                                                }
-                                                .onEnded { gesture in
-                                                    if self.offset.width < -100 {
-                                                        self.dislikeAction()
-                                                    } else if self.offset.width > 100 {
-                                                        self.likeAction()
-                                                    }
-                                                    self.offset = .zero
-                                                }
-                                        )
-                                        .gesture(
-                                            TapGesture(count: 2)
-                                                .onEnded {
+            ScrollView {
+                VStack {
+                    if currentIndex < users.count {
+                        VStack {
+                            ZStack {
+                                UserCardView(user: users[currentIndex])
+                                    .gesture(
+                                        DragGesture()
+                                            .onChanged { gesture in
+                                                self.offset = gesture.translation
+                                            }
+                                            .onEnded { gesture in
+                                                if self.offset.width < -100 {
+                                                    self.dislikeAction()
+                                                } else if self.offset.width > 100 {
                                                     self.likeAction()
                                                 }
-                                        )
-                                        .offset(x: self.offset.width * 1.5, y: self.offset.height)
-                                        .animation(.spring())
-                                        .transition(.slide)
-
-                                    if let result = interactionResult {
-                                        if result == .liked {
-                                            Image(systemName: "heart.fill")
-                                                .resizable()
-                                                .frame(width: 100, height: 100)
-                                                .foregroundColor(.green)
-                                                .transition(.opacity)
-                                        } else if result == .passed {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .resizable()
-                                                .frame(width: 100, height: 100)
-                                                .foregroundColor(.red)
-                                                .transition(.opacity)
-                                        }
-                                    }
-                                }
-                                .padding()
-
-                                VStack(alignment: .leading, spacing: 20) {
-                                    ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            HStack {
-                                                Image(systemName: "questionmark.circle")
-                                                    .foregroundColor(.blue)
-                                                Text(key)
-                                                    .font(.custom("AvenirNext-Bold", size: 18))
-                                                    .foregroundColor(.black)
+                                                self.offset = .zero
                                             }
-                                            Text(users[currentIndex].answers[key] ?? "")
-                                                .font(.custom("AvenirNext-Regular", size: 22))
-                                                .foregroundColor(.black)
-                                                .padding(.top, 2)
-                                        }
-                                        .frame(width: UIScreen.main.bounds.width * 0.85, alignment: .leading)
-                                        .padding()
-                                        .background(Color.white)
-                                        .cornerRadius(10)
-                                        .padding(.horizontal)
+                                    )
+                                    .gesture(
+                                        TapGesture(count: 2)
+                                            .onEnded {
+                                                self.likeAction()
+                                            }
+                                    )
+                                    .offset(x: self.offset.width * 1.5, y: self.offset.height)
+                                    .animation(.spring())
+                                    .transition(.slide)
+
+                                if let result = interactionResult {
+                                    if result == .liked {
+                                        Image(systemName: "heart.fill")
+                                            .resizable()
+                                            .frame(width: 100, height: 100)
+                                            .foregroundColor(.green)
+                                            .transition(.opacity)
+                                    } else if result == .passed {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .resizable()
+                                            .frame(width: 100, height: 100)
+                                            .foregroundColor(.red)
+                                            .transition(.opacity)
                                     }
                                 }
-                                .padding(.horizontal)
                             }
-                        } else {
-                            VStack {
-                                Text("No more users")
-                                    .font(.largeTitle)
-                                    .foregroundColor(.white)
-                                    .padding()
+                            .padding()
 
-                                NavigationLink(destination: QuestionsView(userProfile: .constant(users[currentIndex]), hasAnsweredQuestions: $hasAnsweredQuestions)) {
-                                    Text("Answer Questions")
-                                        .foregroundColor(.white)
-                                        .font(.custom("AvenirNext-Bold", size: 18))
-                                        .padding()
-                                        .frame(maxWidth: .infinity)
-                                        .background(Color.blue)
-                                        .cornerRadius(8)
-                                        .padding(.horizontal)
+                            VStack(alignment: .leading, spacing: 20) {
+                                ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack {
+                                            Image(systemName: "questionmark.circle")
+                                                .foregroundColor(.blue)
+                                            Text(key)
+                                                .font(.custom("AvenirNext-Bold", size: 18))
+                                                .foregroundColor(.black)
+                                        }
+                                        Text(users[currentIndex].answers[key] ?? "")
+                                            .font(.custom("AvenirNext-Regular", size: 22))
+                                            .foregroundColor(.black)
+                                            .padding(.top, 2)
+                                    }
+                                    .frame(width: UIScreen.main.bounds.width * 0.85, alignment: .leading)
+                                    .padding()
+                                    .background(Color.white)
+                                    .cornerRadius(10)
+                                    .padding(.horizontal)
                                 }
                             }
+                            .padding(.horizontal)
+                            
+                            // Display additional images
+                            ScrollView(.horizontal) {
+                                HStack {
+                                    ForEach(users[currentIndex].additionalImages, id: \.self) { imageUrl in
+                                        if let url = URL(string: imageUrl),
+                                           let data = try? Data(contentsOf: url),
+                                           let image = UIImage(data: data) {
+                                            Image(uiImage: image)
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fill)
+                                                .frame(width: 100, height: 100)
+                                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                                .shadow(radius: 5)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                    } else {
+                        VStack {
+                            Text("No more users")
+                                .font(.largeTitle)
+                                .foregroundColor(.white)
+                                .padding()
                         }
                     }
                 }
@@ -191,37 +181,20 @@ struct ContentView: View {
             Alert(title: Text("Match!"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
         }
         .onAppear {
-            checkUser()
+            fetchUsers()
         }
     }
 
-    private func checkUser() {
-        if let user = Auth.auth().currentUser {
-            fetchUserProfile(userID: user.uid)
-            isSignedIn = true
-        } else {
-            isSignedIn = false
-        }
-    }
-
-    private func fetchUserProfile(userID: String) {
+    private func fetchUsers() {
         let db = Firestore.firestore()
-        db.collection("users").document(userID).getDocument { document, error in
-            if let document = document, document.exists {
-                if let data = document.data() {
-                    self.currentUser = UserProfile(
-                        id: document.documentID,
-                        name: data["name"] as? String ?? "",
-                        rank: data["rank"] as? String ?? "",
-                        imageName: data["imageName"] as? String ?? "",
-                        age: data["age"] as? String ?? "",
-                        server: data["server"] as? String ?? "",
-                        answers: data["answers"] as? [String: String] ?? [:],
-                        hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false
-                    )
-                    self.hasAnsweredQuestions = self.currentUser?.hasAnsweredQuestions ?? false
-                }
+        db.collection("users").getDocuments { (querySnapshot, error) in
+            if let error = error {
+                print("Error fetching users: \(error)")
+                return
             }
+            self.users = querySnapshot?.documents.compactMap { document in
+                try? document.data(as: UserProfile.self)
+            } ?? []
         }
     }
 
@@ -375,6 +348,7 @@ struct ContentView: View {
     }
 }
 
+
 struct UserCardView: View {
     var user: UserProfile
     
@@ -383,15 +357,20 @@ struct UserCardView: View {
     var body: some View {
         VStack(spacing: 0) {
             TabView(selection: $currentMediaIndex) {
-                ForEach(user.media.indices, id: \.self) { index in
-                    Image(user.media[index])
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                        .clipped()
-                        .cornerRadius(20)
-                        .shadow(radius: 10)
-                        .tag(index)
+                ForEach(user.additionalImages.indices, id: \.self) { index in
+                    let urlString = user.additionalImages[index]
+                    if let url = URL(string: urlString),
+                       let data = try? Data(contentsOf: url),
+                       let image = UIImage(data: data) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                            .clipped()
+                            .cornerRadius(20)
+                            .shadow(radius: 10)
+                            .tag(index)
+                    }
                 }
             }
             .tabViewStyle(PageTabViewStyle())
@@ -421,6 +400,7 @@ struct UserCardView: View {
         .padding()
     }
 }
+
 
 // BadgeView Definition
 struct BadgeView: View {
@@ -510,11 +490,3 @@ struct ContentView_Previews: PreviewProvider {
     }
 }
 
-extension Binding {
-    func unwrap<T>(defaultValue: T) -> Binding<T> where Value == T? {
-        return Binding<T>(
-            get: { self.wrappedValue ?? defaultValue },
-            set: { self.wrappedValue = $0 }
-        )
-    }
-}
