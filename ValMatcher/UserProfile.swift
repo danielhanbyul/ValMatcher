@@ -16,6 +16,6 @@ struct UserProfile: Identifiable, Codable {
     var age: String
     var server: String
     var answers: [String: String]
-    var hasAnsweredQuestions: Bool = false
-    var additionalImages: [String] = []
+    var hasAnsweredQuestions: Bool
+    var additionalImages: [String?] // Use optional strings for URLs
 }

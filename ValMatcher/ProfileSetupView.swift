@@ -7,141 +7,113 @@
 
 import SwiftUI
 import Firebase
-import FirebaseStorage
 import FirebaseFirestore
 
 struct ProfileSetupView: View {
-    @Binding var userProfile: UserProfile
-    @State private var firstName = ""
-    @State private var lastName = ""
-    @State private var age = ""
-    @State private var rank = ""
-    @State private var server = ""
-    @State private var image: UIImage?
-    @State private var imageData: Data?
+    @Binding var currentUser: UserProfile?
+    @Binding var isSignedIn: Bool
+
+    @State private var currentQuestionIndex = 0
+    @State private var answers: [String: String] = [:]
+    @State private var isLoading = false
+    @State private var errorMessage = ""
+
+    private let questions = [
+        "Who's your favorite agent to play in Valorant?",
+        "Do you prefer playing as a Duelist, Initiator, Controller, or Sentinel?",
+        "What's your current rank in Valorant?",
+        "Favorite game mode?",
+        "What servers do you play on? (ex: NA, N. California)",
+        "What's your favorite weapon skin in Valorant?"
+    ]
 
     var body: some View {
         VStack {
-            Spacer()
-            Text("Complete Your Profile")
-                .font(.custom("AvenirNext-Bold", size: 24))
-                .foregroundColor(Color(red: 0.98, green: 0.27, blue: 0.29))
-                .padding(.bottom, 20)
-                .shadow(color: Color(red: 0.86, green: 0.24, blue: 0.29), radius: 5, x: 0, y: 3)
-
-            VStack(alignment: .leading, spacing: 15) {
-                TextField("First Name", text: $firstName)
-                    .padding()
-                    .background(Color(.systemGray6).opacity(0.8))
-                    .cornerRadius(8.0)
-
-                TextField("Last Name", text: $lastName)
-                    .padding()
-                    .background(Color(.systemGray6).opacity(0.8))
-                    .cornerRadius(8.0)
-
-                TextField("Age", text: $age)
-                    .padding()
-                    .background(Color(.systemGray6).opacity(0.8))
-                    .cornerRadius(8.0)
-
-                TextField("Valorant Rank", text: $rank)
-                    .padding()
-                    .background(Color(.systemGray6).opacity(0.8))
-                    .cornerRadius(8.0)
-
-                TextField("Server", text: $server)
-                    .padding()
-                    .background(Color(.systemGray6).opacity(0.8))
-                    .cornerRadius(8.0)
-
-                Button(action: {
-                    // Handle image picker action
-                }) {
-                    Text("Upload Profile Picture")
+            if isLoading {
+                ProgressView("Saving...")
+            } else {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text(questions[currentQuestionIndex])
                         .font(.headline)
-                        .foregroundColor(.white)
                         .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color(red: 0.98, green: 0.27, blue: 0.29))
-                        .cornerRadius(8.0)
-                        .shadow(color: Color(red: 0.98, green: 0.27, blue: 0.29).opacity(0.5), radius: 5, x: 0, y: 5)
-                }
-            }
-            .padding(.horizontal, 30)
 
-            Button(action: completeProfile) {
-                Text("Complete Profile")
-                    .font(.headline)
-                    .foregroundColor(.white)
+                    TextField("Answer", text: Binding(
+                        get: { answers[questions[currentQuestionIndex]] ?? "" },
+                        set: { answers[questions[currentQuestionIndex]] = $0 }
+                    ))
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color(red: 0.98, green: 0.27, blue: 0.29))
-                    .cornerRadius(8.0)
-                    .shadow(color: Color(red: 0.98, green: 0.27, blue: 0.29).opacity(0.5), radius: 5, x: 0, y: 5)
-            }
-            .padding(.top, 20)
-            .padding(.horizontal, 30)
 
-            Spacer()
+                    HStack {
+                        Spacer()
+                        Button(action: nextQuestion) {
+                            Text(currentQuestionIndex == questions.count - 1 ? "Finish" : "Next")
+                                .bold()
+                                .padding()
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                        }
+                        Spacer()
+                    }
+                }
+                .padding()
+            }
+
+            if !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .foregroundColor(.red)
+                    .padding()
+            }
         }
-        .background(
-            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
-                .edgesIgnoringSafeArea(.all)
-        )
+        .navigationBarTitle("Profile Setup", displayMode: .inline)
     }
 
-    func completeProfile() {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
+    private func nextQuestion() {
+        if currentQuestionIndex < questions.count - 1 {
+            currentQuestionIndex += 1
+        } else {
+            saveProfile()
+        }
+    }
+
+    private func saveProfile() {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            errorMessage = "Unable to fetch user ID"
+            return
+        }
+
+        isLoading = true
 
         let db = Firestore.firestore()
-        var data: [String: Any] = [
-            "firstName": firstName,
-            "lastName": lastName,
-            "age": age,
-            "rank": rank,
-            "server": server
-        ]
-
-        if let imageData = imageData {
-            let storageRef = Storage.storage().reference().child("profile_pictures").child(uid)
-            storageRef.putData(imageData, metadata: nil) { (metadata, error) in
-                if let error = error {
-                    print("Error uploading image: \(error.localizedDescription)")
-                    return
-                }
-
-                storageRef.downloadURL { (url, error) in
-                    if let error = error {
-                        print("Error getting download URL: \(error.localizedDescription)")
-                        return
-                    }
-
-                    if let profileImageUrl = url?.absoluteString {
-                        data["profileImageUrl"] = profileImageUrl
-                        db.collection("users").document(uid).updateData(data) { error in
-                            if let error = error {
-                                print("Error updating profile: \(error.localizedDescription)")
-                            }
-                        }
-                    }
-                }
+        db.collection("users").document(userId).updateData([
+            "answers": answers,
+            "hasAnsweredQuestions": true
+        ]) { error in
+            if let error = error {
+                errorMessage = "Failed to save profile: \(error.localizedDescription)"
+                isLoading = false
+                return
             }
-        } else {
-            db.collection("users").document(uid).updateData(data) { error in
-                if let error = error {
-                    print("Error updating profile: \(error.localizedDescription)")
-                }
-            }
+
+            self.currentUser?.answers = self.answers
+            self.currentUser?.hasAnsweredQuestions = true
+            self.isSignedIn = true
         }
     }
 }
 
 struct ProfileSetupView_Previews: PreviewProvider {
-    @State static var userProfile = UserProfile(name: "John", rank: "Bronze", imageName: "profile", age: "25", server: "NA", answers: [:], hasAnsweredQuestions: false)
-
     static var previews: some View {
-        ProfileSetupView(userProfile: $userProfile)
-            .preferredColorScheme(.dark)
+        ProfileSetupView(currentUser: .constant(UserProfile(
+            name: "Preview User",
+            rank: "Gold 3",
+            imageName: "preview",
+            age: "24",
+            server: "NA",
+            answers: [:],
+            hasAnsweredQuestions: false,
+            additionalImages: []
+        )), isSignedIn: .constant(true))
     }
 }

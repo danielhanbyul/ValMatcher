@@ -47,7 +47,16 @@ struct MatchNotificationView: View {
 
 struct MatchNotificationView_Previews: PreviewProvider {
     static var previews: some View {
-        MatchNotificationView(matchedUser: UserProfile(name: "Alice", rank: "Bronze 1", imageName: "alice", age: "21", server: "NA", answers: [:], hasAnsweredQuestions: true))
-            .preferredColorScheme(.dark)
+        MatchNotificationView(matchedUser: UserProfile(
+            name: "Alice",
+            rank: "Bronze 1",
+            imageName: "alice",
+            age: "21",
+            server: "NA",
+            answers: [:],
+            hasAnsweredQuestions: true,
+            additionalImages: []
+        ))
+        .preferredColorScheme(.dark)
     }
 }

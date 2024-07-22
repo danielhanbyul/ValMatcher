@@ -126,7 +126,8 @@ struct LoginView: View {
                         age: data["age"] as? String ?? "",
                         server: data["server"] as? String ?? "",
                         answers: data["answers"] as? [String: String] ?? [:],
-                        hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false
+                        hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false,
+                        additionalImages: data["additionalImages"] as? [String] ?? []
                     )
                 }
             }
@@ -139,4 +140,3 @@ struct LoginView_Previews: PreviewProvider {
         LoginView(isSignedIn: .constant(false), currentUser: .constant(nil), isShowingLoginView: .constant(true))
     }
 }
-

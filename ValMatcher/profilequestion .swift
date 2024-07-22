@@ -107,6 +107,8 @@ struct QuestionsView: View {
 
             userProfile.answers[currentQuestion.text] = questions[currentQuestionIndex].answer
 
+            print("Current Answers: \(userProfile.answers)") // Debugging
+
             answer = ""
             selectedOption = ""
             errorMessage = ""
@@ -136,14 +138,16 @@ struct QuestionsView: View {
         do {
             try db.collection("users").document(uid).setData(from: userProfile) { err in
                 if let err = err {
-                    print("Error writing user to Firestore: \(err)")
+                    print("Error writing user to Firestore: \(err.localizedDescription)")
                 } else {
+                    print("Profile saved successfully")
                     self.hasAnsweredQuestions = true
                     self.presentationMode.wrappedValue.dismiss()
                 }
             }
         } catch let error {
-            print("Error writing user to Firestore: \(error)")
+            print("Error writing user to Firestore: \(error.localizedDescription)")
         }
     }
+
 }

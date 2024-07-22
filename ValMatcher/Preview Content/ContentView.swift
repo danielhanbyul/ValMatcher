@@ -112,7 +112,8 @@ struct ContentView: View {
                             ScrollView(.horizontal) {
                                 HStack {
                                     ForEach(users[currentIndex].additionalImages, id: \.self) { imageUrl in
-                                        if let url = URL(string: imageUrl),
+                                        if let urlString = imageUrl,
+                                           let url = URL(string: urlString),
                                            let data = try? Data(contentsOf: url),
                                            let image = UIImage(data: data) {
                                             Image(uiImage: image)
@@ -169,7 +170,7 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .imageScale(.medium)
                     }
-                    NavigationLink(destination: ProfileView(user: .constant(currentUser ?? UserProfile(name: "", rank: "", imageName: "", age: "", server: "", answers: [:])), isSignedIn: $isSignedIn)) {
+                    NavigationLink(destination: ProfileView(user: .constant(currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, additionalImages: [])), isSignedIn: $isSignedIn)) {
                         Image(systemName: "person.crop.circle.fill")
                             .foregroundColor(.white)
                             .imageScale(.medium)
@@ -348,7 +349,6 @@ struct ContentView: View {
     }
 }
 
-
 struct UserCardView: View {
     var user: UserProfile
     
@@ -358,8 +358,8 @@ struct UserCardView: View {
         VStack(spacing: 0) {
             TabView(selection: $currentMediaIndex) {
                 ForEach(user.additionalImages.indices, id: \.self) { index in
-                    let urlString = user.additionalImages[index]
-                    if let url = URL(string: urlString),
+                    if let urlString = user.additionalImages[index],
+                       let url = URL(string: urlString),
                        let data = try? Data(contentsOf: url),
                        let image = UIImage(data: data) {
                         Image(uiImage: image)
@@ -480,13 +480,12 @@ struct NotificationBanner: View {
 // Previews for ContentView
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView(currentUser: .constant(UserProfile(name: "Preview User", rank: "Gold 3", imageName: "preview", age: "24", server: "NA", answers: [
+        ContentView(currentUser: .constant(UserProfile(id: "", name: "Preview User", rank: "Gold 3", imageName: "preview", age: "24", server: "NA", answers: [
             "Favorite agent to play in Valorant?": "Jett",
             "Preferred role?": "Duelist",
             "Favorite game mode?": "Competitive",
             "Servers?": "NA",
             "Favorite weapon skin?": "Phantom"
-        ])), isSignedIn: .constant(true))
+        ], hasAnsweredQuestions: true, additionalImages: [])), isSignedIn: .constant(true))
     }
 }
-

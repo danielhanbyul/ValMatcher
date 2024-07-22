@@ -15,10 +15,6 @@ struct SettingsView: View {
     var body: some View {
         VStack {
             List {
-                NavigationLink(destination: EditProfileView(user: $user)) {
-                    Text("Edit Profile")
-                }
-                
                 Button(action: {
                     logout()
                 }) {
