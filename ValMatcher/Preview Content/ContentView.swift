@@ -32,157 +32,186 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ZStack {
-            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
-                .edgesIgnoringSafeArea(.all)
+        NavigationView {
+            ZStack {
+                LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
+                    .edgesIgnoringSafeArea(.all)
 
-            ScrollView {
-                VStack {
-                    if currentIndex < users.count {
-                        VStack {
-                            ZStack {
-                                UserCardView(user: users[currentIndex])
-                                    .gesture(
-                                        DragGesture()
-                                            .onChanged { gesture in
-                                                self.offset = gesture.translation
-                                            }
-                                            .onEnded { gesture in
-                                                if self.offset.width < -100 {
-                                                    self.dislikeAction()
-                                                } else if self.offset.width > 100 {
-                                                    self.likeAction()
-                                                }
-                                                self.offset = .zero
-                                            }
-                                    )
-                                    .gesture(
-                                        TapGesture(count: 2)
-                                            .onEnded {
-                                                self.likeAction()
-                                            }
-                                    )
-                                    .offset(x: self.offset.width * 1.5, y: self.offset.height)
-                                    .animation(.spring())
-                                    .transition(.slide)
-
-                                if let result = interactionResult {
-                                    if result == .liked {
-                                        Image(systemName: "heart.fill")
-                                            .resizable()
-                                            .frame(width: 100, height: 100)
-                                            .foregroundColor(.green)
-                                            .transition(.opacity)
-                                    } else if result == .passed {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .resizable()
-                                            .frame(width: 100, height: 100)
-                                            .foregroundColor(.red)
-                                            .transition(.opacity)
-                                    }
-                                }
-                            }
-                            .padding()
-
-                            VStack(alignment: .leading, spacing: 20) {
-                                ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        HStack {
-                                            Image(systemName: "questionmark.circle")
-                                                .foregroundColor(.blue)
-                                            Text(key)
-                                                .font(.custom("AvenirNext-Bold", size: 18))
-                                                .foregroundColor(.black)
-                                        }
-                                        Text(users[currentIndex].answers[key] ?? "")
-                                            .font(.custom("AvenirNext-Regular", size: 22))
-                                            .foregroundColor(.black)
-                                            .padding(.top, 2)
-                                    }
-                                    .frame(width: UIScreen.main.bounds.width * 0.85, alignment: .leading)
-                                    .padding()
-                                    .background(Color.white)
-                                    .cornerRadius(10)
-                                    .padding(.horizontal)
-                                }
-                            }
-                            .padding(.horizontal)
-                            
-                            // Display additional images
-                            ScrollView(.horizontal) {
-                                HStack {
-                                    ForEach(users[currentIndex].additionalImages, id: \.self) { imageUrl in
-                                        if let urlString = imageUrl,
-                                           let url = URL(string: urlString),
-                                           let data = try? Data(contentsOf: url),
-                                           let image = UIImage(data: data) {
-                                            Image(uiImage: image)
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                                .frame(width: 100, height: 100)
-                                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                                                .shadow(radius: 5)
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                    } else {
-                        VStack {
-                            Text("No more users")
-                                .font(.largeTitle)
-                                .foregroundColor(.white)
-                                .padding()
+                ScrollView {
+                    VStack {
+                        if currentIndex < users.count {
+                            userCardStack
+                        } else {
+                            noMoreUsersView
                         }
                     }
                 }
+                
+                if showNotificationBanner {
+                    NotificationBanner(message: bannerMessage, showBanner: $showNotificationBanner)
+                        .transition(.move(edge: .top))
+                        .animation(.easeInOut)
+                }
             }
+            .navigationTitle("ValMatcher")
+            .toolbar {
+                topBarContent
+            }
+            .alert(isPresented: $showAlert) {
+                Alert(title: Text("Match!"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+            }
+            .onAppear {
+                fetchUsers()
+            }
+        }
+    }
+    
+    private var userCardStack: some View {
+        VStack {
+            ZStack {
+                UserCardView(user: users[currentIndex])
+                    .gesture(
+                        DragGesture()
+                            .onChanged { gesture in
+                                self.offset = gesture.translation
+                            }
+                            .onEnded { gesture in
+                                if self.offset.width < -100 {
+                                    self.dislikeAction()
+                                } else if self.offset.width > 100 {
+                                    self.likeAction()
+                                }
+                                self.offset = .zero
+                            }
+                    )
+                    .gesture(
+                        TapGesture(count: 2)
+                            .onEnded {
+                                self.likeAction()
+                            }
+                    )
+                    .offset(x: self.offset.width * 1.5, y: self.offset.height)
+                    .animation(.spring())
+                    .transition(.slide)
+
+                if let result = interactionResult {
+                    interactionResultView(result)
+                }
+            }
+            .padding()
+
+            userInfoView
+                .padding(.horizontal)
             
-            if showNotificationBanner {
-                NotificationBanner(message: bannerMessage, showBanner: $showNotificationBanner)
-                    .transition(.move(edge: .top))
-                    .animation(.easeInOut)
-            }
+            userAdditionalImagesView
+                .padding(.horizontal)
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Text("ValMatcher")
-                    .font(.title2)
-                    .bold()
-                    .foregroundColor(.white)
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 15) {
-                    NavigationLink(destination: NotificationsView(notifications: $notifications, notificationCount: $notificationCount)) {
-                        Image(systemName: "bell.fill")
-                            .foregroundColor(.white)
-                            .imageScale(.medium)
-                            .overlay(
-                                BadgeView(count: notificationCount)
-                                    .offset(x: 12, y: -12)
-                            )
-                    }
-                    NavigationLink(destination: DMHomeView()) {
-                        Image(systemName: "message.fill")
-                            .foregroundColor(.white)
-                            .imageScale(.medium)
-                    }
-                    NavigationLink(destination: ProfileView(user: .constant(currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, additionalImages: [])), isSignedIn: $isSignedIn)) {
-                        Image(systemName: "person.crop.circle.fill")
-                            .foregroundColor(.white)
-                            .imageScale(.medium)
-                    }
+    }
+    
+    private var noMoreUsersView: some View {
+        VStack {
+            Text("No more users")
+                .font(.largeTitle)
+                .foregroundColor(.white)
+                .padding()
+        }
+    }
+
+    private var topBarContent: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigationBarLeading) {
+            Text("ValMatcher")
+                .font(.title2)
+                .bold()
+                .foregroundColor(.white)
+        }
+        return ToolbarItemGroup(placement: .navigationBarTrailing) {
+            HStack(spacing: 15) {
+                NavigationLink(destination: NotificationsView(notifications: $notifications, notificationCount: $notificationCount)) {
+                    Image(systemName: "bell.fill")
+                        .foregroundColor(.white)
+                        .imageScale(.medium)
+                        .overlay(
+                            BadgeView(count: notificationCount)
+                                .offset(x: 12, y: -12)
+                        )
+                }
+                NavigationLink(destination: DMHomeView()) {
+                    Image(systemName: "message.fill")
+                        .foregroundColor(.white)
+                        .imageScale(.medium)
+                }
+                NavigationLink(destination: ProfileView(user: .constant(currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, additionalImages: [])), isSignedIn: $isSignedIn, currentUserID: Auth.auth().currentUser?.uid ?? "")) {
+                    Image(systemName: "person.crop.circle.fill")
+                        .foregroundColor(.white)
+                        .imageScale(.medium)
                 }
             }
         }
-        .alert(isPresented: $showAlert) {
-            Alert(title: Text("Match!"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+    }
+
+
+    
+    private func interactionResultView(_ result: InteractionResult) -> some View {
+        Group {
+            if result == .liked {
+                Image(systemName: "heart.fill")
+                    .resizable()
+                    .frame(width: 100, height: 100)
+                    .foregroundColor(.green)
+                    .transition(.opacity)
+            } else if result == .passed {
+                Image(systemName: "xmark.circle.fill")
+                    .resizable()
+                    .frame(width: 100, height: 100)
+                    .foregroundColor(.red)
+                    .transition(.opacity)
+            }
         }
-        .onAppear {
-            fetchUsers()
+    }
+    
+    private var userInfoView: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundColor(.blue)
+                        Text(key)
+                            .font(.custom("AvenirNext-Bold", size: 18))
+                            .foregroundColor(.black)
+                    }
+                    Text(users[currentIndex].answers[key] ?? "")
+                        .font(.custom("AvenirNext-Regular", size: 22))
+                        .foregroundColor(.black)
+                        .padding(.top, 2)
+                }
+                .frame(width: UIScreen.main.bounds.width * 0.85, alignment: .leading)
+                .padding()
+                .background(Color.white)
+                .cornerRadius(10)
+                .padding(.horizontal)
+            }
+        }
+    }
+
+    private var userAdditionalImagesView: some View {
+        ScrollView(.horizontal) {
+            HStack {
+                ForEach(users[currentIndex].additionalImages, id: \.self) { imageUrl in
+                    if let urlString = imageUrl,
+                       let url = URL(string: urlString),
+                       let data = try? Data(contentsOf: url),
+                       let image = UIImage(data: data) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 100, height: 100)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                            .shadow(radius: 5)
+                    }
+                }
+            }
         }
     }
 

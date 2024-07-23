@@ -8,11 +8,11 @@
 import SwiftUI
 import Firebase
 import FirebaseFirestore
-import FirebaseFirestoreSwift
 
 struct ProfileView: View {
     @Binding var user: UserProfile
     @Binding var isSignedIn: Bool
+    var currentUserID: String
     @Environment(\.presentationMode) var presentationMode
     @State private var isEditing = false
     @State private var newImage: UIImage?
@@ -21,6 +21,15 @@ struct ProfileView: View {
     @State private var newRank = ""
     @State private var newServer = ""
     @State private var additionalImages: [String] = []
+    @State private var updatedAnswers: [String: String] = [:]
+    @State private var listener: ListenerRegistration?
+    private var db = Firestore.firestore()
+
+    init(user: Binding<UserProfile>, isSignedIn: Binding<Bool>, currentUserID: String) {
+        self._user = user
+        self._isSignedIn = isSignedIn
+        self.currentUserID = currentUserID
+    }
 
     var body: some View {
         VStack {
@@ -47,7 +56,7 @@ struct ProfileView: View {
                 
                 Spacer()
                 
-                if !isEditing {
+                if !isEditing && user.id == currentUserID {
                     Button(action: {
                         isEditing.toggle()
                         initializeEditValues()
@@ -160,8 +169,8 @@ struct ProfileView: View {
                                     .foregroundColor(.white)
                                 if isEditing {
                                     TextField("Answer", text: Binding(
-                                        get: { user.answers[question] ?? "" },
-                                        set: { user.answers[question] = $0 }
+                                        get: { updatedAnswers[question] ?? user.answers[question] ?? "" },
+                                        set: { updatedAnswers[question] = $0 }
                                     ))
                                     .textFieldStyle(RoundedBorderTextFieldStyle())
                                 } else {
@@ -220,97 +229,77 @@ struct ProfileView: View {
         )
         .navigationBarTitle("Profile", displayMode: .inline)
         .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: {
-                    presentationMode.wrappedValue.dismiss()
-                }) {
-                    Image(systemName: "chevron.left")
-                        .foregroundColor(.white)
-                        .imageScale(.medium)
-                }
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                NavigationLink(destination: SettingsView(user: $user, isSignedIn: $isSignedIn)) {
-                    Image(systemName: "gearshape.fill")
-                        .foregroundColor(.white)
-                        .imageScale(.medium)
-                }
-            }
-        }
-        .sheet(isPresented: $showingImagePicker, onDismiss: loadImage) {
-            ImagePicker(image: self.$newImage)
+        .sheet(isPresented: $showingImagePicker) {
+            // Your image picker view here
         }
         .onAppear {
-            print("ProfileView onAppear - user: \(user)")
-            // Load additional images if needed
             initializeEditValues()
+            startListeningForUserUpdates()
+        }
+        .onDisappear {
+            stopListeningForUserUpdates()
         }
     }
 
-    private func initializeEditValues() {
+    func initializeEditValues() {
         newAge = user.age
         newRank = user.rank
         newServer = user.server
-        additionalImages = user.additionalImages.compactMap { $0 }
+        additionalImages = user.additionalImages.compactMap { $0 } // Ensure non-nil URLs
+        updatedAnswers = user.answers
     }
-    
-    private func saveProfile() {
-        user.age = newAge
-        user.rank = newRank
-        user.server = newServer
-        user.additionalImages = additionalImages
-        
-        print("Saving profile - user: \(user)")
-        
-        // Save updated profile to Firestore
-        let db = Firestore.firestore()
-        if let userId = user.id {
-            do {
-                try db.collection("users").document(userId).setData(from: user) { error in
-                    if let error = error {
-                        print("Error writing user to Firestore: \(error)")
-                    } else {
-                        // Successfully saved, exit editing mode
-                        isEditing.toggle()
-                        print("Profile saved successfully")
-                        fetchUserProfile() // Fetch the updated profile
-                    }
-                }
-            } catch let error {
-                print("Error writing user to Firestore: \(error)")
-            }
-        } else {
-            print("Error: User ID is nil")
-        }
-    }
-    
-    private func fetchUserProfile() {
-        guard let userId = user.id else {
-            print("Error: User ID is nil")
-            return
-        }
 
-        let db = Firestore.firestore()
-        db.collection("users").document(userId).getDocument { document, error in
-            if let document = document, document.exists {
-                do {
-                    let newUser = try document.data(as: UserProfile.self)
-                    DispatchQueue.main.async {
-                        self.user = newUser
-                        print("Updated user profile fetched: \(newUser)") // Debugging statement
-                    }
-                } catch {
-                    print("Error decoding user: \(error)")
-                }
+    func saveProfile() {
+        // Update Firestore
+        let profileRef = db.collection("users").document(currentUserID)
+        profileRef.updateData([
+            "name": user.name,
+            "age": newAge,
+            "rank": newRank,
+            "server": newServer,
+            "additionalImages": additionalImages,
+            "answers": updatedAnswers
+        ]) { error in
+            if let error = error {
+                print("Error updating profile: \(error)")
             } else {
-                print("Document does not exist")
+                // Successfully updated
+                user.age = newAge
+                user.rank = newRank
+                user.server = newServer
+                user.additionalImages = additionalImages
+                user.answers = updatedAnswers
+                isEditing = false
+                // Navigate back to the updated profile view
+                presentationMode.wrappedValue.dismiss()
             }
         }
     }
-    
-    private func loadImage() {
-        guard let newImage = newImage else { return }
-        // Handle the new image (e.g., upload to Firebase Storage)
+
+    func startListeningForUserUpdates() {
+        listener = db.collection("users").document(currentUserID).addSnapshotListener { snapshot, error in
+            if let document = snapshot, document.exists {
+                if let data = document.data() {
+                    // Parse updated data
+                    if let age = data["age"] as? String,
+                       let rank = data["rank"] as? String,
+                       let server = data["server"] as? String,
+                       let additionalImages = data["additionalImages"] as? [String],
+                       let answers = data["answers"] as? [String: String] {
+                        DispatchQueue.main.async {
+                            self.user.age = age
+                            self.user.rank = rank
+                            self.user.server = server
+                            self.user.additionalImages = additionalImages
+                            self.user.answers = answers
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    func stopListeningForUserUpdates() {
+        listener?.remove()
     }
 }
