@@ -32,7 +32,7 @@ struct SettingsView: View {
             try Auth.auth().signOut()
             isSignedIn = false
         } catch let signOutError as NSError {
-            print("Error signing out: %@", signOutError)
+            print("Error signing out: \(signOutError.localizedDescription)")
         }
     }
 }

@@ -63,6 +63,7 @@
 		A984D4E92C1A2A5600BB75DB /* DM.swift in Sources */ = {isa = PBXBuildFile; fileRef = A984D4E82C1A2A5600BB75DB /* DM.swift */; };
 		A984D4EB2C1A2E6300BB75DB /* DMHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A984D4EA2C1A2E6300BB75DB /* DMHomeView.swift */; };
 		A9A63DF92C3245EA00F6198E /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9A63DF82C3245EA00F6198E /* MainView.swift */; };
+		A9FAA11E2C4F5D7700048F32 /* UserProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9FAA11D2C4F5D7700048F32 /* UserProfileView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -114,6 +115,7 @@
 		A984D4E82C1A2A5600BB75DB /* DM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DM.swift; sourceTree = "<group>"; };
 		A984D4EA2C1A2E6300BB75DB /* DMHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMHomeView.swift; sourceTree = "<group>"; };
 		A9A63DF82C3245EA00F6198E /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
+		A9FAA11D2C4F5D7700048F32 /* UserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -225,6 +227,7 @@
 				A984D4E82C1A2A5600BB75DB /* DM.swift */,
 				A984D4EA2C1A2E6300BB75DB /* DMHomeView.swift */,
 				A956FE802C1E78B200C9A8C3 /* ProfileView.swift */,
+				A9FAA11D2C4F5D7700048F32 /* UserProfileView.swift */,
 			);
 			path = "Preview Content";
 			sourceTree = "<group>";
@@ -424,6 +427,7 @@
 				2726BC6D2C12CA4A001F6885 /* profilequestion .swift in Sources */,
 				A984D4E52C1A291900BB75DB /* Message.swift in Sources */,
 				A984D4E92C1A2A5600BB75DB /* DM.swift in Sources */,
+				A9FAA11E2C4F5D7700048F32 /* UserProfileView.swift in Sources */,
 				A984D4E72C1A299500BB75DB /* RandomProfileAlgorithm.swift in Sources */,
 				A9A63DF92C3245EA00F6198E /* MainView.swift in Sources */,
 				A91470B02C280B3200380D39 /* Chat.swift in Sources */,

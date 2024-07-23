@@ -19,10 +19,10 @@ struct MainView: View {
             if isSignedIn {
                 if let user = currentUser {
                     if user.hasAnsweredQuestions {
-                        ContentView(currentUser: $currentUser, isSignedIn: $isSignedIn)
+                        ContentView(userProfileViewModel: UserProfileViewModel(user: user), isSignedIn: $isSignedIn)
                     } else {
                         QuestionsView(userProfile: Binding(
-                            get: { self.currentUser ?? UserProfile(name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, additionalImages: []) },
+                            get: { self.currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, additionalImages: []) },
                             set: { self.currentUser = $0 }
                         ), hasAnsweredQuestions: $hasAnsweredQuestions)
                     }

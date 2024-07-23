@@ -7,12 +7,10 @@
 
 import SwiftUI
 import Firebase
-import FirebaseFirestore
 
 struct ProfileView: View {
-    @Binding var user: UserProfile
+    @ObservedObject var viewModel: UserProfileViewModel
     @Binding var isSignedIn: Bool
-    var currentUserID: String
     @Environment(\.presentationMode) var presentationMode
     @State private var isEditing = false
     @State private var newImage: UIImage?
@@ -22,18 +20,11 @@ struct ProfileView: View {
     @State private var newServer = ""
     @State private var additionalImages: [String] = []
     @State private var updatedAnswers: [String: String] = [:]
-    @State private var listener: ListenerRegistration?
-    private var db = Firestore.firestore()
-
-    init(user: Binding<UserProfile>, isSignedIn: Binding<Bool>, currentUserID: String) {
-        self._user = user
-        self._isSignedIn = isSignedIn
-        self.currentUserID = currentUserID
-    }
+    @State private var showingSettings = false
 
     var body: some View {
         VStack {
-            // Custom Back Button
+            // Custom Back Button and Settings Button
             HStack {
                 Button(action: {
                     if isEditing {
@@ -56,7 +47,7 @@ struct ProfileView: View {
                 
                 Spacer()
                 
-                if !isEditing && user.id == currentUserID {
+                if !isEditing && viewModel.user.id == Auth.auth().currentUser?.uid {
                     Button(action: {
                         isEditing.toggle()
                         initializeEditValues()
@@ -68,6 +59,16 @@ struct ProfileView: View {
                     .padding(.top, 20)
                     .padding(.trailing, 20)
                 }
+                
+                Button(action: {
+                    showingSettings.toggle()
+                }) {
+                    Image(systemName: "gearshape")
+                        .foregroundColor(.white)
+                        .imageScale(.medium)
+                }
+                .padding(.top, 20)
+                .padding(.trailing, 20)
             }
 
             ScrollView {
@@ -142,15 +143,15 @@ struct ProfileView: View {
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .padding(.horizontal)
                         } else {
-                            Text("\(user.name), \(user.age)")
+                            Text("\(viewModel.user.name), \(viewModel.user.age)")
                                 .font(.custom("AvenirNext-Bold", size: 28))
                                 .foregroundColor(.white)
                             
-                            Text("Rank: \(user.rank)")
+                            Text("Rank: \(viewModel.user.rank)")
                                 .font(.custom("AvenirNext-Regular", size: 18))
                                 .foregroundColor(.gray)
                             
-                            Text("Server: \(user.server)")
+                            Text("Server: \(viewModel.user.server)")
                                 .font(.custom("AvenirNext-Regular", size: 18))
                                 .foregroundColor(.gray)
                         }
@@ -162,19 +163,19 @@ struct ProfileView: View {
 
                     // User Answers
                     VStack(alignment: .leading, spacing: 15) {
-                        ForEach(user.answers.keys.sorted(), id: \.self) { question in
+                        ForEach(viewModel.user.answers.keys.sorted(), id: \.self) { question in
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(question)
                                     .font(.custom("AvenirNext-Bold", size: 20))
                                     .foregroundColor(.white)
                                 if isEditing {
                                     TextField("Answer", text: Binding(
-                                        get: { updatedAnswers[question] ?? user.answers[question] ?? "" },
+                                        get: { updatedAnswers[question] ?? viewModel.user.answers[question] ?? "" },
                                         set: { updatedAnswers[question] = $0 }
                                     ))
                                     .textFieldStyle(RoundedBorderTextFieldStyle())
                                 } else {
-                                    Text(user.answers[question] ?? "No answer provided")
+                                    Text(viewModel.user.answers[question] ?? "No answer provided")
                                         .font(.custom("AvenirNext-Regular", size: 18))
                                         .foregroundColor(.gray)
                                 }
@@ -200,18 +201,33 @@ struct ProfileView: View {
                                 .font(.headline)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack {
-                                    ForEach(user.additionalImages.indices, id: \.self) { index in
-                                        let urlString = user.additionalImages[index] ?? ""
-                                        if let url = URL(string: urlString),
-                                           let data = try? Data(contentsOf: url),
-                                           let image = UIImage(data: data) {
-                                            Image(uiImage: image)
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                                .frame(width: 100, height: 100)
-                                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                                                .shadow(radius: 5)
+                                    ForEach(viewModel.user.additionalImages.indices, id: \.self) { index in
+                                        if let urlString = viewModel.user.additionalImages[index], let url = URL(string: urlString) {
+                                            AsyncImage(url: url) { phase in
+                                                switch phase {
+                                                case .empty:
+                                                    ProgressView()
+                                                        .frame(width: 100, height: 100)
+                                                case .success(let image):
+                                                    image
+                                                        .resizable()
+                                                        .aspectRatio(contentMode: .fill)
+                                                        .frame(width: 100, height: 100)
+                                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                                        .shadow(radius: 5)
+                                                case .failure:
+                                                    Image(systemName: "photo")
+                                                        .resizable()
+                                                        .aspectRatio(contentMode: .fill)
+                                                        .frame(width: 100, height: 100)
+                                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                                        .shadow(radius: 5)
+                                                @unknown default:
+                                                    EmptyView()
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -232,74 +248,30 @@ struct ProfileView: View {
         .sheet(isPresented: $showingImagePicker) {
             // Your image picker view here
         }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView(user: $viewModel.user, isSignedIn: $isSignedIn)
+        }
         .onAppear {
             initializeEditValues()
-            startListeningForUserUpdates()
-        }
-        .onDisappear {
-            stopListeningForUserUpdates()
         }
     }
 
-    func initializeEditValues() {
-        newAge = user.age
-        newRank = user.rank
-        newServer = user.server
-        additionalImages = user.additionalImages.compactMap { $0 } // Ensure non-nil URLs
-        updatedAnswers = user.answers
+    private func initializeEditValues() {
+        newAge = viewModel.user.age
+        newRank = viewModel.user.rank
+        newServer = viewModel.user.server
+        additionalImages = viewModel.user.additionalImages.compactMap { $0 } // Ensure non-nil URLs
+        updatedAnswers = viewModel.user.answers
     }
 
-    func saveProfile() {
-        // Update Firestore
-        let profileRef = db.collection("users").document(currentUserID)
-        profileRef.updateData([
-            "name": user.name,
-            "age": newAge,
-            "rank": newRank,
-            "server": newServer,
-            "additionalImages": additionalImages,
-            "answers": updatedAnswers
-        ]) { error in
-            if let error = error {
-                print("Error updating profile: \(error)")
-            } else {
-                // Successfully updated
-                user.age = newAge
-                user.rank = newRank
-                user.server = newServer
-                user.additionalImages = additionalImages
-                user.answers = updatedAnswers
-                isEditing = false
-                // Navigate back to the updated profile view
-                presentationMode.wrappedValue.dismiss()
-            }
-        }
-    }
-
-    func startListeningForUserUpdates() {
-        listener = db.collection("users").document(currentUserID).addSnapshotListener { snapshot, error in
-            if let document = snapshot, document.exists {
-                if let data = document.data() {
-                    // Parse updated data
-                    if let age = data["age"] as? String,
-                       let rank = data["rank"] as? String,
-                       let server = data["server"] as? String,
-                       let additionalImages = data["additionalImages"] as? [String],
-                       let answers = data["answers"] as? [String: String] {
-                        DispatchQueue.main.async {
-                            self.user.age = age
-                            self.user.rank = rank
-                            self.user.server = server
-                            self.user.additionalImages = additionalImages
-                            self.user.answers = answers
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    func stopListeningForUserUpdates() {
-        listener?.remove()
+    private func saveProfile() {
+        viewModel.updateUserProfile(
+            newAge: newAge,
+            newRank: newRank,
+            newServer: newServer,
+            additionalImages: additionalImages,
+            updatedAnswers: updatedAnswers
+        )
+        isEditing.toggle()
     }
 }

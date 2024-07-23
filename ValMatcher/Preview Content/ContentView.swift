@@ -10,7 +10,7 @@ import Firebase
 import FirebaseFirestore
 
 struct ContentView: View {
-    @Binding var currentUser: UserProfile?
+    @StateObject var userProfileViewModel: UserProfileViewModel
     @Binding var isSignedIn: Bool
     @State private var hasAnsweredQuestions = false
     @State private var users: [UserProfile] = []
@@ -140,7 +140,7 @@ struct ContentView: View {
                         .foregroundColor(.white)
                         .imageScale(.medium)
                 }
-                NavigationLink(destination: ProfileView(user: .constant(currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, additionalImages: [])), isSignedIn: $isSignedIn, currentUserID: Auth.auth().currentUser?.uid ?? "")) {
+                NavigationLink(destination: ProfileView(viewModel: userProfileViewModel, isSignedIn: $isSignedIn)) {
                     Image(systemName: "person.crop.circle.fill")
                         .foregroundColor(.white)
                         .imageScale(.medium)
@@ -148,8 +148,6 @@ struct ContentView: View {
             }
         }
     }
-
-
     
     private func interactionResultView(_ result: InteractionResult) -> some View {
         Group {
@@ -509,7 +507,7 @@ struct NotificationBanner: View {
 // Previews for ContentView
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView(currentUser: .constant(UserProfile(id: "", name: "Preview User", rank: "Gold 3", imageName: "preview", age: "24", server: "NA", answers: [
+        ContentView(userProfileViewModel: UserProfileViewModel(user: UserProfile(id: "", name: "Preview User", rank: "Gold 3", imageName: "preview", age: "24", server: "NA", answers: [
             "Favorite agent to play in Valorant?": "Jett",
             "Preferred role?": "Duelist",
             "Favorite game mode?": "Competitive",
