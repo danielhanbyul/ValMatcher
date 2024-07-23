@@ -25,6 +25,10 @@ struct ContentView: View {
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
     @State private var notificationCount = 0
+    
+    // Set to store IDs of processed likes and matches
+    @State private var processedLikes = Set<String>()
+    @State private var processedMatches = Set<String>()
 
     enum InteractionResult {
         case liked
@@ -58,10 +62,11 @@ struct ContentView: View {
                 topBarContent
             }
             .alert(isPresented: $showAlert) {
-                Alert(title: Text("Match!"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+                Alert(title: Text("Notification"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
             }
             .onAppear {
                 fetchUsers()
+                fetchIncomingLikes()
             }
         }
     }
@@ -69,30 +74,27 @@ struct ContentView: View {
     private var userCardStack: some View {
         VStack {
             ZStack {
-                UserCardView(user: users[currentIndex])
-                    .gesture(
-                        DragGesture()
-                            .onChanged { gesture in
-                                self.offset = gesture.translation
-                            }
-                            .onEnded { gesture in
-                                if self.offset.width < -100 {
-                                    self.dislikeAction()
-                                } else if self.offset.width > 100 {
+                if currentIndex < users.count {
+                    UserCardView(user: users[currentIndex])
+                        .gesture(
+                            DragGesture()
+                                .onChanged { gesture in
+                                    self.offset = gesture.translation
+                                }
+                                .onEnded { gesture in
+                                    self.offset = .zero
+                                }
+                        )
+                        .gesture(
+                            TapGesture(count: 2)
+                                .onEnded {
                                     self.likeAction()
                                 }
-                                self.offset = .zero
-                            }
-                    )
-                    .gesture(
-                        TapGesture(count: 2)
-                            .onEnded {
-                                self.likeAction()
-                            }
-                    )
-                    .offset(x: self.offset.width * 1.5, y: self.offset.height)
-                    .animation(.spring())
-                    .transition(.slide)
+                        )
+                        .offset(x: self.offset.width * 1.5, y: self.offset.height)
+                        .animation(.spring())
+                        .transition(.slide)
+                }
 
                 if let result = interactionResult {
                     interactionResultView(result)
@@ -214,6 +216,11 @@ struct ContentView: View {
     }
 
     private func fetchUsers() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("Error: User not authenticated")
+            return
+        }
+
         let db = Firestore.firestore()
         db.collection("users").getDocuments { (querySnapshot, error) in
             if let error = error {
@@ -223,7 +230,77 @@ struct ContentView: View {
             self.users = querySnapshot?.documents.compactMap { document in
                 try? document.data(as: UserProfile.self)
             } ?? []
+
+            // Filter out the current user's profile
+            self.users.removeAll { $0.id == currentUserID }
         }
+    }
+    
+    private func fetchIncomingLikes() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("Error: User not authenticated")
+            return
+        }
+        
+        let db = Firestore.firestore()
+        db.collection("likes")
+            .whereField("likedUserID", isEqualTo: currentUserID)
+            .addSnapshotListener { (querySnapshot, error) in
+                if let error = error {
+                    print("Error fetching incoming likes: \(error.localizedDescription)")
+                    return
+                }
+                
+                for document in querySnapshot?.documents ?? [] {
+                    let likeData = document.data()
+                    let likingUserID = likeData["likingUserID"] as? String ?? ""
+                    
+                    // Avoid processing the same like again
+                    guard likingUserID != currentUserID && !self.processedLikes.contains(likingUserID) else { continue }
+                    self.processedLikes.insert(likingUserID)
+
+                    // Fetch the user who liked the current user
+                    db.collection("users").document(likingUserID).getDocument { (userDocument, error) in
+                        if let error = error {
+                            print("Error fetching liking user: \(error.localizedDescription)")
+                            return
+                        }
+                        
+                        if let userDocument = userDocument, let likedUser = try? userDocument.data(as: UserProfile.self) {
+                            // Check if it's a match
+                            db.collection("likes")
+                                .whereField("likedUserID", isEqualTo: likingUserID)
+                                .whereField("likingUserID", isEqualTo: currentUserID)
+                                .getDocuments { (matchQuerySnapshot, matchError) in
+                                    if let matchError = matchError {
+                                        print("Error checking match: \(matchError.localizedDescription)")
+                                        return
+                                    }
+                                    
+                                    if matchQuerySnapshot?.isEmpty == false {
+                                        // Avoid processing the same match again
+                                        guard !self.processedMatches.contains(likingUserID) else { return }
+                                        self.processedMatches.insert(likingUserID)
+                                        
+                                        // It's a match!
+                                        self.alertMessage = "You have matched with \(likedUser.name)!"
+                                        self.notifications.append("You have matched with \(likedUser.name)!")
+                                        notificationCount += 1
+                                        self.showAlert = true
+                                        self.sendNotification(to: currentUserID, message: "You have matched with \(likedUser.name)!")
+                                        self.sendNotification(to: likingUserID, message: "You have matched with \(likedUser.name)!")
+                                    } else {
+                                        // Not a match, just a like
+                                        self.alertMessage = "\(likedUser.name) liked you!"
+                                        self.notifications.append("\(likedUser.name) liked you!")
+                                        notificationCount += 1
+                                        self.showAlert = true
+                                    }
+                                }
+                        }
+                    }
+                }
+            }
     }
 
     private func likeAction() {
@@ -302,8 +379,6 @@ struct ContentView: View {
                 self.alertMessage = "You have matched with \(likedUser.name)!"
                 self.notifications.append("You have matched with \(likedUser.name)!")
                 notificationCount += 1
-                self.sendNotification(to: likedUserID, message: "You have matched with \(likedUser.name)!")
-                self.sendNotification(to: currentUserID, message: "You have matched with \(likedUser.name)!")
                 self.showAlert = true
 
                 // Create a DM chat between the two users
@@ -427,7 +502,6 @@ struct UserCardView: View {
         .padding()
     }
 }
-
 
 // BadgeView Definition
 struct BadgeView: View {
