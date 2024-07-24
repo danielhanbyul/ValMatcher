@@ -78,15 +78,10 @@ struct ContentView: View {
                                 .onEnded { gesture in
                                     if self.offset.width < -100 {
                                         self.dislikeAction()
-                                    } else {
-                                        self.offset = .zero
+                                    } else if self.offset.width > 100 {
+                                        self.likeAction()
                                     }
-                                }
-                        )
-                        .gesture(
-                            TapGesture(count: 2)
-                                .onEnded {
-                                    self.likeAction()
+                                    self.offset = .zero
                                 }
                         )
                         .offset(x: self.offset.width, y: 0)
@@ -180,16 +175,16 @@ struct ContentView: View {
                             .foregroundColor(.blue)
                         Text(key)
                             .font(.custom("AvenirNext-Bold", size: 18))
-                            .foregroundColor(.black)
+                            .foregroundColor(.white)
                     }
                     Text(users[currentIndex].answers[key] ?? "")
                         .font(.custom("AvenirNext-Regular", size: 22))
-                        .foregroundColor(.black)
+                        .foregroundColor(.white)
                         .padding(.top, 2)
                 }
                 .frame(width: UIScreen.main.bounds.width * 0.85, alignment: .leading)
                 .padding()
-                .background(Color.white)
+                .background(Color.black.opacity(0.7))
                 .cornerRadius(10)
                 .padding(.horizontal)
             }
