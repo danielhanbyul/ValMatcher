@@ -134,7 +134,7 @@ struct ContentView: View {
                                     .offset(x: 12, y: -12)
                             )
                     }
-                    NavigationLink(destination: DMHomeView()) {
+                    NavigationLink(destination: DMHomeView(totalUnreadMessages: $unreadMessagesCount)) {
                         Image(systemName: "message.fill")
                             .foregroundColor(.white)
                             .imageScale(.medium)
@@ -322,7 +322,9 @@ struct ContentView: View {
                 }
 
                 var count = 0
+                let group = DispatchGroup()
                 snapshot?.documents.forEach { document in
+                    group.enter()
                     db.collection("matches").document(document.documentID).collection("messages")
                         .whereField("senderID", isNotEqualTo: currentUserID)
                         .whereField("isRead", isEqualTo: false)
@@ -333,8 +335,11 @@ struct ContentView: View {
                             }
 
                             count += messageSnapshot?.documents.count ?? 0
-                            unreadMessagesCount = count
+                            group.leave()
                         }
+                }
+                group.notify(queue: .main) {
+                    unreadMessagesCount = count
                 }
             }
         
@@ -347,7 +352,9 @@ struct ContentView: View {
                 }
 
                 var count = 0
+                let group = DispatchGroup()
                 snapshot?.documents.forEach { document in
+                    group.enter()
                     db.collection("matches").document(document.documentID).collection("messages")
                         .whereField("senderID", isNotEqualTo: currentUserID)
                         .whereField("isRead", isEqualTo: false)
@@ -358,8 +365,11 @@ struct ContentView: View {
                             }
 
                             count += messageSnapshot?.documents.count ?? 0
-                            unreadMessagesCount = count
+                            group.leave()
                         }
+                }
+                group.notify(queue: .main) {
+                    unreadMessagesCount = count
                 }
             }
     }

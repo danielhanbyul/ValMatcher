@@ -11,10 +11,11 @@ import FirebaseFirestore
 import FirebaseFirestoreSwift
 
 struct DMHomeView: View {
-    @State private var chats = [Chat]()
+    @State private var matches = [Chat]() // Use Chat model for matches
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var isEditing = false
-    @State private var selectedChats = Set<String>()
+    @State private var selectedMatches = Set<String>()
+    @Binding var totalUnreadMessages: Int // Binding to track total unread messages
 
     var body: some View {
         ZStack {
@@ -23,14 +24,14 @@ struct DMHomeView: View {
 
             VStack(spacing: 0) {
                 ScrollView {
-                    ForEach(chats) { chat in
-                        chatRow(chat: chat)
+                    ForEach(matches) { match in
+                        matchRow(match: match)
                     }
                 }
                 .padding(.top, 10)
                 
-                if isEditing && !selectedChats.isEmpty {
-                    Button(action: deleteSelectedChats) {
+                if isEditing && !selectedMatches.isEmpty {
+                    Button(action: deleteSelectedMatches) {
                         Text("Delete Selected")
                             .foregroundColor(.white)
                             .padding()
@@ -41,55 +42,60 @@ struct DMHomeView: View {
                 }
             }
         }
-        .navigationBarTitle("Messages", displayMode: .inline) // Use navigation bar title
+        .navigationBarTitle("Messages", displayMode: .inline)
         .navigationBarItems(trailing: Button(action: { isEditing.toggle() }) {
             Text(isEditing ? "Done" : "Edit")
                 .foregroundColor(.white)
         })
         .onAppear {
-            loadChats()
+            loadMatches()
         }
     }
 
     @ViewBuilder
-    private func chatRow(chat: Chat) -> some View {
+    private func matchRow(match: Chat) -> some View {
         HStack {
             if isEditing {
                 Button(action: {
-                    if selectedChats.contains(chat.id ?? "") {
-                        selectedChats.remove(chat.id ?? "")
+                    if selectedMatches.contains(match.id ?? "") {
+                        selectedMatches.remove(match.id ?? "")
                     } else {
-                        selectedChats.insert(chat.id ?? "")
+                        selectedMatches.insert(match.id ?? "")
                     }
                 }) {
-                    Image(systemName: selectedChats.contains(chat.id ?? "") ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(selectedChats.contains(chat.id ?? "") ? .blue : .white)
+                    Image(systemName: selectedMatches.contains(match.id ?? "") ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(selectedMatches.contains(match.id ?? "") ? .blue : .white)
                         .padding()
                 }
             }
 
-            NavigationLink(destination: DM(matchID: chat.id ?? "", recipientName: chat.user1 == currentUserID ? chat.user2Name ?? "Unknown User" : chat.user1Name ?? "Unknown User")) {
+            NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: match.user1 == currentUserID ? match.user2Name ?? "Unknown User" : match.user1Name ?? "Unknown User")) {
                 HStack {
                     if let currentUserID = currentUserID {
-                        userImageView(currentUserID: currentUserID, chat: chat)
+                        userImageView(currentUserID: currentUserID, match: match)
                     }
 
                     VStack(alignment: .leading) {
                         if let currentUserID = currentUserID {
-                            Text(currentUserID == chat.user1 ? (chat.user2Name ?? "Unknown User") : (chat.user1Name ?? "Unknown User"))
+                            Text(currentUserID == match.user1 ? (match.user2Name ?? "Unknown User") : (match.user1Name ?? "Unknown User"))
                                 .font(.custom("AvenirNext-Bold", size: 18))
                                 .foregroundColor(.white)
                         }
-                        if let hasUnreadMessages = chat.hasUnreadMessages, hasUnreadMessages {
+                        if match.hasUnreadMessages ?? false {
                             Text("Unread messages")
                                 .font(.caption)
                                 .foregroundColor(.red)
                                 .padding(.top, 2)
                         }
-
                     }
                     .padding()
                     Spacer()
+
+                    if match.hasUnreadMessages ?? false {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 10, height: 10)
+                    }
                 }
                 .background(Color.black.opacity(0.7))
                 .cornerRadius(12)
@@ -101,8 +107,8 @@ struct DMHomeView: View {
     }
 
     @ViewBuilder
-    private func userImageView(currentUserID: String, chat: Chat) -> some View {
-        let currentUserImage = (currentUserID == chat.user1 ? chat.user2Image : chat.user1Image) ?? "https://example.com/default-image.jpg"
+    private func userImageView(currentUserID: String, match: Chat) -> some View {
+        let currentUserImage = (currentUserID == match.user1 ? match.user2Image : match.user1Image) ?? "https://example.com/default-image.jpg"
         if let url = URL(string: currentUserImage) {
             AsyncImage(url: url) { phase in
                 switch phase {
@@ -130,7 +136,7 @@ struct DMHomeView: View {
         }
     }
 
-    func loadChats() {
+    func loadMatches() {
         guard let currentUserID = currentUserID else {
             print("Error: currentUserID is nil")
             return
@@ -142,7 +148,7 @@ struct DMHomeView: View {
             .whereField("user1", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("Error loading chats for user1: \(error.localizedDescription)")
+                    print("Error loading matches for user1: \(error.localizedDescription)")
                     return
                 }
 
@@ -151,27 +157,28 @@ struct DMHomeView: View {
                     return
                 }
 
-                let newChats = documents.compactMap { document -> Chat? in
+                let newMatches = documents.compactMap { document -> Chat? in
                     print("Document data: \(document.data())")
                     do {
-                        let chat = try document.data(as: Chat.self)
-                        print("Fetched chat for user1: \(String(describing: chat))")
-                        return chat
+                        let match = try document.data(as: Chat.self)
+                        print("Fetched match for user1: \(String(describing: match))")
+                        return match
                     } catch {
-                        print("Error decoding chat for user1: \(error.localizedDescription)")
+                        print("Error decoding match for user1: \(error.localizedDescription)")
                         return nil
                     }
                 }
                 
-                self.chats = newChats
-                print("Loaded chats for user1: \(newChats)")
+                self.matches = newMatches
+                self.updateUnreadMessagesCount()
+                print("Loaded matches for user1: \(newMatches)")
             }
 
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("Error loading chats for user2: \(error.localizedDescription)")
+                    print("Error loading matches for user2: \(error.localizedDescription)")
                     return
                 }
 
@@ -180,55 +187,72 @@ struct DMHomeView: View {
                     return
                 }
 
-                let moreChats = documents.compactMap { document -> Chat? in
+                let moreMatches = documents.compactMap { document -> Chat? in
                     print("Document data: \(document.data())")
                     do {
-                        let chat = try document.data(as: Chat.self)
-                        print("Fetched chat for user2: \(String(describing: chat))")
-                        return chat
+                        let match = try document.data(as: Chat.self)
+                        print("Fetched match for user2: \(String(describing: match))")
+                        return match
                     } catch {
-                        print("Error decoding chat for user2: \(error.localizedDescription)")
+                        print("Error decoding match for user2: \(error.localizedDescription)")
                         return nil
                     }
                 }
                 
-                self.chats.append(contentsOf: moreChats)
-                self.chats = Array(Set(self.chats))
-                print("Loaded chats for user2: \(moreChats)")
+                self.matches.append(contentsOf: moreMatches)
+                self.matches = Array(Set(self.matches))
+                self.updateUnreadMessagesCount()
+                print("Loaded matches for user2: \(moreMatches)")
             }
     }
 
-    func deleteSelectedChats() {
-        for chatID in selectedChats {
-            if let index = chats.firstIndex(where: { $0.id == chatID }) {
-                let chat = chats[index]
-                deleteChat(chat)
-                chats.remove(at: index)
+    func deleteSelectedMatches() {
+        for matchID in selectedMatches {
+            if let index = matches.firstIndex(where: { $0.id == matchID }) {
+                let match = matches[index]
+                deleteMatch(match)
+                matches.remove(at: index)
             }
         }
-        selectedChats.removeAll()
+        selectedMatches.removeAll()
     }
 
-    func deleteChat(_ chat: Chat) {
-        guard let chatID = chat.id else {
-            print("Chat ID is missing")
+    func deleteMatch(_ match: Chat) {
+        guard let matchID = match.id else {
+            print("Match ID is missing")
             return
         }
 
         let db = Firestore.firestore()
-        db.collection("matches").document(chatID).delete { error in
+        db.collection("matches").document(matchID).delete { error in
             if let error = error {
-                print("Error deleting chat: \(error.localizedDescription)")
+                print("Error deleting match: \(error.localizedDescription)")
             } else {
-                print("Chat deleted successfully")
+                print("Match deleted successfully")
             }
         }
     }
 
-    private func isPreview() -> Bool {
-        return ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+    private func updateUnreadMessagesCount() {
+        totalUnreadMessages = 0
+        
+        for match in matches {
+            guard let matchID = match.id else { continue }
+            let db = Firestore.firestore()
+            db.collection("matches").document(matchID).collection("messages")
+                .whereField("isRead", isEqualTo: false)
+                .whereField("senderID", isNotEqualTo: currentUserID ?? "")
+                .getDocuments { snapshot, error in
+                    if let error = error {
+                        print("Error fetching unread messages: \(error.localizedDescription)")
+                        return
+                    }
+                    
+                    let unreadCount = snapshot?.documents.count ?? 0
+                    totalUnreadMessages += unreadCount
+                }
+        }
     }
-
 }
 
 let dateFormatter: DateFormatter = {
@@ -240,9 +264,7 @@ let dateFormatter: DateFormatter = {
 
 struct DMHomeView_Previews: PreviewProvider {
     static var previews: some View {
-        DMHomeView()
-            .environment(\.colorScheme, .dark) // or .light, depending on your preference
+        DMHomeView(totalUnreadMessages: .constant(0))
+            .environment(\.colorScheme, .dark)
     }
 }
-
-
