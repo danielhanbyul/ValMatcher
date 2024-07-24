@@ -7,6 +7,8 @@
 
 import SwiftUI
 import Firebase
+import FirebaseFirestore
+import FirebaseFirestoreSwift
 
 struct ChatView: View {
     var matchID: String
@@ -15,7 +17,6 @@ struct ChatView: View {
     @State private var newMessage: String = ""
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var scrollToBottom: Bool = true
-    @State private var isScrolling = false
 
     var body: some View {
         VStack {
@@ -40,7 +41,7 @@ struct ChatView: View {
                                                 .background(Color.blue)
                                                 .cornerRadius(8)
                                                 .foregroundColor(.white)
-                                                .frame(maxWidth: 300, alignment: .trailing) // Control width
+                                                .frame(maxWidth: 300, alignment: .trailing)
                                             Text("\(message.timestamp.dateValue(), formatter: timeFormatter)")
                                                 .font(.caption)
                                                 .foregroundColor(.white)
@@ -53,7 +54,7 @@ struct ChatView: View {
                                                 .background(Color.gray)
                                                 .cornerRadius(8)
                                                 .foregroundColor(.black)
-                                                .frame(maxWidth: 300, alignment: .leading) // Control width
+                                                .frame(maxWidth: 300, alignment: .leading)
                                             Text("\(message.timestamp.dateValue(), formatter: timeFormatter)")
                                                 .font(.caption)
                                                 .foregroundColor(.gray)
@@ -82,7 +83,7 @@ struct ChatView: View {
                 TextField("Enter message", text: $newMessage)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding()
-                    .frame(height: 40) // Control height to adjust vertical width
+                    .frame(height: 40)
 
                 Button(action: sendMessage) {
                     Image(systemName: "paperplane.fill")
@@ -122,6 +123,9 @@ struct ChatView: View {
                 self.messages = documents.compactMap { document in
                     try? document.data(as: Message.self)
                 }
+
+                // Mark messages as read
+                markMessagesAsRead()
             }
     }
 
@@ -132,7 +136,8 @@ struct ChatView: View {
         let messageData: [String: Any] = [
             "senderID": currentUserID ?? "",
             "content": newMessage,
-            "timestamp": FieldValue.serverTimestamp()
+            "timestamp": FieldValue.serverTimestamp(),
+            "isRead": false
         ]
 
         db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
@@ -154,6 +159,19 @@ struct ChatView: View {
         let previousMessage = messages[index - 1]
         let calendar = Calendar.current
         return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
+    }
+
+    private func markMessagesAsRead() {
+        let db = Firestore.firestore()
+        messages.filter { !$0.isCurrentUser && !$0.isRead }.forEach { message in
+            db.collection("matches").document(matchID).collection("messages").document(message.id ?? "").updateData([
+                "isRead": true
+            ]) { error in
+                if let error = error {
+                    print("Error marking message as read: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 }
 

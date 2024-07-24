@@ -24,69 +24,7 @@ struct DMHomeView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     ForEach(chats) { chat in
-                        HStack {
-                            if isEditing {
-                                Button(action: {
-                                    if selectedChats.contains(chat.id ?? "") {
-                                        selectedChats.remove(chat.id ?? "")
-                                    } else {
-                                        selectedChats.insert(chat.id ?? "")
-                                    }
-                                }) {
-                                    Image(systemName: selectedChats.contains(chat.id ?? "") ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(selectedChats.contains(chat.id ?? "") ? .blue : .white)
-                                        .padding()
-                                }
-                            }
-
-                            NavigationLink(destination: DM(matchID: chat.id ?? "", recipientName: chat.user1 == currentUserID ? chat.user2Name ?? "Unknown User" : chat.user1Name ?? "Unknown User")) {
-                                HStack {
-                                    if let currentUserID = currentUserID {
-                                        let currentUserImage = (currentUserID == chat.user1 ? chat.user2Image : chat.user1Image) ?? "https://example.com/default-image.jpg"
-                                        if let url = URL(string: currentUserImage) {
-                                            AsyncImage(url: url) { phase in
-                                                switch phase {
-                                                case .empty:
-                                                    ProgressView()
-                                                        .frame(width: 50, height: 50)
-                                                case .success(let image):
-                                                    image
-                                                        .resizable()
-                                                        .aspectRatio(contentMode: .fill)
-                                                        .frame(width: 50, height: 50)
-                                                        .clipShape(Circle())
-                                                case .failure:
-                                                    Image(systemName: "person.circle.fill")
-                                                        .resizable()
-                                                        .frame(width: 50, height: 50)
-                                                @unknown default:
-                                                    EmptyView()
-                                                }
-                                            }
-                                        } else {
-                                            Image(systemName: "person.circle.fill")
-                                                .resizable()
-                                                .frame(width: 50, height: 50)
-                                        }
-                                    }
-
-                                    VStack(alignment: .leading) {
-                                        if let currentUserID = currentUserID {
-                                            Text(currentUserID == chat.user1 ? (chat.user2Name ?? "Unknown User") : (chat.user1Name ?? "Unknown User"))
-                                                .font(.custom("AvenirNext-Bold", size: 18))
-                                                .foregroundColor(.white)
-                                        }
-                                    }
-                                    .padding()
-                                    Spacer()
-                                }
-                                .background(Color.black.opacity(0.7))
-                                .cornerRadius(12)
-                                .padding(.horizontal)
-                                .padding(.vertical, 5)
-                                .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
-                            }
-                        }
+                        chatRow(chat: chat)
                     }
                 }
                 .padding(.top, 10)
@@ -110,6 +48,85 @@ struct DMHomeView: View {
         })
         .onAppear {
             loadChats()
+        }
+    }
+
+    @ViewBuilder
+    private func chatRow(chat: Chat) -> some View {
+        HStack {
+            if isEditing {
+                Button(action: {
+                    if selectedChats.contains(chat.id ?? "") {
+                        selectedChats.remove(chat.id ?? "")
+                    } else {
+                        selectedChats.insert(chat.id ?? "")
+                    }
+                }) {
+                    Image(systemName: selectedChats.contains(chat.id ?? "") ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(selectedChats.contains(chat.id ?? "") ? .blue : .white)
+                        .padding()
+                }
+            }
+
+            NavigationLink(destination: DM(matchID: chat.id ?? "", recipientName: chat.user1 == currentUserID ? chat.user2Name ?? "Unknown User" : chat.user1Name ?? "Unknown User")) {
+                HStack {
+                    if let currentUserID = currentUserID {
+                        userImageView(currentUserID: currentUserID, chat: chat)
+                    }
+
+                    VStack(alignment: .leading) {
+                        if let currentUserID = currentUserID {
+                            Text(currentUserID == chat.user1 ? (chat.user2Name ?? "Unknown User") : (chat.user1Name ?? "Unknown User"))
+                                .font(.custom("AvenirNext-Bold", size: 18))
+                                .foregroundColor(.white)
+                        }
+                        if let hasUnreadMessages = chat.hasUnreadMessages, hasUnreadMessages {
+                            Text("Unread messages")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .padding(.top, 2)
+                        }
+
+                    }
+                    .padding()
+                    Spacer()
+                }
+                .background(Color.black.opacity(0.7))
+                .cornerRadius(12)
+                .padding(.horizontal)
+                .padding(.vertical, 5)
+                .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func userImageView(currentUserID: String, chat: Chat) -> some View {
+        let currentUserImage = (currentUserID == chat.user1 ? chat.user2Image : chat.user1Image) ?? "https://example.com/default-image.jpg"
+        if let url = URL(string: currentUserImage) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .empty:
+                    ProgressView()
+                        .frame(width: 50, height: 50)
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 50, height: 50)
+                        .clipShape(Circle())
+                case .failure:
+                    Image(systemName: "person.circle.fill")
+                        .resizable()
+                        .frame(width: 50, height: 50)
+                @unknown default:
+                    EmptyView()
+                }
+            }
+        } else {
+            Image(systemName: "person.circle.fill")
+                .resizable()
+                .frame(width: 50, height: 50)
         }
     }
 
@@ -211,6 +228,7 @@ struct DMHomeView: View {
     private func isPreview() -> Bool {
         return ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
     }
+
 }
 
 let dateFormatter: DateFormatter = {
@@ -223,5 +241,8 @@ let dateFormatter: DateFormatter = {
 struct DMHomeView_Previews: PreviewProvider {
     static var previews: some View {
         DMHomeView()
+            .environment(\.colorScheme, .dark) // or .light, depending on your preference
     }
 }
+
+

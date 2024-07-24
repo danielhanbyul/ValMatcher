@@ -12,6 +12,7 @@ import FirebaseFirestore
 struct ContentView: View {
     @StateObject var userProfileViewModel: UserProfileViewModel
     @Binding var isSignedIn: Bool
+    @StateObject private var firestoreManager = FirestoreManager()
     @State private var hasAnsweredQuestions = false
     @State private var users: [UserProfile] = []
     @State private var currentIndex = 0
@@ -24,6 +25,7 @@ struct ContentView: View {
     @State private var bannerMessage = ""
     @State private var notificationCount = 0
     @State private var acknowledgedNotifications: Set<String> = []
+    @State private var unreadMessagesCount = 0
 
     enum InteractionResult {
         case liked
@@ -45,12 +47,6 @@ struct ContentView: View {
                         }
                     }
                 }
-                
-                if showNotificationBanner {
-                    NotificationBanner(message: bannerMessage, showBanner: $showNotificationBanner)
-                        .transition(.move(edge: .top))
-                        .animation(.easeInOut)
-                }
             }
             .navigationTitle("ValMatcher")
             .toolbar {
@@ -64,10 +60,11 @@ struct ContentView: View {
             .onAppear {
                 fetchUsers()
                 fetchIncomingLikes()
+                fetchUnreadMessagesCount()
             }
         }
     }
-    
+
     private var userCardStack: some View {
         VStack {
             ZStack {
@@ -141,6 +138,10 @@ struct ContentView: View {
                         Image(systemName: "message.fill")
                             .foregroundColor(.white)
                             .imageScale(.medium)
+                            .overlay(
+                                BadgeView(count: unreadMessagesCount)
+                                    .offset(x: 12, y: -12)
+                            )
                     }
                     NavigationLink(destination: ProfileView(viewModel: userProfileViewModel, isSignedIn: $isSignedIn)) {
                         Image(systemName: "person.crop.circle.fill")
@@ -285,6 +286,7 @@ struct ContentView: View {
                                             self.showAlert = true
                                             self.sendNotification(to: currentUserID, message: matchMessage)
                                             self.sendNotification(to: likingUserID, message: matchMessage)
+                                            self.createDMChat(currentUserID: currentUserID, likedUserID: likingUserID, likedUser: likedUser)
                                         }
                                     } else {
                                         // Not a match, just a like
@@ -300,6 +302,64 @@ struct ContentView: View {
                                 }
                         }
                     }
+                }
+            }
+    }
+
+    private func fetchUnreadMessagesCount() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("Error: User not authenticated")
+            return
+        }
+        
+        let db = Firestore.firestore()
+        db.collection("matches")
+            .whereField("user1", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error fetching matches: \(error)")
+                    return
+                }
+
+                var count = 0
+                snapshot?.documents.forEach { document in
+                    db.collection("matches").document(document.documentID).collection("messages")
+                        .whereField("senderID", isNotEqualTo: currentUserID)
+                        .whereField("isRead", isEqualTo: false)
+                        .getDocuments { messageSnapshot, error in
+                            if let error = error {
+                                print("Error fetching messages: \(error)")
+                                return
+                            }
+
+                            count += messageSnapshot?.documents.count ?? 0
+                            unreadMessagesCount = count
+                        }
+                }
+            }
+        
+        db.collection("matches")
+            .whereField("user2", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error fetching matches: \(error)")
+                    return
+                }
+
+                var count = 0
+                snapshot?.documents.forEach { document in
+                    db.collection("matches").document(document.documentID).collection("messages")
+                        .whereField("senderID", isNotEqualTo: currentUserID)
+                        .whereField("isRead", isEqualTo: false)
+                        .getDocuments { messageSnapshot, error in
+                            if let error = error {
+                                print("Error fetching messages: \(error)")
+                                return
+                            }
+
+                            count += messageSnapshot?.documents.count ?? 0
+                            unreadMessagesCount = count
+                        }
                 }
             }
     }
@@ -385,17 +445,22 @@ struct ContentView: View {
                 }
 
                 // Create a DM chat between the two users
-                self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID)
+                self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
             }
         }
     }
 
-    private func createDMChat(currentUserID: String, likedUserID: String) {
+    private func createDMChat(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
         let db = Firestore.firestore()
         let chatData: [String: Any] = [
             "user1": currentUserID,
             "user2": likedUserID,
-            "messages": [],
+            "user1Name": userProfileViewModel.user.name, // Ensure you pass user name
+            "user2Name": likedUser.name, // Ensure you pass liked user name
+            "user1Image": userProfileViewModel.user.imageName, // Ensure you pass user image
+            "user2Image": likedUser.imageName, // Ensure you pass liked user image
+            "recipientName": likedUser.name,  // Add recipientName
+            "hasUnreadMessages": true, // Add hasUnreadMessages
             "timestamp": Timestamp()
         ]
 
@@ -425,18 +490,6 @@ struct ContentView: View {
         }
     }
 
-    private func showBanner(with message: String) {
-        bannerMessage = message
-        withAnimation {
-            showNotificationBanner = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            withAnimation {
-                showNotificationBanner = false
-            }
-        }
-    }
-
     private func dislikeAction() {
         interactionResult = .passed
         moveToNextUser()
@@ -454,6 +507,23 @@ struct ContentView: View {
         }
     }
 }
+
+struct BadgeView: View {
+    let count: Int
+
+    var body: some View {
+        if count > 0 {
+            Text("\(count)")
+                .font(.caption2)
+                .foregroundColor(.white)
+                .padding(5)
+                .background(Color.red)
+                .clipShape(Circle())
+                .offset(x: 10, y: -10)
+        }
+    }
+}
+
 
 struct UserCardView: View {
     var user: UserProfile
@@ -507,21 +577,7 @@ struct UserCardView: View {
     }
 }
 
-struct BadgeView: View {
-    let count: Int
 
-    var body: some View {
-        if count > 0 {
-            Text("\(count)")
-                .font(.caption2)
-                .foregroundColor(.white)
-                .padding(5)
-                .background(Color.red)
-                .clipShape(Circle())
-                .offset(x: 10, y: -10)
-        }
-    }
-}
 
 struct NotificationsView: View {
     @Binding var notifications: [String]
