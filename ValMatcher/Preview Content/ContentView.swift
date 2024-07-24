@@ -19,16 +19,11 @@ struct ContentView: View {
     @State private var interactionResult: InteractionResult? = nil
     @State private var showAlert = false
     @State private var alertMessage = ""
-    @State private var navigateToChat = false
-    @State private var newMatchID: String?
     @State private var notifications: [String] = []
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
     @State private var notificationCount = 0
-    
-    // Set to store IDs of processed likes and matches
-    @State private var processedLikes = Set<String>()
-    @State private var processedMatches = Set<String>()
+    @State private var acknowledgedNotifications: Set<String> = []
 
     enum InteractionResult {
         case liked
@@ -62,7 +57,9 @@ struct ContentView: View {
                 topBarContent
             }
             .alert(isPresented: $showAlert) {
-                Alert(title: Text("Notification"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+                Alert(title: Text("Notification"), message: Text(alertMessage), dismissButton: .default(Text("OK")) {
+                    acknowledgedNotifications.insert(alertMessage)
+                })
             }
             .onAppear {
                 fetchUsers()
@@ -258,8 +255,7 @@ struct ContentView: View {
                     let likingUserID = likeData["likingUserID"] as? String ?? ""
                     
                     // Avoid processing the same like again
-                    guard likingUserID != currentUserID && !self.processedLikes.contains(likingUserID) else { continue }
-                    self.processedLikes.insert(likingUserID)
+                    guard likingUserID != currentUserID else { continue }
 
                     // Fetch the user who liked the current user
                     db.collection("users").document(likingUserID).getDocument { (userDocument, error) in
@@ -280,26 +276,26 @@ struct ContentView: View {
                                     }
                                     
                                     if matchQuerySnapshot?.isEmpty == false {
-                                        // Avoid processing the same match again
-                                        guard !self.processedMatches.contains(likingUserID) else { return }
-                                        self.processedMatches.insert(likingUserID)
-                                        
                                         // It's a match!
                                         let matchMessage = "You have matched with \(likedUser.name)!"
-                                        self.alertMessage = matchMessage
-                                        self.notifications.append(matchMessage)
-                                        notificationCount += 1
-                                        self.showAlert = true
-                                        self.sendNotification(to: currentUserID, message: matchMessage)
-                                        self.sendNotification(to: likingUserID, message: matchMessage)
+                                        if !self.notifications.contains(matchMessage) && !self.acknowledgedNotifications.contains(matchMessage) {
+                                            self.alertMessage = matchMessage
+                                            self.notifications.append(matchMessage)
+                                            notificationCount += 1
+                                            self.showAlert = true
+                                            self.sendNotification(to: currentUserID, message: matchMessage)
+                                            self.sendNotification(to: likingUserID, message: matchMessage)
+                                        }
                                     } else {
                                         // Not a match, just a like
                                         let likeMessage = "\(likedUser.name) liked you!"
-                                        self.alertMessage = likeMessage
-                                        self.notifications.append(likeMessage)
-                                        notificationCount += 1
-                                        self.showAlert = true
-                                        self.sendNotification(to: currentUserID, message: likeMessage)
+                                        if !self.notifications.contains(likeMessage) && !self.acknowledgedNotifications.contains(likeMessage) {
+                                            self.alertMessage = likeMessage
+                                            self.notifications.append(likeMessage)
+                                            notificationCount += 1
+                                            self.showAlert = true
+                                            self.sendNotification(to: currentUserID, message: likeMessage)
+                                        }
                                     }
                                 }
                         }
@@ -312,10 +308,6 @@ struct ContentView: View {
         interactionResult = .liked
         let likedUser = users[currentIndex]
 
-        // Add the liked user to the notifications
-        let notificationMessage = "\(likedUser.name) liked your profile!"
-        sendNotification(to: likedUser.id!, message: notificationMessage)
-        
         // Move to the next user
         moveToNextUser()
 
@@ -332,6 +324,20 @@ struct ContentView: View {
 
         let db = Firestore.firestore()
 
+        // Save the like
+        let likeData: [String: Any] = [
+            "likingUserID": currentUserID,
+            "likedUserID": likedUserID,
+            "timestamp": Timestamp()
+        ]
+        db.collection("likes").addDocument(data: likeData) { error in
+            if let error = error {
+                print("Error saving like: \(error.localizedDescription)")
+            } else {
+                print("Like saved successfully")
+            }
+        }
+
         // Check if the liked user has already liked the current user
         db.collection("likes")
             .whereField("likedUserID", isEqualTo: currentUserID)
@@ -346,27 +352,15 @@ struct ContentView: View {
                     // It's a match!
                     self.createMatch(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
                 } else {
-                    // Not a match, just save the like
-                    self.saveLike(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
+                    // Send a like notification
+                    let likeMessage = "You liked \(likedUser.name)'s profile!"
+                    if !self.notifications.contains(likeMessage) && !self.acknowledgedNotifications.contains(likeMessage) {
+                        self.notifications.append(likeMessage)
+                        notificationCount += 1
+                        self.sendNotification(to: likedUserID, message: likeMessage)
+                    }
                 }
             }
-    }
-
-    private func saveLike(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
-        let db = Firestore.firestore()
-        let likeData: [String: Any] = [
-            "likingUserID": currentUserID,
-            "likedUserID": likedUserID,
-            "timestamp": Timestamp()
-        ]
-
-        db.collection("likes").addDocument(data: likeData) { error in
-            if let error = error {
-                print("Error saving like: \(error.localizedDescription)")
-            } else {
-                print("Like saved successfully")
-            }
-        }
     }
 
     private func createMatch(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
@@ -382,12 +376,13 @@ struct ContentView: View {
                 print("Error creating match: \(error.localizedDescription)")
             } else {
                 let matchMessage = "You have matched with \(likedUser.name)!"
-                self.alertMessage = matchMessage
-                self.notifications.append(matchMessage)
-                notificationCount += 1
-                self.showAlert = true
-                self.sendNotification(to: currentUserID, message: matchMessage)
-                self.sendNotification(to: likedUserID, message: matchMessage)
+                if !self.notifications.contains(matchMessage) && !self.acknowledgedNotifications.contains(matchMessage) {
+                    self.notifications.append(matchMessage)
+                    notificationCount += 1
+                    self.showAlert = true
+                    self.sendNotification(to: currentUserID, message: matchMessage)
+                    self.sendNotification(to: likedUserID, message: matchMessage)
+                }
 
                 // Create a DM chat between the two users
                 self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID)
@@ -512,7 +507,6 @@ struct UserCardView: View {
     }
 }
 
-// BadgeView Definition
 struct BadgeView: View {
     let count: Int
 
@@ -529,7 +523,6 @@ struct BadgeView: View {
     }
 }
 
-// NotificationsView Definition
 struct NotificationsView: View {
     @Binding var notifications: [String]
     @Binding var notificationCount: Int
@@ -564,7 +557,6 @@ struct NotificationsView: View {
     }
 }
 
-// NotificationBanner Definition
 struct NotificationBanner: View {
     var message: String
     @Binding var showBanner: Bool
@@ -587,7 +579,6 @@ struct NotificationBanner: View {
     }
 }
 
-// Previews for ContentView
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView(userProfileViewModel: UserProfileViewModel(user: UserProfile(
