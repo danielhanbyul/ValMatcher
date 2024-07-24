@@ -21,16 +21,7 @@ struct DMHomeView: View {
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
 
-            VStack {
-                HStack {
-                    Spacer()
-                    Button(action: { isEditing.toggle() }) {
-                        Text(isEditing ? "Done" : "Edit")
-                            .foregroundColor(.white)
-                            .padding()
-                    }
-                }
-
+            VStack(spacing: 0) {
                 ScrollView {
                     ForEach(chats) { chat in
                         HStack {
@@ -48,7 +39,7 @@ struct DMHomeView: View {
                                 }
                             }
 
-                            NavigationLink(destination: DM(matchID: chat.id ?? "")) {
+                            NavigationLink(destination: DM(matchID: chat.id ?? "", recipientName: chat.user1 == currentUserID ? chat.user2Name ?? "Unknown User" : chat.user1Name ?? "Unknown User")) {
                                 HStack {
                                     if let currentUserID = currentUserID {
                                         let currentUserImage = (currentUserID == chat.user1 ? chat.user2Image : chat.user1Image) ?? "https://example.com/default-image.jpg"
@@ -85,9 +76,6 @@ struct DMHomeView: View {
                                                 .font(.custom("AvenirNext-Bold", size: 18))
                                                 .foregroundColor(.white)
                                         }
-                                        Text("Last message at \(chat.timestamp.dateValue(), formatter: dateFormatter)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.gray)
                                     }
                                     .padding()
                                     Spacer()
@@ -115,6 +103,11 @@ struct DMHomeView: View {
                 }
             }
         }
+        .navigationBarTitle("Messages", displayMode: .inline) // Use navigation bar title
+        .navigationBarItems(trailing: Button(action: { isEditing.toggle() }) {
+            Text(isEditing ? "Done" : "Edit")
+                .foregroundColor(.white)
+        })
         .onAppear {
             loadChats()
         }
@@ -153,7 +146,7 @@ struct DMHomeView: View {
                     }
                 }
                 
-                self.chats = newChats // Overwrite the chats list to prevent duplicates
+                self.chats = newChats
                 print("Loaded chats for user1: \(newChats)")
             }
 
@@ -183,7 +176,7 @@ struct DMHomeView: View {
                 }
                 
                 self.chats.append(contentsOf: moreChats)
-                self.chats = Array(Set(self.chats)) // Remove duplicates by converting to a Set and back to an Array
+                self.chats = Array(Set(self.chats))
                 print("Loaded chats for user2: \(moreChats)")
             }
     }
@@ -226,3 +219,9 @@ let dateFormatter: DateFormatter = {
     formatter.timeStyle = .short
     return formatter
 }()
+
+struct DMHomeView_Previews: PreviewProvider {
+    static var previews: some View {
+        DMHomeView()
+    }
+}

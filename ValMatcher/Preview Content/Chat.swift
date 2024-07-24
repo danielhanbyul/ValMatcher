@@ -9,9 +9,6 @@ import FirebaseFirestore
 import FirebaseFirestoreSwift
 import FirebaseAuth
 
-import FirebaseFirestore
-import FirebaseFirestoreSwift
-
 struct Chat: Identifiable, Codable, Hashable {
     @DocumentID var id: String?
     var user1: String
@@ -20,6 +17,7 @@ struct Chat: Identifiable, Codable, Hashable {
     var user2Name: String?
     var user1Image: String?
     var user2Image: String?
+    var recipientName: String?  // Add this line
     var timestamp: Timestamp
 
     func hash(into hasher: inout Hasher) {
@@ -30,8 +28,10 @@ struct Chat: Identifiable, Codable, Hashable {
 
 
 
+import FirebaseFirestore
+import FirebaseFirestoreSwift
 
-struct Message: Identifiable, Codable {
+struct Message: Identifiable, Codable, Equatable {
     @DocumentID var id: String?
     var senderID: String
     var content: String
@@ -39,5 +39,9 @@ struct Message: Identifiable, Codable {
     
     var isCurrentUser: Bool {
         return senderID == Auth.auth().currentUser?.uid
+    }
+    
+    static func == (lhs: Message, rhs: Message) -> Bool {
+        return lhs.id == rhs.id
     }
 }

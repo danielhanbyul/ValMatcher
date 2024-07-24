@@ -7,7 +7,6 @@
 
 import SwiftUI
 import Firebase
-import FirebaseFirestore
 
 struct ContentView: View {
     @StateObject var userProfileViewModel: UserProfileViewModel
@@ -25,8 +24,7 @@ struct ContentView: View {
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
     @State private var notificationCount = 0
-    
-    // Set to store IDs of processed likes and matches
+
     @State private var processedLikes = Set<String>()
     @State private var processedMatches = Set<String>()
 
@@ -50,16 +48,44 @@ struct ContentView: View {
                         }
                     }
                 }
-                
+
                 if showNotificationBanner {
                     NotificationBanner(message: bannerMessage, showBanner: $showNotificationBanner)
                         .transition(.move(edge: .top))
                         .animation(.easeInOut)
                 }
             }
-            .navigationTitle("ValMatcher")
+            .navigationTitle("")
             .toolbar {
-                topBarContent
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Text("ValMatcher")
+                        .font(.title2)
+                        .bold()
+                        .foregroundColor(.white)
+                }
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    HStack(spacing: 15) {
+                        NavigationLink(destination: NotificationsView(notifications: $notifications, notificationCount: $notificationCount)) {
+                            Image(systemName: "bell.fill")
+                                .foregroundColor(.white)
+                                .imageScale(.medium)
+                                .overlay(
+                                    BadgeView(count: notificationCount)
+                                        .offset(x: 12, y: -12)
+                                )
+                        }
+                        NavigationLink(destination: DMHomeView()) {
+                            Image(systemName: "message.fill")
+                                .foregroundColor(.white)
+                                .imageScale(.medium)
+                        }
+                        NavigationLink(destination: ProfileView(viewModel: userProfileViewModel, isSignedIn: $isSignedIn)) {
+                            Image(systemName: "person.crop.circle.fill")
+                                .foregroundColor(.white)
+                                .imageScale(.medium)
+                        }
+                    }
+                }
             }
             .alert(isPresented: $showAlert) {
                 Alert(title: Text("Notification"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
@@ -70,7 +96,7 @@ struct ContentView: View {
             }
         }
     }
-    
+
     private var userCardStack: some View {
         VStack {
             ZStack {
@@ -104,12 +130,12 @@ struct ContentView: View {
 
             userInfoView
                 .padding(.horizontal)
-            
+
             userAdditionalImagesView
                 .padding(.horizontal)
         }
     }
-    
+
     private var noMoreUsersView: some View {
         VStack {
             Text("No more users")
@@ -150,7 +176,7 @@ struct ContentView: View {
             }
         }
     }
-    
+
     private func interactionResultView(_ result: InteractionResult) -> some View {
         Group {
             if result == .liked {
@@ -168,7 +194,7 @@ struct ContentView: View {
             }
         }
     }
-    
+
     private var userInfoView: some View {
         VStack(alignment: .leading, spacing: 20) {
             ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
@@ -231,17 +257,16 @@ struct ContentView: View {
                 try? document.data(as: UserProfile.self)
             } ?? []
 
-            // Filter out the current user's profile
             self.users.removeAll { $0.id == currentUserID }
         }
     }
-    
+
     private func fetchIncomingLikes() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
             return
         }
-        
+
         let db = Firestore.firestore()
         db.collection("likes")
             .whereField("likedUserID", isEqualTo: currentUserID)
@@ -250,24 +275,21 @@ struct ContentView: View {
                     print("Error fetching incoming likes: \(error.localizedDescription)")
                     return
                 }
-                
+
                 for document in querySnapshot?.documents ?? [] {
                     let likeData = document.data()
                     let likingUserID = likeData["likingUserID"] as? String ?? ""
-                    
-                    // Avoid processing the same like again
+
                     guard likingUserID != currentUserID && !self.processedLikes.contains(likingUserID) else { continue }
                     self.processedLikes.insert(likingUserID)
 
-                    // Fetch the user who liked the current user
                     db.collection("users").document(likingUserID).getDocument { (userDocument, error) in
                         if let error = error {
                             print("Error fetching liking user: \(error.localizedDescription)")
                             return
                         }
-                        
+
                         if let userDocument = userDocument, let likedUser = try? userDocument.data(as: UserProfile.self) {
-                            // Check if it's a match
                             db.collection("likes")
                                 .whereField("likedUserID", isEqualTo: likingUserID)
                                 .whereField("likingUserID", isEqualTo: currentUserID)
@@ -276,13 +298,11 @@ struct ContentView: View {
                                         print("Error checking match: \(matchError.localizedDescription)")
                                         return
                                     }
-                                    
+
                                     if matchQuerySnapshot?.isEmpty == false {
-                                        // Avoid processing the same match again
                                         guard !self.processedMatches.contains(likingUserID) else { return }
                                         self.processedMatches.insert(likingUserID)
-                                        
-                                        // It's a match!
+
                                         let matchMessage = "You have matched with \(likedUser.name)!"
                                         self.alertMessage = matchMessage
                                         self.notifications.append(matchMessage)
@@ -291,7 +311,6 @@ struct ContentView: View {
                                         self.sendNotification(to: currentUserID, message: matchMessage)
                                         self.sendNotification(to: likingUserID, message: matchMessage)
                                     } else {
-                                        // Not a match, just a like
                                         let likeMessage = "\(likedUser.name) liked you!"
                                         self.alertMessage = likeMessage
                                         self.notifications.append(likeMessage)
@@ -310,14 +329,11 @@ struct ContentView: View {
         interactionResult = .liked
         let likedUser = users[currentIndex]
 
-        // Add the liked user to the notifications
         let notificationMessage = "\(likedUser.name) wants to play with you!"
         sendNotification(to: likedUser.id!, message: notificationMessage)
-        
-        // Move to the next user
+
         moveToNextUser()
 
-        // If authenticated, handle match creation
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
             return
@@ -330,7 +346,6 @@ struct ContentView: View {
 
         let db = Firestore.firestore()
 
-        // Check if the liked user has already liked the current user
         db.collection("likes")
             .whereField("likedUserID", isEqualTo: currentUserID)
             .whereField("likingUserID", isEqualTo: likedUserID)
@@ -341,10 +356,8 @@ struct ContentView: View {
                 }
 
                 if querySnapshot?.isEmpty == false {
-                    // It's a match!
                     self.createMatch(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
                 } else {
-                    // Not a match, just save the like
                     self.saveLike(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
                 }
             }
@@ -387,7 +400,6 @@ struct ContentView: View {
                 self.sendNotification(to: currentUserID, message: matchMessage)
                 self.sendNotification(to: likedUserID, message: matchMessage)
 
-                // Create a DM chat between the two users
                 self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID)
             }
         }
@@ -459,9 +471,9 @@ struct ContentView: View {
 
 struct UserCardView: View {
     var user: UserProfile
-    
+
     @State private var currentMediaIndex = 0
-    
+
     var body: some View {
         VStack(spacing: 0) {
             TabView(selection: $currentMediaIndex) {
@@ -484,7 +496,7 @@ struct UserCardView: View {
             .tabViewStyle(PageTabViewStyle())
             .frame(height: UIScreen.main.bounds.height * 0.5)
             .padding(.bottom, 5)
-            
+
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Age: \(user.age)")
@@ -509,7 +521,6 @@ struct UserCardView: View {
     }
 }
 
-// BadgeView Definition
 struct BadgeView: View {
     let count: Int
 
@@ -526,7 +537,6 @@ struct BadgeView: View {
     }
 }
 
-// NotificationsView Definition
 struct NotificationsView: View {
     @Binding var notifications: [String]
     @Binding var notificationCount: Int
@@ -561,7 +571,6 @@ struct NotificationsView: View {
     }
 }
 
-// NotificationBanner Definition
 struct NotificationBanner: View {
     var message: String
     @Binding var showBanner: Bool
@@ -584,7 +593,6 @@ struct NotificationBanner: View {
     }
 }
 
-// Previews for ContentView
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView(userProfileViewModel: UserProfileViewModel(user: UserProfile(id: "", name: "Preview User", rank: "Gold 3", imageName: "preview", age: "24", server: "NA", answers: [

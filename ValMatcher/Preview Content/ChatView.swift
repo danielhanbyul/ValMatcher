@@ -10,44 +10,71 @@ import Firebase
 
 struct ChatView: View {
     var matchID: String
+    var recipientName: String
     @State private var messages: [Message] = []
     @State private var newMessage: String = ""
     @State private var currentUserID = Auth.auth().currentUser?.uid
+    @State private var scrollToBottom: Bool = true
+    @State private var isScrolling = false
 
     var body: some View {
         VStack {
-            ScrollView {
-                ForEach(messages) { message in
-                    HStack {
-                        if message.isCurrentUser {
-                            Spacer()
-                            VStack(alignment: .trailing) {
-                                Text(message.content)
-                                    .padding()
-                                    .background(Color.blue)
-                                    .cornerRadius(8)
-                                    .foregroundColor(.white)
-                                Text("\(message.timestamp.dateValue(), formatter: dateFormatter)")
-                                    .font(.caption)
-                                    .foregroundColor(.white)
-                                    .padding(.top, 2)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack {
+                        ForEach(messages) { message in
+                            VStack {
+                                if shouldShowDate(for: message) {
+                                    Text("\(message.timestamp.dateValue(), formatter: dateOnlyFormatter)")
+                                        .font(.footnote)
+                                        .foregroundColor(.gray)
+                                        .padding(.top, 10)
+                                }
+
+                                HStack {
+                                    if message.isCurrentUser {
+                                        Spacer()
+                                        VStack(alignment: .trailing) {
+                                            Text(message.content)
+                                                .padding()
+                                                .background(Color.blue)
+                                                .cornerRadius(8)
+                                                .foregroundColor(.white)
+                                                .frame(maxWidth: 300, alignment: .trailing) // Control width
+                                            Text("\(message.timestamp.dateValue(), formatter: timeFormatter)")
+                                                .font(.caption)
+                                                .foregroundColor(.white)
+                                                .padding(.top, 2)
+                                        }
+                                    } else {
+                                        VStack(alignment: .leading) {
+                                            Text(message.content)
+                                                .padding()
+                                                .background(Color.gray)
+                                                .cornerRadius(8)
+                                                .foregroundColor(.black)
+                                                .frame(maxWidth: 300, alignment: .leading) // Control width
+                                            Text("\(message.timestamp.dateValue(), formatter: timeFormatter)")
+                                                .font(.caption)
+                                                .foregroundColor(.gray)
+                                                .padding(.top, 2)
+                                        }
+                                        Spacer()
+                                    }
+                                }
+                                .padding(.horizontal)
+                                .padding(.top, 5)
+                                .id(message.id)
                             }
-                        } else {
-                            VStack(alignment: .leading) {
-                                Text(message.content)
-                                    .padding()
-                                    .background(Color.gray)
-                                    .cornerRadius(8)
-                                    .foregroundColor(.black)
-                                Text("\(message.timestamp.dateValue(), formatter: dateFormatter)")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                                    .padding(.top, 2)
-                            }
-                            Spacer()
                         }
                     }
-                    .padding()
+                }
+                .onChange(of: messages) { _ in
+                    if scrollToBottom {
+                        DispatchQueue.main.async {
+                            proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                        }
+                    }
                 }
             }
 
@@ -55,6 +82,7 @@ struct ChatView: View {
                 TextField("Enter message", text: $newMessage)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding()
+                    .frame(height: 40) // Control height to adjust vertical width
 
                 Button(action: sendMessage) {
                     Image(systemName: "paperplane.fill")
@@ -67,7 +95,13 @@ struct ChatView: View {
             }
             .padding()
         }
+        .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(recipientName)
         .onAppear(perform: loadMessages)
+        .onChange(of: messages) { _ in
+            scrollToBottom = true
+        }
     }
 
     func loadMessages() {
@@ -107,8 +141,32 @@ struct ChatView: View {
             } else {
                 print("Message sent successfully")
                 self.newMessage = ""
+                self.scrollToBottom = true
             }
         }
     }
+
+    private func shouldShowDate(for message: Message) -> Bool {
+        guard let index = messages.firstIndex(of: message) else { return false }
+        if index == 0 {
+            return true
+        }
+        let previousMessage = messages[index - 1]
+        let calendar = Calendar.current
+        return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
+    }
 }
 
+let dateOnlyFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .long
+    formatter.timeStyle = .none
+    return formatter
+}()
+
+let timeFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .none
+    formatter.timeStyle = .short
+    return formatter
+}()
