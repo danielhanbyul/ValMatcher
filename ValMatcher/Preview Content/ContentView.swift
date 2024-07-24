@@ -283,18 +283,21 @@ struct ContentView: View {
                                         self.processedMatches.insert(likingUserID)
                                         
                                         // It's a match!
-                                        self.alertMessage = "You have matched with \(likedUser.name)!"
-                                        self.notifications.append("You have matched with \(likedUser.name)!")
+                                        let matchMessage = "You have matched with \(likedUser.name)!"
+                                        self.alertMessage = matchMessage
+                                        self.notifications.append(matchMessage)
                                         notificationCount += 1
                                         self.showAlert = true
-                                        self.sendNotification(to: currentUserID, message: "You have matched with \(likedUser.name)!")
-                                        self.sendNotification(to: likingUserID, message: "You have matched with \(likedUser.name)!")
+                                        self.sendNotification(to: currentUserID, message: matchMessage)
+                                        self.sendNotification(to: likingUserID, message: matchMessage)
                                     } else {
                                         // Not a match, just a like
-                                        self.alertMessage = "\(likedUser.name) liked you!"
-                                        self.notifications.append("\(likedUser.name) liked you!")
+                                        let likeMessage = "\(likedUser.name) liked you!"
+                                        self.alertMessage = likeMessage
+                                        self.notifications.append(likeMessage)
                                         notificationCount += 1
                                         self.showAlert = true
+                                        self.sendNotification(to: currentUserID, message: likeMessage)
                                     }
                                 }
                         }
@@ -376,10 +379,13 @@ struct ContentView: View {
             if let error = error {
                 print("Error creating match: \(error.localizedDescription)")
             } else {
-                self.alertMessage = "You have matched with \(likedUser.name)!"
-                self.notifications.append("You have matched with \(likedUser.name)!")
+                let matchMessage = "You have matched with \(likedUser.name)!"
+                self.alertMessage = matchMessage
+                self.notifications.append(matchMessage)
                 notificationCount += 1
                 self.showAlert = true
+                self.sendNotification(to: currentUserID, message: matchMessage)
+                self.sendNotification(to: likedUserID, message: matchMessage)
 
                 // Create a DM chat between the two users
                 self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID)
