@@ -84,6 +84,12 @@ struct ContentView: View {
                                     self.offset = .zero
                                 }
                         )
+                        .gesture(
+                            TapGesture(count: 2)
+                                .onEnded {
+                                    self.likeAction()
+                                }
+                        )
                         .offset(x: self.offset.width, y: 0)
                 }
 
