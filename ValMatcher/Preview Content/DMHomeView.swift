@@ -69,7 +69,7 @@ struct DMHomeView: View {
                 }
             }
 
-            NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: match.user1 == currentUserID ? match.user2Name ?? "Unknown User" : match.user1Name ?? "Unknown User")) {
+            NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))) {
                 HStack {
                     if let currentUserID = currentUserID {
                         userImageView(currentUserID: currentUserID, match: match)
@@ -77,11 +77,11 @@ struct DMHomeView: View {
 
                     VStack(alignment: .leading) {
                         if let currentUserID = currentUserID {
-                            Text(currentUserID == match.user1 ? (match.user2Name ?? "Unknown User") : (match.user1Name ?? "Unknown User"))
+                            Text(getRecipientName(for: match))
                                 .font(.custom("AvenirNext-Bold", size: 18))
                                 .foregroundColor(.white)
                         }
-                        if match.hasUnreadMessages ?? false {
+                        if match.hasUnreadMessages ?? false { // Unwrap optional Bool
                             Text("Unread messages")
                                 .font(.caption)
                                 .foregroundColor(.red)
@@ -91,7 +91,7 @@ struct DMHomeView: View {
                     .padding()
                     Spacer()
 
-                    if match.hasUnreadMessages ?? false {
+                    if match.hasUnreadMessages ?? false { // Unwrap optional Bool
                         Circle()
                             .fill(Color.red)
                             .frame(width: 10, height: 10)
@@ -104,6 +104,13 @@ struct DMHomeView: View {
                 .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
             }
         }
+    }
+
+    private func getRecipientName(for match: Chat) -> String {
+        if let currentUserID = currentUserID {
+            return currentUserID == match.user1 ? (match.user2Name ?? "Unknown User") : (match.user1Name ?? "Unknown User")
+        }
+        return "Unknown User"
     }
 
     @ViewBuilder
@@ -157,21 +164,22 @@ struct DMHomeView: View {
                     return
                 }
 
-                let newMatches = documents.compactMap { document -> Chat? in
+                var newMatches = documents.compactMap { document -> Chat? in
                     print("Document data: \(document.data())")
                     do {
-                        let match = try document.data(as: Chat.self)
-                        print("Fetched match for user1: \(String(describing: match))")
+                        var match = try document.data(as: Chat.self)
                         return match
                     } catch {
                         print("Error decoding match for user1: \(error.localizedDescription)")
                         return nil
                     }
                 }
-                
-                self.matches = newMatches
-                self.updateUnreadMessagesCount()
-                print("Loaded matches for user1: \(newMatches)")
+
+                fetchUserNames(for: newMatches) { updatedMatches in
+                    self.matches = updatedMatches
+                    self.updateUnreadMessagesCount()
+                    print("Loaded matches for user1: \(updatedMatches)")
+                }
             }
 
         db.collection("matches")
@@ -187,23 +195,62 @@ struct DMHomeView: View {
                     return
                 }
 
-                let moreMatches = documents.compactMap { document -> Chat? in
+                var moreMatches = documents.compactMap { document -> Chat? in
                     print("Document data: \(document.data())")
                     do {
-                        let match = try document.data(as: Chat.self)
-                        print("Fetched match for user2: \(String(describing: match))")
+                        var match = try document.data(as: Chat.self)
                         return match
                     } catch {
                         print("Error decoding match for user2: \(error.localizedDescription)")
                         return nil
                     }
                 }
-                
-                self.matches.append(contentsOf: moreMatches)
-                self.matches = Array(Set(self.matches))
-                self.updateUnreadMessagesCount()
-                print("Loaded matches for user2: \(moreMatches)")
+
+                fetchUserNames(for: moreMatches) { updatedMatches in
+                    self.matches.append(contentsOf: updatedMatches)
+                    self.matches = Array(Set(self.matches))
+                    self.updateUnreadMessagesCount()
+                    print("Loaded matches for user2: \(updatedMatches)")
+                }
             }
+    }
+
+    private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
+        var updatedMatches = matches
+        let dispatchGroup = DispatchGroup()
+
+        for i in 0..<updatedMatches.count {
+            if let currentUserID = currentUserID {
+                dispatchGroup.enter()
+                if updatedMatches[i].user1 == currentUserID {
+                    if let user2 = updatedMatches[i].user2 {
+                        Firestore.firestore().collection("users").document(user2).getDocument { document, error in
+                            if let document = document, document.exists {
+                                updatedMatches[i].user2Name = document.data()?["name"] as? String ?? "Unknown User"
+                            } else {
+                                updatedMatches[i].user2Name = "Unknown User"
+                            }
+                            dispatchGroup.leave()
+                        }
+                    }
+                } else {
+                    if let user1 = updatedMatches[i].user1 {
+                        Firestore.firestore().collection("users").document(user1).getDocument { document, error in
+                            if let document = document, document.exists {
+                                updatedMatches[i].user1Name = document.data()?["name"] as? String ?? "Unknown User"
+                            } else {
+                                updatedMatches[i].user1Name = "Unknown User"
+                            }
+                            dispatchGroup.leave()
+                        }
+                    }
+                }
+            }
+        }
+
+        dispatchGroup.notify(queue: .main) {
+            completion(updatedMatches)
+        }
     }
 
     func deleteSelectedMatches() {

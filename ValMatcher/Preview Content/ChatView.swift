@@ -10,8 +10,6 @@ import Firebase
 import FirebaseFirestore
 import FirebaseFirestoreSwift
 
-
-
 struct ChatView: View {
     var matchID: String
     var recipientName: String

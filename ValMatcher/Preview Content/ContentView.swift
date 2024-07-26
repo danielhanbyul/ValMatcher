@@ -4,7 +4,6 @@
 //
 //  Created by Daniel Han on 6/6/24.
 //
-
 import SwiftUI
 import Firebase
 import FirebaseFirestore
@@ -48,7 +47,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .navigationTitle("ValMatcher")
+            .navigationTitle("")
             .toolbar {
                 topBarContent
             }
@@ -82,12 +81,6 @@ struct ContentView: View {
                                         self.likeAction()
                                     }
                                     self.offset = .zero
-                                }
-                        )
-                        .gesture(
-                            TapGesture(count: 2)
-                                .onEnded {
-                                    self.likeAction()
                                 }
                         )
                         .offset(x: self.offset.width, y: 0)
@@ -196,6 +189,7 @@ struct ContentView: View {
             }
         }
     }
+
 
     private var userAdditionalImagesView: some View {
         ScrollView(.horizontal) {
@@ -566,9 +560,9 @@ struct UserCardView: View {
             
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Age: \(user.age)")
+                    Text("Username: \(user.name)")
                     Spacer()
-                    Text("Server: \(user.server)")
+                    Text("Age: \(user.age)")
                 }
                 .foregroundColor(.white)
                 .font(.subheadline)
