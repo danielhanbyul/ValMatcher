@@ -11,11 +11,11 @@ import FirebaseFirestore
 import FirebaseFirestoreSwift
 
 struct DMHomeView: View {
-    @State private var matches = [Chat]() // Use Chat model for matches
+    @State private var matches = [Chat]()
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
-    @Binding var totalUnreadMessages: Int // Binding to track total unread messages
+    @Binding var totalUnreadMessages: Int
 
     var body: some View {
         ZStack {
@@ -49,6 +49,7 @@ struct DMHomeView: View {
         })
         .onAppear {
             loadMatches()
+            listenForUnreadMessages()
         }
     }
 
@@ -76,26 +77,20 @@ struct DMHomeView: View {
                     }
 
                     VStack(alignment: .leading) {
-                        if let currentUserID = currentUserID {
+                        HStack {
                             Text(getRecipientName(for: match))
                                 .font(.custom("AvenirNext-Bold", size: 18))
                                 .foregroundColor(.white)
-                        }
-                        if match.hasUnreadMessages ?? false { // Unwrap optional Bool
-                            Text("Unread messages")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                                .padding(.top, 2)
+                            if match.hasUnreadMessages ?? false {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 10, height: 10)
+                                    .offset(x: -10)
+                            }
                         }
                     }
                     .padding()
                     Spacer()
-
-                    if match.hasUnreadMessages ?? false { // Unwrap optional Bool
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 10, height: 10)
-                    }
                 }
                 .background(Color.black.opacity(0.7))
                 .cornerRadius(12)
@@ -177,7 +172,7 @@ struct DMHomeView: View {
 
                 fetchUserNames(for: newMatches) { updatedMatches in
                     self.matches = updatedMatches
-                    self.updateUnreadMessagesCount()
+                    self.updateUnreadMessagesCount(from: snapshot)
                     print("Loaded matches for user1: \(updatedMatches)")
                 }
             }
@@ -209,7 +204,7 @@ struct DMHomeView: View {
                 fetchUserNames(for: moreMatches) { updatedMatches in
                     self.matches.append(contentsOf: updatedMatches)
                     self.matches = Array(Set(self.matches))
-                    self.updateUnreadMessagesCount()
+                    self.updateUnreadMessagesCount(from: snapshot)
                     print("Loaded matches for user2: \(updatedMatches)")
                 }
             }
@@ -280,24 +275,61 @@ struct DMHomeView: View {
         }
     }
 
-    private func updateUnreadMessagesCount() {
-        totalUnreadMessages = 0
+    private func listenForUnreadMessages() {
+        guard let currentUserID = currentUserID else {
+            print("Error: User not authenticated")
+            return
+        }
         
-        for match in matches {
-            guard let matchID = match.id else { continue }
-            let db = Firestore.firestore()
-            db.collection("matches").document(matchID).collection("messages")
+        let db = Firestore.firestore()
+        db.collection("matches")
+            .whereField("user1", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error fetching matches: \(error)")
+                    return
+                }
+                self.updateUnreadMessagesCount(from: snapshot)
+            }
+        
+        db.collection("matches")
+            .whereField("user2", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error fetching matches: \(error)")
+                    return
+                }
+                self.updateUnreadMessagesCount(from: snapshot)
+            }
+    }
+
+    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot?) {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+        var count = 0
+        let group = DispatchGroup()
+        
+        snapshot?.documents.forEach { document in
+            group.enter()
+            Firestore.firestore().collection("matches").document(document.documentID).collection("messages")
+                .whereField("senderID", isNotEqualTo: currentUserID)
                 .whereField("isRead", isEqualTo: false)
-                .whereField("senderID", isNotEqualTo: currentUserID ?? "")
-                .getDocuments { snapshot, error in
+                .getDocuments { messageSnapshot, error in
                     if let error = error {
-                        print("Error fetching unread messages: \(error.localizedDescription)")
+                        print("Error fetching messages: \(error)")
                         return
                     }
-                    
-                    let unreadCount = snapshot?.documents.count ?? 0
-                    totalUnreadMessages += unreadCount
+                    count += messageSnapshot?.documents.count ?? 0
+                    if let matchIndex = matches.firstIndex(where: { $0.id == document.documentID }) {
+                        let hasUnread = !(messageSnapshot?.documents.isEmpty ?? true)
+                        matches[matchIndex].hasUnreadMessages = hasUnread
+                        print("Updated match \(document.documentID) with hasUnreadMessages: \(hasUnread)")
+                    }
+                    group.leave()
                 }
+        }
+        
+        group.notify(queue: .main) {
+            self.totalUnreadMessages = count
         }
     }
 }

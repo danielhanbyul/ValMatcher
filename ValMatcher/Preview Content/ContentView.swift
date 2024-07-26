@@ -59,7 +59,7 @@ struct ContentView: View {
             .onAppear {
                 fetchUsers()
                 fetchIncomingLikes()
-                fetchUnreadMessagesCount()
+                listenForUnreadMessages()
             }
         }
     }
@@ -84,6 +84,12 @@ struct ContentView: View {
                                 }
                         )
                         .offset(x: self.offset.width, y: 0)
+                        .gesture(
+                            TapGesture(count: 2)
+                                .onEnded {
+                                    self.likeAction()
+                                }
+                        )
                 }
 
                 if let result = interactionResult {
@@ -189,7 +195,6 @@ struct ContentView: View {
             }
         }
     }
-
 
     private var userAdditionalImagesView: some View {
         ScrollView(.horizontal) {
@@ -301,7 +306,7 @@ struct ContentView: View {
             }
     }
 
-    private func fetchUnreadMessagesCount() {
+    private func listenForUnreadMessages() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
             return
@@ -315,27 +320,7 @@ struct ContentView: View {
                     print("Error fetching matches: \(error)")
                     return
                 }
-
-                var count = 0
-                let group = DispatchGroup()
-                snapshot?.documents.forEach { document in
-                    group.enter()
-                    db.collection("matches").document(document.documentID).collection("messages")
-                        .whereField("senderID", isNotEqualTo: currentUserID)
-                        .whereField("isRead", isEqualTo: false)
-                        .getDocuments { messageSnapshot, error in
-                            if let error = error {
-                                print("Error fetching messages: \(error)")
-                                return
-                            }
-
-                            count += messageSnapshot?.documents.count ?? 0
-                            group.leave()
-                        }
-                }
-                group.notify(queue: .main) {
-                    unreadMessagesCount = count
-                }
+                self.updateUnreadMessagesCount(from: snapshot)
             }
         
         db.collection("matches")
@@ -345,28 +330,33 @@ struct ContentView: View {
                     print("Error fetching matches: \(error)")
                     return
                 }
-
-                var count = 0
-                let group = DispatchGroup()
-                snapshot?.documents.forEach { document in
-                    group.enter()
-                    db.collection("matches").document(document.documentID).collection("messages")
-                        .whereField("senderID", isNotEqualTo: currentUserID)
-                        .whereField("isRead", isEqualTo: false)
-                        .getDocuments { messageSnapshot, error in
-                            if let error = error {
-                                print("Error fetching messages: \(error)")
-                                return
-                            }
-
-                            count += messageSnapshot?.documents.count ?? 0
-                            group.leave()
-                        }
-                }
-                group.notify(queue: .main) {
-                    unreadMessagesCount = count
-                }
+                self.updateUnreadMessagesCount(from: snapshot)
             }
+    }
+
+    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot?) {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+        var count = 0
+        let group = DispatchGroup()
+        
+        snapshot?.documents.forEach { document in
+            group.enter()
+            Firestore.firestore().collection("matches").document(document.documentID).collection("messages")
+                .whereField("senderID", isNotEqualTo: currentUserID)
+                .whereField("isRead", isEqualTo: false)
+                .getDocuments { messageSnapshot, error in
+                    if let error = error {
+                        print("Error fetching messages: \(error)")
+                        return
+                    }
+                    count += messageSnapshot?.documents.count ?? 0
+                    group.leave()
+                }
+        }
+        
+        group.notify(queue: .main) {
+            self.unreadMessagesCount = count
+        }
     }
 
     private func likeAction() {
@@ -529,7 +519,6 @@ struct BadgeView: View {
     }
 }
 
-
 struct UserCardView: View {
     var user: UserProfile
     
@@ -581,8 +570,6 @@ struct UserCardView: View {
         .padding()
     }
 }
-
-
 
 struct NotificationsView: View {
     @Binding var notifications: [String]

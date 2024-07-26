@@ -163,13 +163,30 @@ struct ChatView: View {
 
     private func markMessagesAsRead() {
         let db = Firestore.firestore()
+        let batch = db.batch()
         messages.filter { !$0.isCurrentUser && !$0.isRead }.forEach { message in
-            db.collection("matches").document(matchID).collection("messages").document(message.id ?? "").updateData([
-                "isRead": true
-            ]) { error in
-                if let error = error {
-                    print("Error marking message as read: \(error.localizedDescription)")
-                }
+            let messageRef = db.collection("matches").document(matchID).collection("messages").document(message.id ?? "")
+            batch.updateData(["isRead": true], forDocument: messageRef)
+        }
+        batch.commit { error in
+            if let error = error {
+                print("Error marking messages as read: \(error.localizedDescription)")
+            } else {
+                // Update hasUnreadMessages field in the match document
+                updateHasUnreadMessages(for: matchID, hasUnread: false)
+            }
+        }
+    }
+
+    private func updateHasUnreadMessages(for matchID: String, hasUnread: Bool) {
+        let db = Firestore.firestore()
+        db.collection("matches").document(matchID).updateData([
+            "hasUnreadMessages": hasUnread
+        ]) { error in
+            if let error = error {
+                print("Error updating unread messages status: \(error.localizedDescription)")
+            } else {
+                print("Updated hasUnreadMessages to \(hasUnread) for matchID \(matchID)")
             }
         }
     }
