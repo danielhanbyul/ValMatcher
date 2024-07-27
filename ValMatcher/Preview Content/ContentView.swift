@@ -519,33 +519,121 @@ struct BadgeView: View {
     }
 }
 
+import SwiftUI
+import AVKit
+
 struct UserCardView: View {
     var user: UserProfile
-    
+    var newMedia: [MediaItem] = []
     @State private var currentMediaIndex = 0
-    
+
     var body: some View {
         VStack(spacing: 0) {
-            TabView(selection: $currentMediaIndex) {
-                ForEach(user.additionalImages.indices, id: \.self) { index in
-                    if let urlString = user.additionalImages[index],
-                       let url = URL(string: urlString),
-                       let data = try? Data(contentsOf: url),
-                       let image = UIImage(data: data) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                            .clipped()
-                            .cornerRadius(20)
-                            .shadow(radius: 10)
-                            .tag(index)
+            ZStack {
+                TabView(selection: $currentMediaIndex) {
+                    // Existing media
+                    ForEach(user.additionalImages.indices, id: \.self) { index in
+                        if let urlString = user.additionalImages[index], let url = URL(string: urlString) {
+                            if url.pathExtension.lowercased() == "mp4" {
+                                VideoPlayer(player: AVPlayer(url: url))
+                                    .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                    .cornerRadius(20)
+                                    .shadow(radius: 10)
+                            } else {
+                                AsyncImage(url: url) { phase in
+                                    switch phase {
+                                    case .empty:
+                                        ProgressView()
+                                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                            .clipped()
+                                            .cornerRadius(20)
+                                            .shadow(radius: 10)
+                                    case .failure:
+                                        Image(systemName: "photo")
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                            .clipped()
+                                            .cornerRadius(20)
+                                            .background(Color.gray)
+                                            .shadow(radius: 10)
+                                    @unknown default:
+                                        EmptyView()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // New media
+                    ForEach(newMedia.indices, id: \.self) { index in
+                        let media = newMedia[index]
+                        if let image = media.image {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                .clipped()
+                                .cornerRadius(20)
+                                .shadow(radius: 10)
+                        } else if let videoURL = media.videoURL {
+                            VideoPlayer(player: AVPlayer(url: videoURL))
+                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                .cornerRadius(20)
+                                .shadow(radius: 10)
+                        }
                     }
                 }
+                .tabViewStyle(PageTabViewStyle())
+                .frame(height: UIScreen.main.bounds.height * 0.5)
+                
+                // Navigation arrows
+                HStack {
+                    Button(action: {
+                        currentMediaIndex = max(currentMediaIndex - 1, 0)
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.title)
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                    .padding(.leading, 20)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        currentMediaIndex = min(currentMediaIndex + 1, (user.additionalImages.count + newMedia.count) - 1)
+                    }) {
+                        Image(systemName: "chevron.right")
+                            .font(.title)
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                    .padding(.trailing, 20)
+                }
+                
+                // Page indicator
+                VStack {
+                    Spacer()
+                    HStack {
+                        ForEach(0..<(user.additionalImages.count + newMedia.count), id: \.self) { index in
+                            Circle()
+                                .fill(index == currentMediaIndex ? Color.white : Color.gray)
+                                .frame(width: 8, height: 8)
+                                .padding(2)
+                        }
+                    }
+                    .padding(.bottom, 20)
+                }
             }
-            .tabViewStyle(PageTabViewStyle())
-            .frame(height: UIScreen.main.bounds.height * 0.5)
-            .padding(.bottom, 5)
             
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -570,6 +658,12 @@ struct UserCardView: View {
         .padding()
     }
 }
+
+func UIImageToDataURL(image: UIImage) -> String? {
+    guard let imageData = image.jpegData(compressionQuality: 0.8) else { return nil }
+    return "data:image/jpeg;base64,\(imageData.base64EncodedString())"
+}
+
 
 struct NotificationsView: View {
     @Binding var notifications: [String]

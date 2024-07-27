@@ -13,18 +13,19 @@ struct ProfileView: View {
     @Binding var isSignedIn: Bool
     @Environment(\.presentationMode) var presentationMode
     @State private var isEditing = false
-    @State private var newImage: UIImage?
     @State private var showingImagePicker = false
+    @State private var newMedia: [MediaItem] = []
     @State private var newAge = ""
     @State private var newRank = ""
     @State private var newServer = ""
     @State private var additionalImages: [String] = []
     @State private var updatedAnswers: [String: String] = [:]
     @State private var showingSettings = false
+    @State private var isShowingLoginView = false
 
     var body: some View {
         VStack {
-            // Custom Back Button and Settings Button
+            // Custom Navigation Bar
             HStack {
                 Button(action: {
                     if isEditing {
@@ -33,17 +34,16 @@ struct ProfileView: View {
                         presentationMode.wrappedValue.dismiss()
                     }
                 }) {
-                    HStack {
-                        Image(systemName: "chevron.left")
-                            .foregroundColor(.white)
-                            .imageScale(.medium)
-                        Text("Back")
-                            .foregroundColor(.white)
-                            .font(.custom("AvenirNext-Bold", size: 18))
-                    }
+                    Image(systemName: "chevron.left")
+                        .foregroundColor(.white)
+                        .imageScale(.medium)
                 }
-                .padding(.top, 20)
-                .padding(.leading, 20)
+                
+                Spacer()
+                
+                Text("Profile")
+                    .foregroundColor(.white)
+                    .font(.custom("AvenirNext-Bold", size: 20))
                 
                 Spacer()
                 
@@ -56,8 +56,6 @@ struct ProfileView: View {
                             .foregroundColor(.white)
                             .imageScale(.medium)
                     }
-                    .padding(.top, 20)
-                    .padding(.trailing, 20)
                 }
                 
                 Button(action: {
@@ -67,70 +65,27 @@ struct ProfileView: View {
                         .foregroundColor(.white)
                         .imageScale(.medium)
                 }
-                .padding(.top, 20)
-                .padding(.trailing, 20)
             }
-
+            .padding()
+            .background(Color.black)
+            .frame(height: 44)
+            
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Profile Picture
-                    if isEditing {
-                        VStack {
-                            ForEach(additionalImages.indices, id: \.self) { index in
-                                let urlString = additionalImages[index]
-                                if let url = URL(string: urlString) {
-                                    AsyncImage(url: url) { phase in
-                                        switch phase {
-                                        case .empty:
-                                            ProgressView()
-                                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.3)
-                                        case .success(let image):
-                                            image
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.3)
-                                                .clipped()
-                                                .cornerRadius(20)
-                                                .background(Color.gray)
-                                                .shadow(radius: 10)
-                                        case .failure:
-                                            Image(systemName: "photo")
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.3)
-                                                .clipped()
-                                                .cornerRadius(20)
-                                                .background(Color.gray)
-                                                .shadow(radius: 10)
-                                        @unknown default:
-                                            EmptyView()
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            Button(action: {
-                                self.showingImagePicker = true
-                            }) {
-                                Image(systemName: "plus.circle.fill")
-                                    .resizable()
-                                    .frame(width: 50, height: 50)
-                                    .foregroundColor(.blue)
-                            }
-                        }
-                    } else {
-                        Image(systemName: "person.circle")
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 150, height: 150)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.white, lineWidth: 4))
-                            .shadow(radius: 10)
-                            .padding(.top, 20)
-                            .padding(.bottom, 10)
-                    }
+                    UserCardView(user: viewModel.user, newMedia: newMedia)
                     
-                    // User Information
+                    if isEditing {
+                        Button(action: {
+                            self.showingImagePicker = true
+                        }) {
+                            Text("Add Images/Videos")
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.blue)
+                                .cornerRadius(8)
+                        }
+                    }
+
                     VStack(alignment: .leading, spacing: 5) {
                         if isEditing {
                             TextField("Age", text: $newAge)
@@ -161,7 +116,6 @@ struct ProfileView: View {
                     Divider()
                         .background(Color.gray)
 
-                    // User Answers
                     VStack(alignment: .leading, spacing: 15) {
                         ForEach(viewModel.user.answers.keys.sorted(), id: \.self) { question in
                             VStack(alignment: .leading, spacing: 5) {
@@ -194,46 +148,6 @@ struct ProfileView: View {
                                 .cornerRadius(8)
                         }
                         .padding(.top, 20)
-                    } else {
-                        // Display Additional Images
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Additional Images")
-                                .font(.headline)
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack {
-                                    ForEach(viewModel.user.additionalImages.indices, id: \.self) { index in
-                                        if let urlString = viewModel.user.additionalImages[index], let url = URL(string: urlString) {
-                                            AsyncImage(url: url) { phase in
-                                                switch phase {
-                                                case .empty:
-                                                    ProgressView()
-                                                        .frame(width: 100, height: 100)
-                                                case .success(let image):
-                                                    image
-                                                        .resizable()
-                                                        .aspectRatio(contentMode: .fill)
-                                                        .frame(width: 100, height: 100)
-                                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                                                        .shadow(radius: 5)
-                                                case .failure:
-                                                    Image(systemName: "photo")
-                                                        .resizable()
-                                                        .aspectRatio(contentMode: .fill)
-                                                        .frame(width: 100, height: 100)
-                                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                                                        .shadow(radius: 5)
-                                                @unknown default:
-                                                    EmptyView()
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
                     }
                 }
                 .padding()
@@ -243,13 +157,23 @@ struct ProfileView: View {
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
         )
-        .navigationBarTitle("Profile", displayMode: .inline)
-        .navigationBarBackButtonHidden(true)
+        .navigationBarTitle("", displayMode: .inline)
+        .navigationBarHidden(true)
         .sheet(isPresented: $showingImagePicker) {
-            // Your image picker view here
+            ImagePicker(selectedMedia: $newMedia)
+                .onDisappear(perform: {
+                    // Navigate to ProfileView and refresh
+                    DispatchQueue.main.async {
+                        self.isEditing = false
+                        saveProfile()
+                    }
+                })
         }
         .sheet(isPresented: $showingSettings) {
-            SettingsView(user: $viewModel.user, isSignedIn: $isSignedIn)
+            SettingsView(user: $viewModel.user, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
+        }
+        .fullScreenCover(isPresented: $isShowingLoginView) {
+            LoginView(isSignedIn: $isSignedIn, currentUser: .constant(nil), isShowingLoginView: $isShowingLoginView)
         }
         .onAppear {
             initializeEditValues()
@@ -260,7 +184,7 @@ struct ProfileView: View {
         newAge = viewModel.user.age
         newRank = viewModel.user.rank
         newServer = viewModel.user.server
-        additionalImages = viewModel.user.additionalImages.compactMap { $0 } // Ensure non-nil URLs
+        additionalImages = viewModel.user.additionalImages.compactMap { $0 }
         updatedAnswers = viewModel.user.answers
     }
 
@@ -269,7 +193,7 @@ struct ProfileView: View {
             newAge: newAge,
             newRank: newRank,
             newServer: newServer,
-            additionalImages: additionalImages,
+            additionalImages: additionalImages + newMedia.compactMap { $0.image != nil ? UIImageToDataURL(image: $0.image!)! : "" },
             updatedAnswers: updatedAnswers
         )
         isEditing.toggle()
