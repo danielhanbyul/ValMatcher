@@ -84,6 +84,8 @@ struct ProfileView: View {
                                 .background(Color.blue)
                                 .cornerRadius(8)
                         }
+                        
+                        
                     }
 
                     VStack(alignment: .leading, spacing: 5) {
@@ -141,7 +143,7 @@ struct ProfileView: View {
                     
                     if isEditing {
                         Button(action: saveProfile) {
-                            Text("Save")
+                            Text("Save Profile")
                                 .foregroundColor(.white)
                                 .padding()
                                 .background(Color.blue)
@@ -197,5 +199,44 @@ struct ProfileView: View {
             updatedAnswers: updatedAnswers
         )
         isEditing.toggle()
+    }
+
+    private func saveMedia() {
+        // Handle media upload and save profile data
+        uploadNewMedia { urls in
+            self.additionalImages.append(contentsOf: urls)
+            self.viewModel.updateUserProfile(
+                newAge: self.newAge,
+                newRank: self.newRank,
+                newServer: self.newServer,
+                additionalImages: self.additionalImages,
+                updatedAnswers: self.updatedAnswers
+            )
+            self.isEditing.toggle()
+        }
+    }
+    
+    private func uploadNewMedia(completion: @escaping ([String]) -> Void) {
+        let dispatchGroup = DispatchGroup()
+        var uploadedURLs: [String] = []
+        
+        for media in newMedia {
+            dispatchGroup.enter()
+            if let image = media.image {
+                viewModel.uploadImage(image: image, path: "media/\(viewModel.user.id!)/\(UUID().uuidString)") { url in
+                    uploadedURLs.append(url.absoluteString)
+                    dispatchGroup.leave()
+                }
+            } else if let videoURL = media.videoURL {
+                viewModel.uploadVideo(url: videoURL, path: "media/\(viewModel.user.id!)/\(UUID().uuidString)") { url in
+                    uploadedURLs.append(url.absoluteString)
+                    dispatchGroup.leave()
+                }
+            }
+        }
+        
+        dispatchGroup.notify(queue: .main) {
+            completion(uploadedURLs)
+        }
     }
 }

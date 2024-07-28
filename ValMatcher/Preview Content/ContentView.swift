@@ -519,6 +519,7 @@ struct BadgeView: View {
     }
 }
 
+
 import SwiftUI
 import AVKit
 
@@ -663,6 +664,7 @@ func UIImageToDataURL(image: UIImage) -> String? {
     guard let imageData = image.jpegData(compressionQuality: 0.8) else { return nil }
     return "data:image/jpeg;base64,\(imageData.base64EncodedString())"
 }
+
 
 
 struct NotificationsView: View {
