@@ -84,8 +84,6 @@ struct ProfileView: View {
                                 .background(Color.blue)
                                 .cornerRadius(8)
                         }
-                        
-                        
                     }
 
                     VStack(alignment: .leading, spacing: 5) {
@@ -140,7 +138,10 @@ struct ProfileView: View {
                         }
                     }
                     .padding(.horizontal)
-                    
+
+                    // Chat List View for displaying chats and unread messages
+                    ChatListView(viewModel: viewModel)
+
                     if isEditing {
                         Button(action: saveProfile) {
                             Text("Save Profile")

@@ -38,7 +38,7 @@ struct ContentView: View {
                     .edgesIgnoringSafeArea(.all)
 
                 ScrollView {
-                    VStack {
+                    VStack(spacing: 0) { // Reduced spacing to zero
                         if currentIndex < users.count {
                             userCardStack
                         } else {
@@ -65,7 +65,7 @@ struct ContentView: View {
     }
 
     private var userCardStack: some View {
-        VStack {
+        VStack(spacing: 0) { // Reduced spacing to zero
             ZStack {
                 if currentIndex < users.count {
                     UserCardView(user: users[currentIndex])
@@ -96,7 +96,7 @@ struct ContentView: View {
                     interactionResultView(result)
                 }
             }
-            .padding()
+            .padding([.horizontal, .bottom]) // Removed top padding to minimize space
 
             userInfoView
                 .padding(.horizontal)
@@ -278,7 +278,7 @@ struct ContentView: View {
                                     
                                     if matchQuerySnapshot?.isEmpty == false {
                                         // It's a match!
-                                        let matchMessage = "You have matched with \(likedUser.name)!"
+                                        let matchMessage = "You matched with \(likedUser.name)!"
                                         if !self.notifications.contains(matchMessage) && !self.acknowledgedNotifications.contains(matchMessage) {
                                             self.alertMessage = matchMessage
                                             self.notifications.append(matchMessage)
@@ -430,7 +430,7 @@ struct ContentView: View {
             if let error = error {
                 print("Error creating match: \(error.localizedDescription)")
             } else {
-                let matchMessage = "You have matched with \(likedUser.name)!"
+                let matchMessage = "You matched with \(likedUser.name)!"
                 if !self.notifications.contains(matchMessage) && !self.acknowledgedNotifications.contains(matchMessage) {
                     self.notifications.append(matchMessage)
                     notificationCount += 1
@@ -672,34 +672,39 @@ struct NotificationsView: View {
     @Binding var notificationCount: Int
 
     var body: some View {
-        VStack {
-            if notifications.isEmpty {
-                Text("No notifications")
-                    .foregroundColor(.white)
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading) {
-                        ForEach(notifications, id: \.self) { notification in
-                            Text(notification)
-                                .foregroundColor(.white)
-                                .padding()
-                                .background(Color(.systemGray5))
-                                .cornerRadius(10)
-                                .padding(.horizontal)
-                                .padding(.vertical, 5)
+        ZStack {
+            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
+                .edgesIgnoringSafeArea(.all)
+            
+            VStack {
+                if notifications.isEmpty {
+                    Text("No notifications")
+                        .foregroundColor(.white)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) { // Added spacing
+                            ForEach(notifications, id: \.self) { notification in
+                                Text(notification)
+                                    .foregroundColor(.white)
+                                    .padding()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color(.systemGray5))
+                                    .cornerRadius(10)
+                                    .padding(.horizontal) // Added horizontal padding
+                            }
                         }
                     }
+                    .padding(.top)
                 }
-                .padding(.top)
             }
+            .onAppear {
+                notificationCount = 0
+            }
+            .navigationBarTitle("Notifications", displayMode: .inline)
         }
-        .onAppear {
-            notificationCount = 0
-        }
-        .navigationBarTitle("Notifications", displayMode: .inline)
-        .background(Color(red: 0.02, green: 0.18, blue: 0.15).edgesIgnoringSafeArea(.all))
     }
 }
+
 
 struct NotificationBanner: View {
     var message: String
