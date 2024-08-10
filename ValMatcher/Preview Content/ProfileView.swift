@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Firebase
+import FirebaseStorage
 
 struct ProfileView: View {
     @ObservedObject var viewModel: UserProfileViewModel
@@ -84,6 +85,7 @@ struct ProfileView: View {
                                 .background(Color.blue)
                                 .cornerRadius(8)
                         }
+                        .disabled(additionalImages.count + newMedia.count >= 3)  // Disable button after 3 images
                     }
 
                     VStack(alignment: .leading, spacing: 5) {
@@ -139,9 +141,6 @@ struct ProfileView: View {
                     }
                     .padding(.horizontal)
 
-                    // Chat List View for displaying chats and unread messages
-                    ChatListView(viewModel: viewModel)
-
                     if isEditing {
                         Button(action: saveProfile) {
                             Text("Save Profile")
@@ -165,11 +164,7 @@ struct ProfileView: View {
         .sheet(isPresented: $showingImagePicker) {
             ImagePicker(selectedMedia: $newMedia)
                 .onDisappear(perform: {
-                    // Navigate to ProfileView and refresh
-                    DispatchQueue.main.async {
-                        self.isEditing = false
-                        saveProfile()
-                    }
+                    saveMedia()
                 })
         }
         .sheet(isPresented: $showingSettings) {
@@ -192,14 +187,17 @@ struct ProfileView: View {
     }
 
     private func saveProfile() {
-        viewModel.updateUserProfile(
-            newAge: newAge,
-            newRank: newRank,
-            newServer: newServer,
-            additionalImages: additionalImages + newMedia.compactMap { $0.image != nil ? UIImageToDataURL(image: $0.image!)! : "" },
-            updatedAnswers: updatedAnswers
-        )
-        isEditing.toggle()
+        uploadNewMedia { urls in
+            self.additionalImages.append(contentsOf: urls)
+            self.viewModel.updateUserProfile(
+                newAge: self.newAge,
+                newRank: self.newRank,
+                newServer: self.newServer,
+                additionalImages: self.additionalImages.prefix(3).map { $0 },  // Ensure only 3 images are saved
+                updatedAnswers: self.updatedAnswers
+            )
+            self.isEditing.toggle()
+        }
     }
 
     private func saveMedia() {
@@ -210,34 +208,66 @@ struct ProfileView: View {
                 newAge: self.newAge,
                 newRank: self.newRank,
                 newServer: self.newServer,
-                additionalImages: self.additionalImages,
+                additionalImages: self.additionalImages.prefix(3).map { $0 },  // Ensure only 3 images are saved
                 updatedAnswers: self.updatedAnswers
             )
             self.isEditing.toggle()
         }
     }
     
-    private func uploadNewMedia(completion: @escaping ([String]) -> Void) {
+
+    func uploadNewMedia(completion: @escaping ([String]) -> Void) {
         let dispatchGroup = DispatchGroup()
         var uploadedURLs: [String] = []
-        
+
         for media in newMedia {
             dispatchGroup.enter()
             if let image = media.image {
-                viewModel.uploadImage(image: image, path: "media/\(viewModel.user.id!)/\(UUID().uuidString)") { url in
-                    uploadedURLs.append(url.absoluteString)
-                    dispatchGroup.leave()
-                }
-            } else if let videoURL = media.videoURL {
-                viewModel.uploadVideo(url: videoURL, path: "media/\(viewModel.user.id!)/\(UUID().uuidString)") { url in
-                    uploadedURLs.append(url.absoluteString)
-                    dispatchGroup.leave()
+                let fileName = UUID().uuidString + ".jpg"
+                let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
+
+                let imageData = image.jpegData(compressionQuality: 0.8)!
+                let metadata = StorageMetadata() // Correctly initialize metadata if needed
+                metadata.contentType = "image/jpeg"
+
+                storageRef.putData(imageData, metadata: metadata) { metadata, error in
+                    guard error == nil else {
+                        print("Error uploading image: \(error!.localizedDescription)")
+                        dispatchGroup.leave()
+                        return
+                    }
+
+                    storageRef.downloadURL { url, error in
+                        guard let downloadURL = url else {
+                            print("Error getting download URL: \(error!.localizedDescription)")
+                            dispatchGroup.leave()
+                            return
+                        }
+
+                        uploadedURLs.append(downloadURL.absoluteString)
+                        dispatchGroup.leave()
+                    }
                 }
             }
         }
-        
+
         dispatchGroup.notify(queue: .main) {
+            self.saveImageURLsToFirestore(uploadedURLs)
             completion(uploadedURLs)
+        }
+    }
+    
+    private func saveImageURLsToFirestore(_ urls: [String]) {
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(viewModel.user.id ?? "")
+        userRef.updateData([
+            "additionalImages": FieldValue.arrayUnion(urls)
+        ]) { error in
+            if let error = error {
+                print("Error saving image URLs to Firestore: \(error.localizedDescription)")
+            } else {
+                print("Successfully saved image URLs to Firestore")
+            }
         }
     }
 }
