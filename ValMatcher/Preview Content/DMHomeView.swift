@@ -216,8 +216,12 @@ struct DMHomeView: View {
         var seenUserPairs = Set<String>()
 
         for chat in chats {
-            let userPair = chat.user1 + chat.user2
-            let reverseUserPair = chat.user2 + chat.user1
+            guard let user1 = chat.user1, let user2 = chat.user2 else {
+                continue  // Skip if either user1 or user2 is nil
+            }
+
+            let userPair = user1 + user2
+            let reverseUserPair = user2 + user1
 
             if !seenUserPairs.contains(userPair) && !seenUserPairs.contains(reverseUserPair) {
                 uniqueChats.append(chat)
