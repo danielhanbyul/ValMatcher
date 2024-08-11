@@ -7,6 +7,7 @@
 import SwiftUI
 import Firebase
 import FirebaseFirestore
+import AVKit
 
 struct ContentView: View {
     @StateObject var userProfileViewModel: UserProfileViewModel
@@ -32,31 +33,67 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
-                    .edgesIgnoringSafeArea(.all)
+        ZStack {
+            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
+                .edgesIgnoringSafeArea(.all)
 
-                ScrollView {
-                    VStack(spacing: 0) { // Reduced spacing to zero
-                        if currentIndex < users.count {
-                            userCardStack
-                        } else {
-                            noMoreUsersView
-                        }
+            ScrollView {
+                VStack(spacing: 0) {
+                    if currentIndex < users.count {
+                        userCardStack
+                            .padding(.top, 40) // Add space between the top of the phone and the user card
+                    } else {
+                        noMoreUsersView
                     }
                 }
             }
-            .navigationTitle("")
-            .toolbar {
-                topBarContent
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .navigationBarLeading) {
+                Text("ValMatcher")
+                    .font(.title2)
+                    .bold()
+                    .foregroundColor(.white)
+                    .padding(.top, 10) // Move the title and icons down a bit
             }
-            .alert(isPresented: $showAlert) {
-                Alert(title: Text("Notification"), message: Text(alertMessage), dismissButton: .default(Text("OK")) {
-                    acknowledgedNotifications.insert(alertMessage)
-                })
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                HStack(spacing: 15) {
+                    NavigationLink(destination: NotificationsView(notifications: $notifications, notificationCount: $notificationCount)) {
+                        Image(systemName: "bell.fill")
+                            .foregroundColor(.white)
+                            .imageScale(.medium)
+                            .overlay(
+                                BadgeView(count: notificationCount)
+                                    .offset(x: 12, y: -12)
+                            )
+                    }
+                    NavigationLink(destination: DMHomeView(totalUnreadMessages: $unreadMessagesCount)) {
+                        Image(systemName: "message.fill")
+                            .foregroundColor(.white)
+                            .imageScale(.medium)
+                            .overlay(
+                                BadgeView(count: unreadMessagesCount)
+                                    .offset(x: 12, y: -12)
+                            )
+                    }
+                    NavigationLink(destination: ProfileView(viewModel: userProfileViewModel, isSignedIn: $isSignedIn)) {
+                        Image(systemName: "person.crop.circle.fill")
+                            .foregroundColor(.white)
+                            .imageScale(.medium)
+                    }
+                }
+                .padding(.top, 10) // Move the icons down a bit
             }
-            .onAppear {
+        }
+        .alert(isPresented: $showAlert) {
+            Alert(title: Text("Notification"), message: Text(alertMessage), dismissButton: .default(Text("OK")) {
+                acknowledgedNotifications.insert(alertMessage)
+            })
+        }
+        .onAppear {
+            // Fetch data only if users array is empty
+            if users.isEmpty {
                 fetchUsers()
                 fetchIncomingLikes()
                 listenForUnreadMessages()
@@ -65,7 +102,7 @@ struct ContentView: View {
     }
 
     private var userCardStack: some View {
-        VStack(spacing: 0) { // Reduced spacing to zero
+        VStack(spacing: 0) {
             ZStack {
                 if currentIndex < users.count {
                     UserCardView(user: users[currentIndex])
@@ -96,13 +133,15 @@ struct ContentView: View {
                     interactionResultView(result)
                 }
             }
-            .padding([.horizontal, .bottom]) // Removed top padding to minimize space
+            .padding([.horizontal, .bottom])
 
             userInfoView
                 .padding(.horizontal)
             
-            userAdditionalImagesView
-                .padding(.horizontal)
+            if !users[currentIndex].additionalImages.isEmpty {
+                userAdditionalImagesView
+                    .padding(.horizontal)
+            }
         }
     }
     
@@ -112,44 +151,6 @@ struct ContentView: View {
                 .font(.largeTitle)
                 .foregroundColor(.white)
                 .padding()
-        }
-    }
-
-    private var topBarContent: some ToolbarContent {
-        Group {
-            ToolbarItemGroup(placement: .navigationBarLeading) {
-                Text("ValMatcher")
-                    .font(.title2)
-                    .bold()
-                    .foregroundColor(.white)
-            }
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                HStack(spacing: 15) {
-                    NavigationLink(destination: NotificationsView(notifications: $notifications, notificationCount: $notificationCount)) {
-                        Image(systemName: "bell.fill")
-                            .foregroundColor(.white)
-                            .imageScale(.medium)
-                            .overlay(
-                                BadgeView(count: notificationCount)
-                                    .offset(x: 12, y: -12)
-                            )
-                    }
-                    NavigationLink(destination: DMHomeView(totalUnreadMessages: $unreadMessagesCount)) {
-                        Image(systemName: "message.fill")
-                            .foregroundColor(.white)
-                            .imageScale(.medium)
-                            .overlay(
-                                BadgeView(count: unreadMessagesCount)
-                                    .offset(x: 12, y: -12)
-                            )
-                    }
-                    NavigationLink(destination: ProfileView(viewModel: userProfileViewModel, isSignedIn: $isSignedIn)) {
-                        Image(systemName: "person.crop.circle.fill")
-                            .foregroundColor(.white)
-                            .imageScale(.medium)
-                    }
-                }
-            }
         }
     }
     
@@ -199,18 +200,33 @@ struct ContentView: View {
     private var userAdditionalImagesView: some View {
         ScrollView(.horizontal) {
             HStack {
-                ForEach(users[currentIndex].additionalImages, id: \.self) { imageUrl in
-                    if let urlString = imageUrl,
+                ForEach(users[currentIndex].additionalImages.indices, id: \.self) { index in
+                    if let urlString = users[currentIndex].additionalImages[index],
                        let url = URL(string: urlString),
                        let data = try? Data(contentsOf: url),
                        let image = UIImage(data: data) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 100, height: 100)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                            .shadow(radius: 5)
+                        ZStack(alignment: .topTrailing) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 100, height: 100)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                .shadow(radius: 5)
+                            
+                            Button(action: {
+                                // Handle image deletion
+                                deleteImage(at: index)
+                            }) {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.red)
+                                    .padding(4)
+                                    .background(Color.white)
+                                    .clipShape(Circle())
+                                    .shadow(radius: 3)
+                            }
+                            .offset(x: -10, y: 10)
+                        }
                     }
                 }
             }
@@ -235,7 +251,7 @@ struct ContentView: View {
             } ?? []
         }
     }
-    
+
     private func fetchIncomingLikes() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
@@ -361,9 +377,8 @@ struct ContentView: View {
 
     private func likeAction() {
         interactionResult = .liked
-        let likedUser = users[currentIndex]
-
-        // Move to the next user
+        
+        // Move to the next user immediately
         moveToNextUser()
 
         // If authenticated, handle match creation
@@ -372,6 +387,8 @@ struct ContentView: View {
             return
         }
 
+        let likedUser = users[currentIndex]
+
         guard let likedUserID = likedUser.id else {
             print("Error: Liked user does not have an ID")
             return
@@ -379,43 +396,47 @@ struct ContentView: View {
 
         let db = Firestore.firestore()
 
-        // Save the like
-        let likeData: [String: Any] = [
-            "likingUserID": currentUserID,
-            "likedUserID": likedUserID,
-            "timestamp": Timestamp()
-        ]
-        db.collection("likes").addDocument(data: likeData) { error in
-            if let error = error {
-                print("Error saving like: \(error.localizedDescription)")
-            } else {
-                print("Like saved successfully")
+        // Save the like in the background
+        DispatchQueue.global(qos: .background).async {
+            let likeData: [String: Any] = [
+                "likingUserID": currentUserID,
+                "likedUserID": likedUserID,
+                "timestamp": Timestamp()
+            ]
+            db.collection("likes").addDocument(data: likeData) { error in
+                if let error = error {
+                    print("Error saving like: \(error.localizedDescription)")
+                } else {
+                    print("Like saved successfully")
+                }
+
+                // Check if the liked user has already liked the current user
+                db.collection("likes")
+                    .whereField("likedUserID", isEqualTo: currentUserID)
+                    .whereField("likingUserID", isEqualTo: likedUserID)
+                    .getDocuments { (querySnapshot, error) in
+                        if let error = error {
+                            print("Error checking likes: \(error.localizedDescription)")
+                            return
+                        }
+
+                        if querySnapshot?.isEmpty == false {
+                            // It's a match!
+                            self.createMatch(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
+                        } else {
+                            // Send a like notification
+                            let likeMessage = "You liked \(likedUser.name)'s profile!"
+                            DispatchQueue.main.async {
+                                if !self.notifications.contains(likeMessage) && !self.acknowledgedNotifications.contains(likeMessage) {
+                                    self.notifications.append(likeMessage)
+                                    notificationCount += 1
+                                    self.sendNotification(to: likedUserID, message: likeMessage)
+                                }
+                            }
+                        }
+                    }
             }
         }
-
-        // Check if the liked user has already liked the current user
-        db.collection("likes")
-            .whereField("likedUserID", isEqualTo: currentUserID)
-            .whereField("likingUserID", isEqualTo: likedUserID)
-            .getDocuments { (querySnapshot, error) in
-                if let error = error {
-                    print("Error checking likes: \(error.localizedDescription)")
-                    return
-                }
-
-                if querySnapshot?.isEmpty == false {
-                    // It's a match!
-                    self.createMatch(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
-                } else {
-                    // Send a like notification
-                    let likeMessage = "You liked \(likedUser.name)'s profile!"
-                    if !self.notifications.contains(likeMessage) && !self.acknowledgedNotifications.contains(likeMessage) {
-                        self.notifications.append(likeMessage)
-                        notificationCount += 1
-                        self.sendNotification(to: likedUserID, message: likeMessage)
-                    }
-                }
-            }
     }
 
     private func createMatch(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
@@ -501,6 +522,12 @@ struct ContentView: View {
             }
         }
     }
+
+    private func deleteImage(at index: Int) {
+        users[currentIndex].additionalImages.remove(at: index)
+        
+        // Update the database or perform any additional logic needed for image deletion
+    }
 }
 
 struct BadgeView: View {
@@ -519,14 +546,49 @@ struct BadgeView: View {
     }
 }
 
+struct NotificationsView: View {
+    @Binding var notifications: [String]
+    @Binding var notificationCount: Int
 
-import SwiftUI
-import AVKit
+    var body: some View {
+        ZStack {
+            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
+                .edgesIgnoringSafeArea(.all)
+            
+            VStack {
+                if notifications.isEmpty {
+                    Text("No notifications")
+                        .foregroundColor(.white)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) { // Added spacing
+                            ForEach(notifications, id: \.self) { notification in
+                                Text(notification)
+                                    .foregroundColor(.white)
+                                    .padding()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color(.systemGray5))
+                                    .cornerRadius(10)
+                                    .padding(.horizontal) // Added horizontal padding
+                            }
+                        }
+                    }
+                    .padding(.top)
+                }
+            }
+            .onAppear {
+                notificationCount = 0
+            }
+            .navigationBarTitle("Notifications", displayMode: .inline)
+        }
+    }
+}
 
 struct UserCardView: View {
     var user: UserProfile
     var newMedia: [MediaItem] = []
     @State private var currentMediaIndex = 0
+    @State private var isEditing: Bool = false // Add this state for editing mode
 
     var body: some View {
         VStack(spacing: 0) {
@@ -535,37 +597,53 @@ struct UserCardView: View {
                     // Existing media
                     ForEach(user.additionalImages.indices, id: \.self) { index in
                         if let urlString = user.additionalImages[index], let url = URL(string: urlString) {
-                            if url.pathExtension.lowercased() == "mp4" {
-                                VideoPlayer(player: AVPlayer(url: url))
-                                    .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                    .cornerRadius(20)
-                                    .shadow(radius: 10)
-                            } else {
-                                AsyncImage(url: url) { phase in
-                                    switch phase {
-                                    case .empty:
-                                        ProgressView()
-                                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                    case .success(let image):
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                            .clipped()
-                                            .cornerRadius(20)
-                                            .shadow(radius: 10)
-                                    case .failure:
-                                        Image(systemName: "photo")
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                            .clipped()
-                                            .cornerRadius(20)
-                                            .background(Color.gray)
-                                            .shadow(radius: 10)
-                                    @unknown default:
-                                        EmptyView()
+                            ZStack {
+                                if url.pathExtension.lowercased() == "mp4" {
+                                    VideoPlayer(player: AVPlayer(url: url))
+                                        .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                        .cornerRadius(20)
+                                        .shadow(radius: 10)
+                                } else {
+                                    AsyncImage(url: url) { phase in
+                                        switch phase {
+                                        case .empty:
+                                            ProgressView()
+                                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                        case .success(let image):
+                                            image
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fill)
+                                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                                .clipped()
+                                                .cornerRadius(20)
+                                                .shadow(radius: 10)
+                                        case .failure:
+                                            Image(systemName: "photo")
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fill)
+                                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                                .clipped()
+                                                .cornerRadius(20)
+                                                .background(Color.gray)
+                                                .shadow(radius: 10)
+                                        @unknown default:
+                                            EmptyView()
+                                        }
                                     }
+                                }
+                                
+                                // Show delete button if in editing mode
+                                if isEditing {
+                                    Button(action: {
+                                        deleteImage(at: index)
+                                    }) {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(.red)
+                                            .padding(10)
+                                            .background(Color.white.opacity(0.7))
+                                            .clipShape(Circle())
+                                    }
+                                    .offset(x: 40, y: -40) // Adjust the offset to position the button on the top-right corner of the image
                                 }
                             }
                         }
@@ -574,13 +652,29 @@ struct UserCardView: View {
                     ForEach(newMedia.indices, id: \.self) { index in
                         let media = newMedia[index]
                         if let image = media.image {
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                .clipped()
-                                .cornerRadius(20)
-                                .shadow(radius: 10)
+                            ZStack {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                    .clipped()
+                                    .cornerRadius(20)
+                                    .shadow(radius: 10)
+                                
+                                // Show delete button if in editing mode
+                                if isEditing {
+                                    Button(action: {
+                                        deleteNewMedia(at: index)
+                                    }) {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(.red)
+                                            .padding(10)
+                                            .background(Color.white.opacity(0.7))
+                                            .clipShape(Circle())
+                                    }
+                                    .offset(x: 40, y: -40) // Adjust the offset to position the button on the top-right corner of the image
+                                }
+                            }
                         } else if let videoURL = media.videoURL {
                             VideoPlayer(player: AVPlayer(url: videoURL))
                                 .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
@@ -657,95 +751,17 @@ struct UserCardView: View {
                 .fill(Color(.systemGray4))
         )
         .padding()
-    }
-}
-
-func UIImageToDataURL(image: UIImage) -> String? {
-    guard let imageData = image.jpegData(compressionQuality: 0.8) else { return nil }
-    return "data:image/jpeg;base64,\(imageData.base64EncodedString())"
-}
-
-
-
-struct NotificationsView: View {
-    @Binding var notifications: [String]
-    @Binding var notificationCount: Int
-
-    var body: some View {
-        ZStack {
-            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
-                .edgesIgnoringSafeArea(.all)
-            
-            VStack {
-                if notifications.isEmpty {
-                    Text("No notifications")
-                        .foregroundColor(.white)
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 10) { // Added spacing
-                            ForEach(notifications, id: \.self) { notification in
-                                Text(notification)
-                                    .foregroundColor(.white)
-                                    .padding()
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color(.systemGray5))
-                                    .cornerRadius(10)
-                                    .padding(.horizontal) // Added horizontal padding
-                            }
-                        }
-                    }
-                    .padding(.top)
-                }
-            }
-            .onAppear {
-                notificationCount = 0
-            }
-            .navigationBarTitle("Notifications", displayMode: .inline)
+        .onTapGesture {
+            // Toggle editing mode when tapping the card
+            isEditing.toggle()
         }
     }
-}
 
-
-struct NotificationBanner: View {
-    var message: String
-    @Binding var showBanner: Bool
-
-    var body: some View {
-        VStack {
-            if showBanner {
-                HStack {
-                    Text(message)
-                        .foregroundColor(.white)
-                        .padding()
-                    Spacer()
-                }
-                .background(Color.blue)
-                .cornerRadius(8)
-                .padding()
-                Spacer()
-            }
-        }
+    private func deleteImage(at index: Int) {
+        // Logic to delete the existing image from the user's profile
     }
-}
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView(userProfileViewModel: UserProfileViewModel(user: UserProfile(
-            id: "1",
-            name: "Preview User",
-            rank: "Gold 3",
-            imageName: "preview",
-            age: "24",
-            server: "NA",
-            answers: [
-                "Favorite agent to play in Valorant?": "Jett",
-                "Preferred role?": "Duelist",
-                "Favorite game mode?": "Competitive",
-                "Servers?": "NA",
-                "Favorite weapon skin?": "Phantom"
-            ],
-            hasAnsweredQuestions: true,
-            additionalImages: []
-        )), isSignedIn: .constant(true))
+    
+    private func deleteNewMedia(at index: Int) {
+        // Logic to delete the newly added media
     }
 }

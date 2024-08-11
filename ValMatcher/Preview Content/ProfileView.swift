@@ -76,6 +76,54 @@ struct ProfileView: View {
                     UserCardView(user: viewModel.user, newMedia: newMedia)
                     
                     if isEditing {
+                        // Display existing images with delete buttons
+                        HStack(spacing: 15) {
+                            ForEach(additionalImages.indices, id: \.self) { index in
+                                let urlString = additionalImages[index]
+                                if let url = URL(string: urlString) {
+                                    ZStack(alignment: .topTrailing) {
+                                        AsyncImage(url: url) { phase in
+                                            switch phase {
+                                            case .empty:
+                                                ProgressView()
+                                            case .success(let image):
+                                                image
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fill)
+                                                    .frame(width: 100, height: 100)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                                    .shadow(radius: 5)
+                                            case .failure:
+                                                Image(systemName: "photo")
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fill)
+                                                    .frame(width: 100, height: 100)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                            @unknown default:
+                                                EmptyView()
+                                            }
+                                        }
+
+                                        // Delete button
+                                        Button(action: {
+                                            deleteImage(at: index)
+                                        }) {
+                                            Image(systemName: "trash")
+                                                .foregroundColor(.red)
+                                                .padding(4)
+                                                .background(Color.white)
+                                                .clipShape(Circle())
+                                                .shadow(radius: 3)
+                                        }
+                                        .offset(x: -10, y: 10)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+
                         Button(action: {
                             self.showingImagePicker = true
                         }) {
@@ -201,7 +249,6 @@ struct ProfileView: View {
     }
 
     private func saveMedia() {
-        // Handle media upload and save profile data
         uploadNewMedia { urls in
             self.additionalImages.append(contentsOf: urls)
             self.viewModel.updateUserProfile(
@@ -211,11 +258,9 @@ struct ProfileView: View {
                 additionalImages: self.additionalImages.prefix(3).map { $0 },  // Ensure only 3 images are saved
                 updatedAnswers: self.updatedAnswers
             )
-            self.isEditing.toggle()
         }
     }
     
-
     func uploadNewMedia(completion: @escaping ([String]) -> Void) {
         let dispatchGroup = DispatchGroup()
         var uploadedURLs: [String] = []
@@ -227,7 +272,7 @@ struct ProfileView: View {
                 let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
 
                 let imageData = image.jpegData(compressionQuality: 0.8)!
-                let metadata = StorageMetadata() // Correctly initialize metadata if needed
+                let metadata = StorageMetadata()
                 metadata.contentType = "image/jpeg"
 
                 storageRef.putData(imageData, metadata: metadata) { metadata, error in
@@ -257,6 +302,24 @@ struct ProfileView: View {
         }
     }
     
+    private func deleteImage(at index: Int) {
+        let urlString = additionalImages[index]
+        additionalImages.remove(at: index)
+
+        // Optionally, remove the image from Firebase Storage
+        let storageRef = Storage.storage().reference(forURL: urlString)
+        storageRef.delete { error in
+            if let error = error {
+                print("Error deleting image from storage: \(error.localizedDescription)")
+            } else {
+                print("Image deleted from storage")
+            }
+        }
+
+        // No need to toggle editing, keep the user in edit mode
+        saveProfile()
+    }
+
     private func saveImageURLsToFirestore(_ urls: [String]) {
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(viewModel.user.id ?? "")
