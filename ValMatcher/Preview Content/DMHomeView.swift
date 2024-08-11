@@ -163,6 +163,9 @@ struct DMHomeView: View {
                     }
                 }
                 
+                // Ensure there are no duplicate chats
+                newMatches = removeDuplicateChats(from: newMatches)
+                
                 fetchUserNames(for: newMatches) { updatedMatches in
                     self.matches = updatedMatches
                     self.updateUnreadMessagesCount(from: snapshot)
@@ -196,6 +199,9 @@ struct DMHomeView: View {
                     }
                 }
 
+                // Ensure there are no duplicate chats
+                moreMatches = removeDuplicateChats(from: moreMatches)
+
                 fetchUserNames(for: moreMatches) { updatedMatches in
                     self.matches.append(contentsOf: updatedMatches)
                     self.matches = Array(Set(self.matches))
@@ -203,6 +209,23 @@ struct DMHomeView: View {
                     print("Loaded matches for user2: \(updatedMatches)")
                 }
             }
+    }
+
+    private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
+        var uniqueChats = [Chat]()
+        var seenUserPairs = Set<String>()
+
+        for chat in chats {
+            let userPair = chat.user1 + chat.user2
+            let reverseUserPair = chat.user2 + chat.user1
+
+            if !seenUserPairs.contains(userPair) && !seenUserPairs.contains(reverseUserPair) {
+                uniqueChats.append(chat)
+                seenUserPairs.insert(userPair)
+            }
+        }
+
+        return uniqueChats
     }
 
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
