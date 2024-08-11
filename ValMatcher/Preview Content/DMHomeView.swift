@@ -25,7 +25,6 @@ struct DMHomeView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        // Chat section
                         ForEach(matches) { match in
                             matchRow(match: match)
                         }
@@ -73,7 +72,6 @@ struct DMHomeView: View {
                     .padding()
                     Spacer()
 
-                    // Ensure correct display of red dot based on hasUnreadMessages
                     if match.hasUnreadMessages == true {
                         Circle()
                             .fill(Color.red)
@@ -81,7 +79,7 @@ struct DMHomeView: View {
                             .padding(.trailing, 10)
                     }
                 }
-                .background(Color.black.opacity(0.7)) // Background color
+                .background(Color.black.opacity(0.7))
                 .cornerRadius(12)
                 .padding(.horizontal)
                 .padding(.vertical, 5)
@@ -134,8 +132,7 @@ struct DMHomeView: View {
         }
 
         let db = Firestore.firestore()
-        
-        // Fetch matches where the current user is user1
+
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
@@ -144,14 +141,13 @@ struct DMHomeView: View {
                     print("Error loading matches for user1: \(error.localizedDescription)")
                     return
                 }
-                
+
                 guard let documents = snapshot?.documents else {
                     print("No documents for user1")
                     return
                 }
-                
+
                 var newMatches = documents.compactMap { document -> Chat? in
-                    print("Document data: \(document.data())")
                     do {
                         let match = try document.data(as: Chat.self)
                         return match
@@ -160,21 +156,14 @@ struct DMHomeView: View {
                         return nil
                     }
                 }
-                
+
                 fetchUserNames(for: newMatches) { updatedMatches in
-                    let uniqueMatches = removeDuplicateChats(from: updatedMatches)
-                    self.matches = uniqueMatches.sorted {
-                        guard let timestamp1 = $0.timestamp, let timestamp2 = $1.timestamp else {
-                            return false
-                        }
-                        return timestamp1.compare(timestamp2) == .orderedDescending
-                    }
+                    self.matches = removeDuplicateChats(from: updatedMatches)
                     self.updateUnreadMessagesCount(from: snapshot)
-                    print("Loaded matches for user1: \(uniqueMatches)")
+                    print("Loaded matches for user1: \(self.matches)")
                 }
             }
 
-        // Fetch matches where the current user is user2
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
@@ -190,7 +179,6 @@ struct DMHomeView: View {
                 }
 
                 var moreMatches = documents.compactMap { document -> Chat? in
-                    print("Document data: \(document.data())")
                     do {
                         let match = try document.data(as: Chat.self)
                         return match
@@ -201,16 +189,10 @@ struct DMHomeView: View {
                 }
 
                 fetchUserNames(for: moreMatches) { updatedMatches in
-                    let uniqueMatches = removeDuplicateChats(from: updatedMatches)
-                    self.matches.append(contentsOf: uniqueMatches)
-                    self.matches = self.removeDuplicateChats(from: self.matches).sorted {
-                        guard let timestamp1 = $0.timestamp, let timestamp2 = $1.timestamp else {
-                            return false
-                        }
-                        return timestamp1.compare(timestamp2) == .orderedDescending
-                    }
+                    self.matches.append(contentsOf: updatedMatches)
+                    self.matches = removeDuplicateChats(from: self.matches)
                     self.updateUnreadMessagesCount(from: snapshot)
-                    print("Loaded matches for user2: \(uniqueMatches)")
+                    print("Loaded matches for user2: \(self.matches)")
                 }
             }
     }
@@ -256,7 +238,7 @@ struct DMHomeView: View {
     private func updateUnreadMessagesCount(from snapshot: QuerySnapshot?) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         var count = 0
-        var updatedMatches = self.matches  // Create a copy to modify
+        var updatedMatches = self.matches
 
         let group = DispatchGroup()
 
@@ -273,15 +255,10 @@ struct DMHomeView: View {
                         return
                     }
                     let unreadCount = messageSnapshot?.documents.count ?? 0
-                    print("Unread count for \(chatID): \(unreadCount)")
 
                     if let matchIndex = updatedMatches.firstIndex(where: { $0.id == chatID }) {
                         let hasUnread = unreadCount > 0
-                        updatedMatches[matchIndex].hasUnreadMessages = hasUnread  // Directly update the match
-                        if hasUnread {
-                            self.showNotification(title: "New Message", body: "You have a new message from \(getRecipientName(for: updatedMatches[matchIndex]))")
-                        }
-                        print("Updated match \(chatID) with hasUnreadMessages: \(hasUnread)")
+                        updatedMatches[matchIndex].hasUnreadMessages = hasUnread
                     }
                     count += unreadCount
                     group.leave()
@@ -289,9 +266,8 @@ struct DMHomeView: View {
         }
 
         group.notify(queue: .main) {
-            self.matches = updatedMatches  // Update state with modified array
+            self.matches = updatedMatches
             self.totalUnreadMessages = count
-            print("Final matches state after update: \(self.matches)")
         }
     }
 
@@ -322,32 +298,12 @@ struct DMHomeView: View {
         }
     }
 
-    private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
-        var uniqueChats = [Chat]()
-        var seenUserPairs = Set<Set<String>>()
-
-        for chat in chats {
-            guard let user1 = chat.user1, let user2 = chat.user2 else {
-                continue  // Skip if either user1 or user2 is nil
-            }
-
-            let userPair: Set<String> = [user1, user2]
-
-            if !seenUserPairs.contains(userPair) {
-                uniqueChats.append(chat)
-                seenUserPairs.insert(userPair)
-            }
-        }
-
-        return uniqueChats
-    }
-
     private func listenForUnreadMessages() {
         guard let currentUserID = currentUserID else {
             print("Error: User not authenticated")
             return
         }
-        
+
         let db = Firestore.firestore()
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
@@ -358,7 +314,7 @@ struct DMHomeView: View {
                 }
                 self.updateUnreadMessagesCount(from: snapshot)
             }
-        
+
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
@@ -368,6 +324,23 @@ struct DMHomeView: View {
                 }
                 self.updateUnreadMessagesCount(from: snapshot)
             }
+    }
+
+    private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
+        var uniqueChats = [Chat]()
+        var seenPairs = Set<Set<String>>()
+
+        for chat in chats {
+            if let user1 = chat.user1, let user2 = chat.user2 {
+                let userPair = Set([user1, user2])
+                if !seenPairs.contains(userPair) {
+                    uniqueChats.append(chat)
+                    seenPairs.insert(userPair)
+                }
+            }
+        }
+
+        return uniqueChats
     }
 
     private func showNotification(title: String, body: String) {
