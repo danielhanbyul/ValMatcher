@@ -16,7 +16,7 @@ struct DMHomeView: View {
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
-    @State private var lastNotifiedMessageIDs = Set<String>() // Track notified message IDs
+    @State private var notificationCenter = UNUserNotificationCenter.current()
 
     var body: some View {
         ZStack {
@@ -136,28 +136,24 @@ struct DMHomeView: View {
         }
 
         let db = Firestore.firestore()
-        var loadedMatches = [Chat]()
         
-        let group = DispatchGroup()
-
-        group.enter()
+        // Fetch matches where the current user is user1
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
-            .getDocuments { snapshot, error in
+            .addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("Error loading matches for user1: \(error.localizedDescription)")
-                    group.leave()
                     return
                 }
                 
                 guard let documents = snapshot?.documents else {
                     print("No documents for user1")
-                    group.leave()
                     return
                 }
                 
-                let newMatches = documents.compactMap { document -> Chat? in
+                var newMatches = documents.compactMap { document -> Chat? in
+                    print("Document data: \(document.data())")
                     do {
                         let match = try document.data(as: Chat.self)
                         return match
@@ -166,28 +162,31 @@ struct DMHomeView: View {
                         return nil
                     }
                 }
-                loadedMatches.append(contentsOf: newMatches)
-                group.leave()
+                
+                fetchUserNames(for: newMatches) { updatedMatches in
+                    self.matches = updatedMatches
+                    self.updateUnreadMessagesCount(from: snapshot)
+                    print("Loaded matches for user1: \(updatedMatches)")
+                }
             }
 
-        group.enter()
+        // Fetch matches where the current user is user2
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
-            .getDocuments { snapshot, error in
+            .addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("Error loading matches for user2: \(error.localizedDescription)")
-                    group.leave()
                     return
                 }
 
                 guard let documents = snapshot?.documents else {
                     print("No documents for user2")
-                    group.leave()
                     return
                 }
 
-                let moreMatches = documents.compactMap { document -> Chat? in
+                var moreMatches = documents.compactMap { document -> Chat? in
+                    print("Document data: \(document.data())")
                     do {
                         let match = try document.data(as: Chat.self)
                         return match
@@ -196,18 +195,14 @@ struct DMHomeView: View {
                         return nil
                     }
                 }
-                loadedMatches.append(contentsOf: moreMatches)
-                group.leave()
-            }
 
-        group.notify(queue: .main) {
-            fetchUserNames(for: loadedMatches) { updatedMatches in
-                self.matches = Array(Set(updatedMatches)) // Ensure no duplicates
-                self.updateUnreadMessagesCount()
-                self.sortMatchesByMostRecentActivity()
-                print("Loaded matches: \(self.matches)")
+                fetchUserNames(for: moreMatches) { updatedMatches in
+                    self.matches.append(contentsOf: updatedMatches)
+                    self.matches = Array(Set(self.matches))
+                    self.updateUnreadMessagesCount(from: snapshot)
+                    print("Loaded matches for user2: \(updatedMatches)")
+                }
             }
-        }
     }
 
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
@@ -248,16 +243,16 @@ struct DMHomeView: View {
         }
     }
 
-    private func updateUnreadMessagesCount() {
+    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot?) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         var count = 0
         var updatedMatches = self.matches  // Create a copy to modify
 
         let group = DispatchGroup()
 
-        for match in updatedMatches {
+        snapshot?.documents.forEach { document in
             group.enter()
-            let chatID = match.id ?? ""
+            let chatID = document.documentID
             Firestore.firestore().collection("matches").document(chatID).collection("messages")
                 .whereField("senderID", isNotEqualTo: currentUserID)
                 .whereField("isRead", isEqualTo: false)
@@ -328,10 +323,7 @@ struct DMHomeView: View {
                     print("Error fetching matches: \(error)")
                     return
                 }
-                self.updateUnreadMessagesCount()
-                if let snapshot = snapshot {
-                    self.handleNotificationForNewMessages(snapshot: snapshot)
-                }
+                self.updateUnreadMessagesCount(from: snapshot)
             }
         
         db.collection("matches")
@@ -341,75 +333,18 @@ struct DMHomeView: View {
                     print("Error fetching matches: \(error)")
                     return
                 }
-                self.updateUnreadMessagesCount()
-                if let snapshot = snapshot {
-                    self.handleNotificationForNewMessages(snapshot: snapshot)
-                }
+                self.updateUnreadMessagesCount(from: snapshot)
             }
     }
+
+    // MARK: - Notification Handling
 
     private func setupNotificationObserver() {
-        NotificationCenter.default.addObserver(forName: .newMessageNotification, object: nil, queue: .main) { notification in
-            if let matchID = notification.userInfo?["matchID"] as? String,
-               let message = notification.userInfo?["message"] as? String,
-               let senderName = notification.userInfo?["senderName"] as? String {
-                showNotificationBanner(message: "\(senderName): \(message)")
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("newMessageReceived"), object: nil, queue: .main) { notification in
+            if let message = notification.userInfo?["message"] as? String {
+                showNotificationBanner(message: message)
             }
         }
-    }
-
-    private func handleNotificationForNewMessages(snapshot: QuerySnapshot) {
-        for diff in snapshot.documentChanges {
-            if diff.type == .added || diff.type == .modified {
-                let matchID = diff.document.documentID
-                if !lastNotifiedMessageIDs.contains(matchID) {
-                    lastNotifiedMessageIDs.insert(matchID)
-                    if let match = self.matches.first(where: { $0.id == matchID }) {
-                        fetchLastMessage(for: match)
-                    }
-                }
-            }
-        }
-    }
-
-    private func fetchLastMessage(for match: Chat) {
-        guard let matchID = match.id else { return }
-
-        let db = Firestore.firestore()
-        db.collection("matches").document(matchID).collection("messages")
-            .order(by: "timestamp", descending: true)
-            .limit(to: 1)
-            .getDocuments { snapshot, error in
-                if let error = error {
-                    print("Error fetching last message: \(error.localizedDescription)")
-                    return
-                }
-
-                guard let document = snapshot?.documents.first else {
-                    print("No messages found")
-                    return
-                }
-
-                let message = document.data()["text"] as? String ?? ""
-                let senderID = document.data()["senderID"] as? String ?? ""
-                let senderName = senderID == match.user1 ? match.user1Name : match.user2Name
-
-                if senderID != self.currentUserID {
-                    NotificationCenter.default.post(name: .newMessageNotification, object: nil, userInfo: [
-                        "matchID": matchID,
-                        "message": message,
-                        "senderName": senderName ?? "Unknown"
-                    ])
-                }
-
-                // Update the match's timestamp and re-sort the list only if it's a new message
-                if let matchIndex = self.matches.firstIndex(where: { $0.id == matchID }) {
-                    if document.metadata.hasPendingWrites {
-                        self.matches[matchIndex].timestamp = document.data()["timestamp"] as? Timestamp
-                        self.sortMatchesByMostRecentActivity()
-                    }
-                }
-            }
     }
 
     private func showNotificationBanner(message: String) {
@@ -419,14 +354,24 @@ struct DMHomeView: View {
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
-    }
-
-    private func sortMatchesByMostRecentActivity() {
-        self.matches.sort { $0.timestamp?.dateValue() ?? Date() > $1.timestamp?.dateValue() ?? Date() }
+        notificationCenter.add(request) { error in
+            if let error = error {
+                print("Error displaying notification: \(error.localizedDescription)")
+            }
+        }
     }
 }
 
-extension Notification.Name {
-    static let newMessageNotification = Notification.Name("newMessageNotification")
+let dateFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+    return formatter
+}()
+
+struct DMHomeView_Previews: PreviewProvider {
+    static var previews: some View {
+        DMHomeView(totalUnreadMessages: .constant(0))
+            .environment(\.colorScheme, .dark)
+    }
 }
