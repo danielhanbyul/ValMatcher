@@ -16,7 +16,6 @@ struct DMHomeView: View {
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
-    @State private var notificationCenter = UNUserNotificationCenter.current()
 
     var body: some View {
         ZStack {
@@ -54,7 +53,6 @@ struct DMHomeView: View {
         .onAppear {
             loadMatches()
             listenForUnreadMessages()
-            setupNotificationObserver()
         }
     }
 
@@ -163,13 +161,16 @@ struct DMHomeView: View {
                     }
                 }
                 
-                // Ensure there are no duplicate chats
-                newMatches = removeDuplicateChats(from: newMatches)
-                
                 fetchUserNames(for: newMatches) { updatedMatches in
-                    self.matches = updatedMatches
+                    let uniqueMatches = removeDuplicateChats(from: updatedMatches)
+                    self.matches = uniqueMatches.sorted {
+                        guard let timestamp1 = $0.timestamp, let timestamp2 = $1.timestamp else {
+                            return false
+                        }
+                        return timestamp1.compare(timestamp2) == .orderedDescending
+                    }
                     self.updateUnreadMessagesCount(from: snapshot)
-                    print("Loaded matches for user1: \(updatedMatches)")
+                    print("Loaded matches for user1: \(uniqueMatches)")
                 }
             }
 
@@ -199,37 +200,19 @@ struct DMHomeView: View {
                     }
                 }
 
-                // Ensure there are no duplicate chats
-                moreMatches = removeDuplicateChats(from: moreMatches)
-
                 fetchUserNames(for: moreMatches) { updatedMatches in
-                    self.matches.append(contentsOf: updatedMatches)
-                    self.matches = Array(Set(self.matches))
+                    let uniqueMatches = removeDuplicateChats(from: updatedMatches)
+                    self.matches.append(contentsOf: uniqueMatches)
+                    self.matches = self.removeDuplicateChats(from: self.matches).sorted {
+                        guard let timestamp1 = $0.timestamp, let timestamp2 = $1.timestamp else {
+                            return false
+                        }
+                        return timestamp1.compare(timestamp2) == .orderedDescending
+                    }
                     self.updateUnreadMessagesCount(from: snapshot)
-                    print("Loaded matches for user2: \(updatedMatches)")
+                    print("Loaded matches for user2: \(uniqueMatches)")
                 }
             }
-    }
-
-    private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
-        var uniqueChats = [Chat]()
-        var seenUserPairs = Set<String>()
-
-        for chat in chats {
-            guard let user1 = chat.user1, let user2 = chat.user2 else {
-                continue  // Skip if either user1 or user2 is nil
-            }
-
-            let userPair = user1 + user2
-            let reverseUserPair = user2 + user1
-
-            if !seenUserPairs.contains(userPair) && !seenUserPairs.contains(reverseUserPair) {
-                uniqueChats.append(chat)
-                seenUserPairs.insert(userPair)
-            }
-        }
-
-        return uniqueChats
     }
 
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
@@ -295,6 +278,9 @@ struct DMHomeView: View {
                     if let matchIndex = updatedMatches.firstIndex(where: { $0.id == chatID }) {
                         let hasUnread = unreadCount > 0
                         updatedMatches[matchIndex].hasUnreadMessages = hasUnread  // Directly update the match
+                        if hasUnread {
+                            self.showNotification(title: "New Message", body: "You have a new message from \(getRecipientName(for: updatedMatches[matchIndex]))")
+                        }
                         print("Updated match \(chatID) with hasUnreadMessages: \(hasUnread)")
                     }
                     count += unreadCount
@@ -336,6 +322,26 @@ struct DMHomeView: View {
         }
     }
 
+    private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
+        var uniqueChats = [Chat]()
+        var seenUserPairs = Set<Set<String>>()
+
+        for chat in chats {
+            guard let user1 = chat.user1, let user2 = chat.user2 else {
+                continue  // Skip if either user1 or user2 is nil
+            }
+
+            let userPair: Set<String> = [user1, user2]
+
+            if !seenUserPairs.contains(userPair) {
+                uniqueChats.append(chat)
+                seenUserPairs.insert(userPair)
+            }
+        }
+
+        return uniqueChats
+    }
+
     private func listenForUnreadMessages() {
         guard let currentUserID = currentUserID else {
             print("Error: User not authenticated")
@@ -364,28 +370,14 @@ struct DMHomeView: View {
             }
     }
 
-    // MARK: - Notification Handling
-
-    private func setupNotificationObserver() {
-        NotificationCenter.default.addObserver(forName: NSNotification.Name("newMessageReceived"), object: nil, queue: .main) { notification in
-            if let message = notification.userInfo?["message"] as? String {
-                showNotificationBanner(message: message)
-            }
-        }
-    }
-
-    private func showNotificationBanner(message: String) {
+    private func showNotification(title: String, body: String) {
         let content = UNMutableNotificationContent()
-        content.title = "New Message"
-        content.body = message
+        content.title = title
+        content.body = body
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        notificationCenter.add(request) { error in
-            if let error = error {
-                print("Error displaying notification: \(error.localizedDescription)")
-            }
-        }
+        UNUserNotificationCenter.current().add(request)
     }
 }
 
