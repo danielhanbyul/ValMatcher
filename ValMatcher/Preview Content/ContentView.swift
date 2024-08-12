@@ -16,7 +16,6 @@ struct ContentView: View {
     @State private var hasAnsweredQuestions = false
     @State private var users: [UserProfile] = []
     @State private var currentIndex = 0
-    @State private var offset = CGSize.zero
     @State private var interactionResult: InteractionResult? = nil
     @State private var showAlert = false
     @State private var alertMessage = ""
@@ -34,14 +33,14 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
+            LinearGradient(gradient: Gradient(colors: [Color.black, Color.gray]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
 
             ScrollView {
                 VStack(spacing: 0) {
                     if currentIndex < users.count {
                         userCardStack
-                            .padding(.top, 40) // Add space between the top of the phone and the user card
+                            .padding(.top, 40)
                     } else {
                         noMoreUsersView
                     }
@@ -55,7 +54,7 @@ struct ContentView: View {
                     .font(.title2)
                     .bold()
                     .foregroundColor(.white)
-                    .padding(.top, 10) // Move the title and icons down a bit
+                    .padding(.top, 10)
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 HStack(spacing: 15) {
@@ -83,7 +82,7 @@ struct ContentView: View {
                             .imageScale(.medium)
                     }
                 }
-                .padding(.top, 10) // Move the icons down a bit
+                .padding(.top, 10)
             }
         }
         .alert(isPresented: $showAlert) {
@@ -92,7 +91,6 @@ struct ContentView: View {
             })
         }
         .onAppear {
-            // Fetch data only if users array is empty
             if users.isEmpty {
                 fetchUsers()
                 fetchIncomingLikes()
@@ -106,25 +104,22 @@ struct ContentView: View {
             ZStack {
                 if currentIndex < users.count {
                     UserCardView(user: users[currentIndex])
-                        .onTapGesture(count: 2) {
-                            // Handle double-tap gesture
-                            handleDoubleTap()
-                        }
                         .gesture(
-                            DragGesture()
-                                .onChanged { gesture in
-                                    self.offset = gesture.translation
-                                }
+                            DragGesture(minimumDistance: 20)
                                 .onEnded { gesture in
-                                    if self.offset.width < -100 {
-                                        self.dislikeAction()
-                                    } else if self.offset.width > 100 {
+                                    if gesture.translation.width < -100 {
+                                        self.passAction()
+                                    } else if gesture.translation.width > 100 {
                                         self.likeAction()
                                     }
-                                    self.offset = .zero
                                 }
                         )
-                        .offset(x: self.offset.width, y: 0)
+                        .gesture(
+                            TapGesture(count: 2)
+                                .onEnded {
+                                    self.likeAction()
+                                }
+                        )
                 }
 
                 if let result = interactionResult {
@@ -142,25 +137,7 @@ struct ContentView: View {
             }
         }
     }
-
-    private func handleDoubleTap() {
-        print("Double tap detected")
-
-        // Perform the like action
-        likeAction()
-
-        // Send a notification to the liked user
-        if currentIndex < users.count {
-            let likedUser = users[currentIndex]
-            if let likedUserID = likedUser.id {
-                sendNotification(to: likedUserID, message: "\(userProfileViewModel.user.name) liked your profile!")
-            }
-        }
-
-        // Move to the next user
-        moveToNextUser()
-    }
-
+    
     private var noMoreUsersView: some View {
         VStack {
             Text("No more users")
@@ -169,7 +146,7 @@ struct ContentView: View {
                 .padding()
         }
     }
-
+    
     private func interactionResultView(_ result: InteractionResult) -> some View {
         Group {
             if result == .liked {
@@ -187,7 +164,7 @@ struct ContentView: View {
             }
         }
     }
-
+    
     private var userInfoView: some View {
         VStack(alignment: .leading, spacing: 20) {
             ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
@@ -218,47 +195,17 @@ struct ContentView: View {
             HStack {
                 ForEach(users[currentIndex].additionalImages.indices, id: \.self) { index in
                     if let urlString = users[currentIndex].additionalImages[index],
-                       let url = URL(string: urlString) {
-                        ZStack(alignment: .topTrailing) {
-                            // Use AsyncImage to load the image asynchronously
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case .empty:
-                                    ProgressView() // Show a loading spinner while the image loads
-                                        .frame(width: 100, height: 100)
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 100, height: 100)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                                        .shadow(radius: 5)
-                                case .failure:
-                                    Image(systemName: "photo") // Show a placeholder image on failure
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 100, height: 100)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                        .background(Color.gray)
-                                        .shadow(radius: 5)
-                                @unknown default:
-                                    EmptyView()
-                                }
-                            }
-                            
-                            Button(action: {
-                                // Handle image deletion
-                                deleteImage(at: index)
-                            }) {
-                                Image(systemName: "trash")
-                                    .foregroundColor(.red)
-                                    .padding(4)
-                                    .background(Color.white)
-                                    .clipShape(Circle())
-                                    .shadow(radius: 3)
-                            }
-                            .offset(x: -10, y: 10)
+                       let url = URL(string: urlString),
+                       let data = try? Data(contentsOf: url),
+                       let image = UIImage(data: data) {
+                        ZStack {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 100, height: 100)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                .shadow(radius: 5)
                         }
                     }
                 }
@@ -304,10 +251,8 @@ struct ContentView: View {
                     let likeData = document.data()
                     let likingUserID = likeData["likingUserID"] as? String ?? ""
                     
-                    // Avoid processing the same like again
                     guard likingUserID != currentUserID else { continue }
 
-                    // Fetch the user who liked the current user
                     db.collection("users").document(likingUserID).getDocument { (userDocument, error) in
                         if let error = error {
                             print("Error fetching liking user: \(error.localizedDescription)")
@@ -315,7 +260,6 @@ struct ContentView: View {
                         }
                         
                         if let userDocument = userDocument, let likedUser = try? userDocument.data(as: UserProfile.self) {
-                            // Check if it's a match
                             db.collection("likes")
                                 .whereField("likedUserID", isEqualTo: likingUserID)
                                 .whereField("likingUserID", isEqualTo: currentUserID)
@@ -326,7 +270,6 @@ struct ContentView: View {
                                     }
                                     
                                     if matchQuerySnapshot?.isEmpty == false {
-                                        // It's a match!
                                         let matchMessage = "You matched with \(likedUser.name)!"
                                         if !self.notifications.contains(matchMessage) && !self.acknowledgedNotifications.contains(matchMessage) {
                                             self.alertMessage = matchMessage
@@ -338,7 +281,6 @@ struct ContentView: View {
                                             self.createDMChat(currentUserID: currentUserID, likedUserID: likingUserID, likedUser: likedUser)
                                         }
                                     } else {
-                                        // Not a match, just a like
                                         let likeMessage = "\(likedUser.name) liked you!"
                                         if !self.notifications.contains(likeMessage) && !self.acknowledgedNotifications.contains(likeMessage) {
                                             self.alertMessage = likeMessage
@@ -411,7 +353,8 @@ struct ContentView: View {
     private func likeAction() {
         interactionResult = .liked
         
-        // If authenticated, handle match creation
+        moveToNextUser()
+
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
             return
@@ -426,7 +369,6 @@ struct ContentView: View {
 
         let db = Firestore.firestore()
 
-        // Save the like in the background
         DispatchQueue.global(qos: .background).async {
             let likeData: [String: Any] = [
                 "likingUserID": currentUserID,
@@ -438,37 +380,32 @@ struct ContentView: View {
                     print("Error saving like: \(error.localizedDescription)")
                 } else {
                     print("Like saved successfully")
+                }
 
-                    // Check if the liked user has already liked the current user
-                    db.collection("likes")
-                        .whereField("likedUserID", isEqualTo: currentUserID)
-                        .whereField("likingUserID", isEqualTo: likedUserID)
-                        .getDocuments { (querySnapshot, error) in
-                            if let error = error {
-                                print("Error checking likes: \(error.localizedDescription)")
-                                return
-                            }
+                db.collection("likes")
+                    .whereField("likedUserID", isEqualTo: currentUserID)
+                    .whereField("likingUserID", isEqualTo: likedUserID)
+                    .getDocuments { (querySnapshot, error) in
+                        if let error = error {
+                            print("Error checking likes: \(error.localizedDescription)")
+                            return
+                        }
 
-                            if querySnapshot?.isEmpty == false {
-                                // It's a match!
-                                self.createMatch(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
-                            } else {
-                                // Send a like notification
-                                let likeMessage = "You liked \(likedUser.name)'s profile!"
-                                DispatchQueue.main.async {
-                                    if !self.notifications.contains(likeMessage) && !self.acknowledgedNotifications.contains(likeMessage) {
-                                        self.notifications.append(likeMessage)
-                                        notificationCount += 1
-                                        self.sendNotification(to: likedUserID, message: likeMessage)
-                                    }
+                        if querySnapshot?.isEmpty == false {
+                            self.createMatch(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
+                        } else {
+                            let likeMessage = "You liked \(likedUser.name)'s profile!"
+                            DispatchQueue.main.async {
+                                if !self.notifications.contains(likeMessage) && !self.acknowledgedNotifications.contains(likeMessage) {
+                                    self.notifications.append(likeMessage)
+                                    notificationCount += 1
+                                    self.sendNotification(to: likedUserID, message: likeMessage)
                                 }
                             }
                         }
-                }
+                    }
             }
         }
-        // Move to the next user after performing the like action
-        moveToNextUser()
     }
 
     private func createMatch(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
@@ -492,7 +429,6 @@ struct ContentView: View {
                     self.sendNotification(to: likedUserID, message: matchMessage)
                 }
 
-                // Create a DM chat between the two users
                 self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
             }
         }
@@ -503,16 +439,16 @@ struct ContentView: View {
         let chatData: [String: Any] = [
             "user1": currentUserID,
             "user2": likedUserID,
-            "user1Name": userProfileViewModel.user.name, // Ensure you pass user name
-            "user2Name": likedUser.name, // Ensure you pass liked user name
-            "user1Image": userProfileViewModel.user.imageName, // Ensure you pass user image
-            "user2Image": likedUser.imageName, // Ensure you pass liked user image
-            "recipientName": likedUser.name,  // Add recipientName
-            "hasUnreadMessages": true, // Add hasUnreadMessages
+            "user1Name": userProfileViewModel.user.name,
+            "user2Name": likedUser.name,
+            "user1Image": userProfileViewModel.user.imageName,
+            "user2Image": likedUser.imageName,
+            "recipientName": likedUser.name,
+            "hasUnreadMessages": true,
             "timestamp": Timestamp()
         ]
 
-        db.collection("matches").addDocument(data: chatData) { error in
+        db.collection("chats").addDocument(data: chatData) { error in
             if let error = error {
                 print("Error creating chat: \(error.localizedDescription)")
             } else {
@@ -538,15 +474,15 @@ struct ContentView: View {
         }
     }
 
-    private func dislikeAction() {
+    private func passAction() {
         interactionResult = .passed
+        
         moveToNextUser()
     }
 
     private func moveToNextUser() {
-        DispatchQueue.main.async {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.interactionResult = nil
-            self.offset = .zero
             if self.currentIndex < self.users.count - 1 {
                 self.currentIndex += 1
             } else {
@@ -557,8 +493,6 @@ struct ContentView: View {
 
     private func deleteImage(at index: Int) {
         users[currentIndex].additionalImages.remove(at: index)
-        
-        // Update the database or perform any additional logic needed for image deletion
     }
 }
 
@@ -584,7 +518,7 @@ struct NotificationsView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
+            LinearGradient(gradient: Gradient(colors: [Color.black, Color.gray]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
             
             VStack {
@@ -593,7 +527,7 @@ struct NotificationsView: View {
                         .foregroundColor(.white)
                 } else {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 10) { // Added spacing
+                        VStack(alignment: .leading, spacing: 10) {
                             ForEach(notifications, id: \.self) { notification in
                                 Text(notification)
                                     .foregroundColor(.white)
@@ -601,7 +535,7 @@ struct NotificationsView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(Color(.systemGray5))
                                     .cornerRadius(10)
-                                    .padding(.horizontal) // Added horizontal padding
+                                    .padding(.horizontal)
                             }
                         }
                     }
@@ -620,13 +554,11 @@ struct UserCardView: View {
     var user: UserProfile
     var newMedia: [MediaItem] = []
     @State private var currentMediaIndex = 0
-    @State private var isEditing: Bool = false // Add this state for editing mode
 
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
                 TabView(selection: $currentMediaIndex) {
-                    // Existing media
                     ForEach(user.additionalImages.indices, id: \.self) { index in
                         if let urlString = user.additionalImages[index], let url = URL(string: urlString) {
                             ZStack {
@@ -663,50 +595,19 @@ struct UserCardView: View {
                                         }
                                     }
                                 }
-                                
-                                // Show delete button if in editing mode
-                                if isEditing {
-                                    Button(action: {
-                                        deleteImage(at: index)
-                                    }) {
-                                        Image(systemName: "trash")
-                                            .foregroundColor(.red)
-                                            .padding(10)
-                                            .background(Color.white.opacity(0.7))
-                                            .clipShape(Circle())
-                                    }
-                                    .offset(x: 40, y: -40) // Adjust the offset to position the button on the top-right corner of the image
-                                }
                             }
                         }
                     }
-                    // New media
                     ForEach(newMedia.indices, id: \.self) { index in
                         let media = newMedia[index]
                         if let image = media.image {
-                            ZStack {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                    .clipped()
-                                    .cornerRadius(20)
-                                    .shadow(radius: 10)
-                                
-                                // Show delete button if in editing mode
-                                if isEditing {
-                                    Button(action: {
-                                        deleteNewMedia(at: index)
-                                    }) {
-                                        Image(systemName: "trash")
-                                            .foregroundColor(.red)
-                                            .padding(10)
-                                            .background(Color.white.opacity(0.7))
-                                            .clipShape(Circle())
-                                    }
-                                    .offset(x: 40, y: -40) // Adjust the offset to position the button on the top-right corner of the image
-                                }
-                            }
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                .clipped()
+                                .cornerRadius(20)
+                                .shadow(radius: 10)
                         } else if let videoURL = media.videoURL {
                             VideoPlayer(player: AVPlayer(url: videoURL))
                                 .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
@@ -718,7 +619,6 @@ struct UserCardView: View {
                 .tabViewStyle(PageTabViewStyle())
                 .frame(height: UIScreen.main.bounds.height * 0.5)
                 
-                // Navigation arrows
                 HStack {
                     Button(action: {
                         currentMediaIndex = max(currentMediaIndex - 1, 0)
@@ -747,7 +647,6 @@ struct UserCardView: View {
                     .padding(.trailing, 20)
                 }
                 
-                // Page indicator
                 VStack {
                     Spacer()
                     HStack {
@@ -783,22 +682,5 @@ struct UserCardView: View {
                 .fill(Color(.systemGray4))
         )
         .padding()
-        .onTapGesture(count: 2) { // Double tap gesture
-            // Call the like action directly in ContentView
-            NotificationCenter.default.post(name: .likeUser, object: user)
-        }
     }
-
-    private func deleteImage(at index: Int) {
-        // Logic to delete the existing image from the user's profile
-    }
-    
-    private func deleteNewMedia(at index: Int) {
-        // Logic to delete the newly added media
-    }
-}
-
-// Add a notification name for the like action
-extension Notification.Name {
-    static let likeUser = Notification.Name("likeUser")
 }
