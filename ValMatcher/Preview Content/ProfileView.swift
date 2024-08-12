@@ -236,7 +236,11 @@ struct ProfileView: View {
 
     private func saveProfile() {
         uploadNewMedia { urls in
-            self.additionalImages.append(contentsOf: urls)
+            // Ensure only a maximum of 3 images are saved, by adding only as many images as needed
+            let remainingSlots = max(3 - self.additionalImages.count, 0)
+            let imagesToAdd = urls.prefix(remainingSlots)
+            self.additionalImages.append(contentsOf: imagesToAdd)
+            
             self.viewModel.updateUserProfile(
                 newAge: self.newAge,
                 newRank: self.newRank,
@@ -250,7 +254,11 @@ struct ProfileView: View {
 
     private func saveMedia() {
         uploadNewMedia { urls in
-            self.additionalImages.append(contentsOf: urls)
+            // Ensure only a maximum of 3 images are saved, by adding only as many images as needed
+            let remainingSlots = max(3 - self.additionalImages.count, 0)
+            let imagesToAdd = urls.prefix(remainingSlots)
+            self.additionalImages.append(contentsOf: imagesToAdd)
+            
             self.viewModel.updateUserProfile(
                 newAge: self.newAge,
                 newRank: self.newRank,
@@ -260,6 +268,7 @@ struct ProfileView: View {
             )
         }
     }
+
     
     func uploadNewMedia(completion: @escaping ([String]) -> Void) {
         let dispatchGroup = DispatchGroup()
