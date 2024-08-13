@@ -8,6 +8,8 @@ import SwiftUI
 import Firebase
 import FirebaseFirestore
 import AVKit
+import FirebaseAnalytics
+
 
 struct ContentView: View {
     @StateObject var userProfileViewModel: UserProfileViewModel
@@ -25,17 +27,22 @@ struct ContentView: View {
     @State private var notificationCount = 0
     @State private var acknowledgedNotifications: Set<String> = []
     @State private var unreadMessagesCount = 0
-
+    
     enum InteractionResult {
         case liked
         case passed
     }
-
+    
     var body: some View {
         ZStack {
-            LinearGradient(gradient: Gradient(colors: [Color.black, Color.gray]), startPoint: .top, endPoint: .bottom)
-                .edgesIgnoringSafeArea(.all)
-
+            // Matching background with ProfileView
+            LinearGradient(
+                gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .edgesIgnoringSafeArea(.all)
+            
             ScrollView {
                 VStack(spacing: 0) {
                     if currentIndex < users.count {
@@ -98,6 +105,7 @@ struct ContentView: View {
             }
         }
     }
+
 
     private var userCardStack: some View {
         VStack(spacing: 0) {
@@ -195,23 +203,41 @@ struct ContentView: View {
             HStack {
                 ForEach(users[currentIndex].additionalImages.indices, id: \.self) { index in
                     if let urlString = users[currentIndex].additionalImages[index],
-                       let url = URL(string: urlString),
-                       let data = try? Data(contentsOf: url),
-                       let image = UIImage(data: data) {
+                       let url = URL(string: urlString) {
                         ZStack {
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 100, height: 100)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                                .shadow(radius: 5)
+                            AsyncImage(url: url) { phase in
+                                switch phase {
+                                case .empty:
+                                    ProgressView()
+                                        .frame(width: 100, height: 100)
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                        .shadow(radius: 5)
+                                case .failure:
+                                    Image(systemName: "photo")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                        .background(Color.gray)
+                                        .shadow(radius: 5)
+                                @unknown default:
+                                    EmptyView()
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
+
 
     private func fetchUsers() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
@@ -237,7 +263,7 @@ struct ContentView: View {
             print("Error: User not authenticated")
             return
         }
-        
+
         let db = Firestore.firestore()
         db.collection("likes")
             .whereField("likedUserID", isEqualTo: currentUserID)
@@ -246,11 +272,11 @@ struct ContentView: View {
                     print("Error fetching incoming likes: \(error.localizedDescription)")
                     return
                 }
-                
+
                 for document in querySnapshot?.documents ?? [] {
                     let likeData = document.data()
                     let likingUserID = likeData["likingUserID"] as? String ?? ""
-                    
+
                     guard likingUserID != currentUserID else { continue }
 
                     db.collection("users").document(likingUserID).getDocument { (userDocument, error) in
@@ -258,7 +284,7 @@ struct ContentView: View {
                             print("Error fetching liking user: \(error.localizedDescription)")
                             return
                         }
-                        
+
                         if let userDocument = userDocument, let likedUser = try? userDocument.data(as: UserProfile.self) {
                             db.collection("likes")
                                 .whereField("likedUserID", isEqualTo: likingUserID)
@@ -268,7 +294,7 @@ struct ContentView: View {
                                         print("Error checking match: \(matchError.localizedDescription)")
                                         return
                                     }
-                                    
+
                                     if matchQuerySnapshot?.isEmpty == false {
                                         let matchMessage = "You matched with \(likedUser.name)!"
                                         if !self.notifications.contains(matchMessage) && !self.acknowledgedNotifications.contains(matchMessage) {
@@ -279,15 +305,6 @@ struct ContentView: View {
                                             self.sendNotification(to: currentUserID, message: matchMessage)
                                             self.sendNotification(to: likingUserID, message: matchMessage)
                                             self.createDMChat(currentUserID: currentUserID, likedUserID: likingUserID, likedUser: likedUser)
-                                        }
-                                    } else {
-                                        let likeMessage = "\(likedUser.name) liked you!"
-                                        if !self.notifications.contains(likeMessage) && !self.acknowledgedNotifications.contains(likeMessage) {
-                                            self.alertMessage = likeMessage
-                                            self.notifications.append(likeMessage)
-                                            notificationCount += 1
-                                            self.showAlert = true
-                                            self.sendNotification(to: currentUserID, message: likeMessage)
                                         }
                                     }
                                 }
@@ -393,20 +410,12 @@ struct ContentView: View {
 
                         if querySnapshot?.isEmpty == false {
                             self.createMatch(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
-                        } else {
-                            let likeMessage = "You liked \(likedUser.name)'s profile!"
-                            DispatchQueue.main.async {
-                                if !self.notifications.contains(likeMessage) && !self.acknowledgedNotifications.contains(likeMessage) {
-                                    self.notifications.append(likeMessage)
-                                    notificationCount += 1
-                                    self.sendNotification(to: likedUserID, message: likeMessage)
-                                }
-                            }
                         }
                     }
             }
         }
     }
+
 
     private func createMatch(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
         let db = Firestore.firestore()
@@ -416,45 +425,71 @@ struct ContentView: View {
             "timestamp": Timestamp()
         ]
 
-        db.collection("matches").addDocument(data: matchData) { error in
-            if let error = error {
-                print("Error creating match: \(error.localizedDescription)")
-            } else {
-                let matchMessage = "You matched with \(likedUser.name)!"
-                if !self.notifications.contains(matchMessage) && !self.acknowledgedNotifications.contains(matchMessage) {
-                    self.notifications.append(matchMessage)
-                    notificationCount += 1
-                    self.showAlert = true
-                    self.sendNotification(to: currentUserID, message: matchMessage)
-                    self.sendNotification(to: likedUserID, message: matchMessage)
+        // Check if a match already exists between these two users
+        db.collection("matches")
+            .whereField("user1", isEqualTo: currentUserID)
+            .whereField("user2", isEqualTo: likedUserID)
+            .getDocuments { querySnapshot, error in
+                if let error = error {
+                    print("Error checking existing match: \(error.localizedDescription)")
+                    return
                 }
+                if querySnapshot?.documents.isEmpty == true {
+                    db.collection("matches").addDocument(data: matchData) { error in
+                        if let error = error {
+                            print("Error creating match: \(error.localizedDescription)")
+                        } else {
+                            let matchMessage = "You matched with \(likedUser.name)!"
+                            if !self.notifications.contains(matchMessage) && !self.acknowledgedNotifications.contains(matchMessage) {
+                                self.notifications.append(matchMessage)
+                                notificationCount += 1
+                                self.showAlert = true
+                                self.sendNotification(to: currentUserID, message: matchMessage)
+                                self.sendNotification(to: likedUserID, message: matchMessage)
+                            }
 
-                self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
+                            self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
+                        }
+                    }
+                }
             }
-        }
     }
+
 
     private func createDMChat(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
         let db = Firestore.firestore()
-        let chatData: [String: Any] = [
-            "user1": currentUserID,
-            "user2": likedUserID,
-            "user1Name": userProfileViewModel.user.name,
-            "user2Name": likedUser.name,
-            "user1Image": userProfileViewModel.user.imageName,
-            "user2Image": likedUser.imageName,
-            "recipientName": likedUser.name,
-            "hasUnreadMessages": true,
-            "timestamp": Timestamp()
-        ]
+        
+        // Check if a chat already exists between the two users
+        db.collection("chats")
+            .whereField("user1", isEqualTo: currentUserID)
+            .whereField("user2", isEqualTo: likedUserID)
+            .getDocuments { querySnapshot, error in
+                if let error = error {
+                    print("Error checking existing chat: \(error.localizedDescription)")
+                    return
+                }
+                if querySnapshot?.documents.isEmpty == true {
+                    let chatData: [String: Any] = [
+                        "user1": currentUserID,
+                        "user2": likedUserID,
+                        "user1Name": userProfileViewModel.user.name,
+                        "user2Name": likedUser.name,
+                        "user1Image": userProfileViewModel.user.imageName,
+                        "user2Image": likedUser.imageName,
+                        "recipientName": likedUser.name,
+                        "hasUnreadMessages": true,
+                        "timestamp": Timestamp()
+                    ]
 
-        db.collection("chats").addDocument(data: chatData) { error in
-            if let error = error {
-                print("Error creating chat: \(error.localizedDescription)")
-            } else {
-                print("Chat created successfully")
+                    db.collection("chats").addDocument(data: chatData) { error in
+                        if let error = error {
+                            print("Error creating chat: \(error.localizedDescription)")
+                        } else {
+                            print("Chat created successfully")
+                        }
+                    }
+                }
             }
-        }
     }
 
     private func sendNotification(to userID: String, message: String) {

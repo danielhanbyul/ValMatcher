@@ -58,7 +58,12 @@ struct DMHomeView: View {
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
         HStack {
-            NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))) {
+            NavigationLink(
+                destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))
+                    .onAppear {
+                        markMessagesAsRead(match: match)
+                    }
+            ) {
                 HStack {
                     if let currentUserID = currentUserID {
                         userImageView(currentUserID: currentUserID, match: match)
@@ -72,7 +77,8 @@ struct DMHomeView: View {
                     .padding()
                     Spacer()
 
-                    if match.hasUnreadMessages == true {
+                    // Unwrap the optional Bool using ?? to provide a default value
+                    if match.hasUnreadMessages ?? false {
                         Circle()
                             .fill(Color.red)
                             .frame(width: 10, height: 10)
@@ -87,6 +93,47 @@ struct DMHomeView: View {
             }
         }
     }
+
+
+    private func markMessagesAsRead(match: Chat) {
+        guard let matchID = match.id else { return }
+
+        let db = Firestore.firestore()
+        db.collection("matches").document(matchID).collection("messages")
+            .whereField("senderID", isNotEqualTo: currentUserID ?? "")
+            .whereField("isRead", isEqualTo: false)
+            .getDocuments { snapshot, error in
+                guard let documents = snapshot?.documents, !documents.isEmpty else {
+                    return
+                }
+                let batch = db.batch()
+                documents.forEach { document in
+                    let docRef = db.collection("matches").document(matchID).collection("messages").document(document.documentID)
+                    batch.updateData(["isRead": true], forDocument: docRef)
+                }
+                batch.commit { error in
+                    if let error = error {
+                        print("Error marking messages as read: \(error.localizedDescription)")
+                    } else {
+                        updateHasUnreadMessages(for: matchID, hasUnread: false)
+                    }
+                }
+            }
+    }
+
+    private func updateHasUnreadMessages(for matchID: String, hasUnread: Bool) {
+        let db = Firestore.firestore()
+        db.collection("matches").document(matchID).updateData([
+            "hasUnreadMessages": hasUnread
+        ]) { error in
+            if let error = error {
+                print("Error updating unread messages status: \(error.localizedDescription)")
+            } else {
+                print("Updated hasUnreadMessages to \(hasUnread) for matchID \(matchID)")
+            }
+        }
+    }
+
 
     private func getRecipientName(for match: Chat) -> String {
         if let currentUserID = currentUserID {
