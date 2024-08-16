@@ -58,6 +58,16 @@ struct DMHomeView: View {
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
         HStack {
+            if isEditing {
+                Button(action: {
+                    toggleSelection(for: match.id ?? "")
+                }) {
+                    Image(systemName: selectedMatches.contains(match.id ?? "") ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(.blue)
+                }
+                .padding(.leading, 10)
+            }
+            
             NavigationLink(
                 destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))
                     .onAppear {
@@ -77,7 +87,6 @@ struct DMHomeView: View {
                     .padding()
                     Spacer()
 
-                    // Unwrap the optional Bool using ?? to provide a default value
                     if match.hasUnreadMessages ?? false {
                         Circle()
                             .fill(Color.red)
@@ -94,6 +103,13 @@ struct DMHomeView: View {
         }
     }
 
+    private func toggleSelection(for matchID: String) {
+        if selectedMatches.contains(matchID) {
+            selectedMatches.remove(matchID)
+        } else {
+            selectedMatches.insert(matchID)
+        }
+    }
 
     private func markMessagesAsRead(match: Chat) {
         guard let matchID = match.id else { return }
@@ -133,7 +149,6 @@ struct DMHomeView: View {
             }
         }
     }
-
 
     private func getRecipientName(for match: Chat) -> String {
         if let currentUserID = currentUserID {
@@ -179,69 +194,62 @@ struct DMHomeView: View {
         }
 
         let db = Firestore.firestore()
+        var fetchedMatches = [Chat]()
+        let group = DispatchGroup()
 
+        // Fetch matches where the current user is user1
+        group.enter()
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
-            .addSnapshotListener { snapshot, error in
+            .getDocuments { snapshot, error in
                 if let error = error {
                     print("Error loading matches for user1: \(error.localizedDescription)")
+                    group.leave()
                     return
                 }
 
                 guard let documents = snapshot?.documents else {
                     print("No documents for user1")
+                    group.leave()
                     return
                 }
 
-                var newMatches = documents.compactMap { document -> Chat? in
-                    do {
-                        let match = try document.data(as: Chat.self)
-                        return match
-                    } catch {
-                        print("Error decoding match for user1: \(error.localizedDescription)")
-                        return nil
-                    }
-                }
-
-                fetchUserNames(for: newMatches) { updatedMatches in
-                    self.matches = removeDuplicateChats(from: updatedMatches)
-                    self.updateUnreadMessagesCount(from: snapshot)
-                    print("Loaded matches for user1: \(self.matches)")
-                }
+                let matchesForUser1 = documents.compactMap { try? $0.data(as: Chat.self) }
+                fetchedMatches.append(contentsOf: matchesForUser1)
+                group.leave()
             }
 
+        // Fetch matches where the current user is user2
+        group.enter()
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
-            .addSnapshotListener { snapshot, error in
+            .getDocuments { snapshot, error in
                 if let error = error {
                     print("Error loading matches for user2: \(error.localizedDescription)")
+                    group.leave()
                     return
                 }
 
                 guard let documents = snapshot?.documents else {
                     print("No documents for user2")
+                    group.leave()
                     return
                 }
 
-                var moreMatches = documents.compactMap { document -> Chat? in
-                    do {
-                        let match = try document.data(as: Chat.self)
-                        return match
-                    } catch {
-                        print("Error decoding match for user2: \(error.localizedDescription)")
-                        return nil
-                    }
-                }
-
-                fetchUserNames(for: moreMatches) { updatedMatches in
-                    self.matches.append(contentsOf: updatedMatches)
-                    self.matches = removeDuplicateChats(from: self.matches)
-                    self.updateUnreadMessagesCount(from: snapshot)
-                    print("Loaded matches for user2: \(self.matches)")
-                }
+                let matchesForUser2 = documents.compactMap { try? $0.data(as: Chat.self) }
+                fetchedMatches.append(contentsOf: matchesForUser2)
+                group.leave()
             }
+
+        group.notify(queue: .main) {
+            self.fetchUserNames(for: fetchedMatches) { updatedMatches in
+                self.matches = self.removeDuplicateChats(from: updatedMatches)
+                self.updateUnreadMessagesCount(from: self.matches)
+                print("Loaded matches: \(self.matches)")
+            }
+        }
     }
 
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
@@ -282,17 +290,16 @@ struct DMHomeView: View {
         }
     }
 
-    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot?) {
+    private func updateUnreadMessagesCount(from chats: [Chat]) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         var count = 0
-        var updatedMatches = self.matches
+        var updatedMatches = chats
 
         let group = DispatchGroup()
 
-        snapshot?.documents.forEach { document in
+        for chat in updatedMatches {
             group.enter()
-            let chatID = document.documentID
-            Firestore.firestore().collection("matches").document(chatID).collection("messages")
+            Firestore.firestore().collection("matches").document(chat.id ?? "").collection("messages")
                 .whereField("senderID", isNotEqualTo: currentUserID)
                 .whereField("isRead", isEqualTo: false)
                 .getDocuments { messageSnapshot, error in
@@ -303,7 +310,7 @@ struct DMHomeView: View {
                     }
                     let unreadCount = messageSnapshot?.documents.count ?? 0
 
-                    if let matchIndex = updatedMatches.firstIndex(where: { $0.id == chatID }) {
+                    if let matchIndex = updatedMatches.firstIndex(where: { $0.id == chat.id }) {
                         let hasUnread = unreadCount > 0
                         updatedMatches[matchIndex].hasUnreadMessages = hasUnread
                     }
@@ -327,6 +334,7 @@ struct DMHomeView: View {
             }
         }
         selectedMatches.removeAll()
+        isEditing = false
     }
 
     func deleteMatch(_ match: Chat) {
@@ -340,7 +348,26 @@ struct DMHomeView: View {
             if let error = error {
                 print("Error deleting match: \(error.localizedDescription)")
             } else {
+                // Remove the match from the local state
+                if let index = self.matches.firstIndex(where: { $0.id == matchID }) {
+                    self.matches.remove(at: index)
+                }
                 print("Match deleted successfully")
+            }
+        }
+    }
+
+    private func deleteChat(matchID: String) {
+        let db = Firestore.firestore()
+        db.collection("matches").document(matchID).delete { error in
+            if let error = error {
+                print("Error deleting chat: \(error.localizedDescription)")
+            } else {
+                // Remove the chat from the local state
+                if let index = self.matches.firstIndex(where: { $0.id == matchID }) {
+                    self.matches.remove(at: index)
+                }
+                print("Chat deleted successfully")
             }
         }
     }
@@ -359,7 +386,10 @@ struct DMHomeView: View {
                     print("Error fetching matches: \(error)")
                     return
                 }
-                self.updateUnreadMessagesCount(from: snapshot)
+                if let documents = snapshot?.documents {
+                    let matches = documents.compactMap { try? $0.data(as: Chat.self) }
+                    self.updateUnreadMessagesCount(from: matches)
+                }
             }
 
         db.collection("matches")
@@ -369,7 +399,10 @@ struct DMHomeView: View {
                     print("Error fetching matches: \(error)")
                     return
                 }
-                self.updateUnreadMessagesCount(from: snapshot)
+                if let documents = snapshot?.documents {
+                    let matches = documents.compactMap { try? $0.data(as: Chat.self) }
+                    self.updateUnreadMessagesCount(from: matches)
+                }
             }
     }
 
