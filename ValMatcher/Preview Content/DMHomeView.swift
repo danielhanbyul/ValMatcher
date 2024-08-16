@@ -302,7 +302,7 @@ struct DMHomeView: View {
             Firestore.firestore().collection("matches").document(chat.id ?? "").collection("messages")
                 .whereField("senderID", isNotEqualTo: currentUserID)
                 .whereField("isRead", isEqualTo: false)
-                .addSnapshotListener { messageSnapshot, error in
+                .getDocuments { messageSnapshot, error in
                     if let error = error {
                         print("Error fetching messages: \(error)")
                         group.leave()
@@ -389,6 +389,7 @@ struct DMHomeView: View {
                 if let documents = snapshot?.documents {
                     let matches = documents.compactMap { try? $0.data(as: Chat.self) }
                     self.updateUnreadMessagesCount(from: matches)
+                    self.listenToMessages(for: matches)
                 }
             }
 
@@ -402,8 +403,55 @@ struct DMHomeView: View {
                 if let documents = snapshot?.documents {
                     let matches = documents.compactMap { try? $0.data(as: Chat.self) }
                     self.updateUnreadMessagesCount(from: matches)
+                    self.listenToMessages(for: matches)
                 }
             }
+    }
+
+    private func listenToMessages(for matches: [Chat]) {
+        guard let currentUserID = currentUserID else {
+            return
+        }
+        let db = Firestore.firestore()
+
+        for match in matches {
+            guard let matchID = match.id else { continue }
+
+            db.collection("matches").document(matchID).collection("messages")
+                .whereField("senderID", isNotEqualTo: currentUserID)
+                .whereField("isRead", isEqualTo: false)
+                .addSnapshotListener { snapshot, error in
+                    if let error = error {
+                        print("Error listening for new messages: \(error)")
+                        return
+                    }
+                    guard let documents = snapshot?.documents else {
+                        return
+                    }
+
+                    for document in documents {
+                        if let messageData = document.data() as? [String: Any],
+                           let senderID = messageData["senderID"] as? String,
+                           let messageText = messageData["message"] as? String {
+
+                            // Get sender's name (user1Name or user2Name based on senderID)
+                            let senderName = (senderID == match.user1) ? match.user1Name : match.user2Name
+
+                            self.showNotification(title: senderName ?? "New Message", body: messageText)
+                        }
+                    }
+                }
+        }
+    }
+
+    private func showNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 
     private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
@@ -421,16 +469,6 @@ struct DMHomeView: View {
         }
 
         return uniqueChats
-    }
-
-    private func showNotification(title: String, body: String) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
     }
 }
 
