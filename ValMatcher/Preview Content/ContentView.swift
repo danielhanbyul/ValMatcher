@@ -354,7 +354,11 @@ struct ContentView: View {
                         print("Error fetching messages: \(error)")
                         return
                     }
-                    count += messageSnapshot?.documents.count ?? 0
+                    let newMessagesCount = messageSnapshot?.documents.count ?? 0
+                    if newMessagesCount > 0 {
+                        self.notifyUserOfNewMessages(count: newMessagesCount)
+                    }
+                    count += newMessagesCount
                     group.leave()
                 }
         }
@@ -362,6 +366,12 @@ struct ContentView: View {
         group.notify(queue: .main) {
             self.unreadMessagesCount = count
         }
+    }
+
+    private func notifyUserOfNewMessages(count: Int) {
+        // Trigger an in-app notification or a system notification for new messages
+        alertMessage = "You have \(count) new message(s)."
+        showAlert = true
     }
 
     private func likeAction() {
@@ -516,11 +526,10 @@ struct ContentView: View {
             if self.currentIndex < self.users.count - 1 {
                 self.currentIndex += 1
             } else {
-                self.currentIndex = 0 // Corrected line here
+                self.currentIndex = 0
             }
         }
     }
-
 
     private func deleteImage(at index: Int) {
         users[currentIndex].additionalImages.remove(at: index)
@@ -698,7 +707,7 @@ struct UserCardView: View {
                     Spacer()
                     Text("Age: \(user.age)")
                 }
-                .foregroundColor(.black)
+                .foregroundColor(.black)  // Changed to black
                 .font(.subheadline)
                 .padding(.horizontal)
             }
