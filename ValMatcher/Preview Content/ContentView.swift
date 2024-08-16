@@ -10,7 +10,6 @@ import FirebaseFirestore
 import AVKit
 import FirebaseAnalytics
 
-
 struct ContentView: View {
     @StateObject var userProfileViewModel: UserProfileViewModel
     @Binding var isSignedIn: Bool
@@ -105,7 +104,6 @@ struct ContentView: View {
             }
         }
     }
-
 
     private var userCardStack: some View {
         VStack(spacing: 0) {
@@ -237,7 +235,6 @@ struct ContentView: View {
             }
         }
     }
-
 
     private func fetchUsers() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
@@ -416,7 +413,6 @@ struct ContentView: View {
         }
     }
 
-
     private func createMatch(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
         let db = Firestore.firestore()
         let matchData: [String: Any] = [
@@ -454,7 +450,6 @@ struct ContentView: View {
                 }
             }
     }
-
 
     private func createDMChat(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
         let db = Firestore.firestore()
@@ -702,7 +697,7 @@ struct UserCardView: View {
                     Spacer()
                     Text("Age: \(user.age)")
                 }
-                .foregroundColor(.white)
+                .foregroundColor(.black)  // Changed to black
                 .font(.subheadline)
                 .padding(.horizontal)
             }
