@@ -158,9 +158,9 @@ struct DMHomeView: View {
                 }
 
                 fetchUserNames(for: newMatches) { updatedMatches in
-                    self.matches = updatedMatches
+                    self.matches = removeDuplicateChats(from: updatedMatches)
                     self.updateUnreadMessagesCount(from: snapshot)
-                    print("Loaded matches for user1: \(updatedMatches)")
+                    print("Loaded matches for user1: \(self.matches)")
                 }
             }
 
@@ -190,9 +190,9 @@ struct DMHomeView: View {
 
                 fetchUserNames(for: moreMatches) { updatedMatches in
                     self.matches.append(contentsOf: updatedMatches)
-                    self.matches = Array(Set(self.matches))
+                    self.matches = removeDuplicateChats(from: self.matches)
                     self.updateUnreadMessagesCount(from: snapshot)
-                    print("Loaded matches for user2: \(updatedMatches)")
+                    print("Loaded matches for user2: \(self.matches)")
                 }
             }
     }
@@ -324,6 +324,23 @@ struct DMHomeView: View {
                 }
                 self.updateUnreadMessagesCount(from: snapshot)
             }
+    }
+
+    private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
+        var uniqueChats = [Chat]()
+        var seenPairs = Set<Set<String>>()
+
+        for chat in chats {
+            if let user1 = chat.user1, let user2 = chat.user2 {
+                let userPair = Set([user1, user2])
+                if !seenPairs.contains(userPair) {
+                    uniqueChats.append(chat)
+                    seenPairs.insert(userPair)
+                }
+            }
+        }
+
+        return uniqueChats
     }
 
     private func showNotification(title: String, body: String) {
