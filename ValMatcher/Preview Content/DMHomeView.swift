@@ -134,9 +134,25 @@ struct DMHomeView: View {
                     if let error = error {
                         print("Error marking messages as read: \(error.localizedDescription)")
                     } else {
-                        updateHasUnreadMessages(for: matchID, hasUnread: false)
+                        // Check if there are any remaining unread messages
+                        self.checkIfUnreadMessagesExist(for: matchID)
                     }
                 }
+            }
+    }
+
+    private func checkIfUnreadMessagesExist(for matchID: String) {
+        let db = Firestore.firestore()
+        db.collection("matches").document(matchID).collection("messages")
+            .whereField("senderID", isNotEqualTo: currentUserID ?? "")
+            .whereField("isRead", isEqualTo: false)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error checking for unread messages: \(error)")
+                    return
+                }
+                let hasUnreadMessages = (snapshot?.documents.count ?? 0) > 0
+                self.updateHasUnreadMessages(for: matchID, hasUnread: hasUnreadMessages)
             }
     }
 
@@ -149,10 +165,12 @@ struct DMHomeView: View {
                 print("Error updating unread messages status: \(error.localizedDescription)")
             } else {
                 print("Updated hasUnreadMessages to \(hasUnread) for matchID \(matchID)")
-                self.loadMatches() // Reload matches to update UI
+                // Ensure UI updates after changing unread status
+                self.loadMatches()
             }
         }
     }
+
 
     private func getRecipientName(for match: Chat) -> String {
         if let currentUserID = currentUserID {
