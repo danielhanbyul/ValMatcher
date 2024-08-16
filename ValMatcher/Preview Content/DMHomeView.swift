@@ -348,10 +348,6 @@ struct DMHomeView: View {
             if let error = error {
                 print("Error deleting match: \(error.localizedDescription)")
             } else {
-                // Remove the match from the local state
-                if let index = self.matches.firstIndex(where: { $0.id == matchID }) {
-                    self.matches.remove(at: index)
-                }
                 print("Match deleted successfully")
             }
         }
