@@ -302,7 +302,7 @@ struct DMHomeView: View {
             Firestore.firestore().collection("matches").document(chat.id ?? "").collection("messages")
                 .whereField("senderID", isNotEqualTo: currentUserID)
                 .whereField("isRead", isEqualTo: false)
-                .getDocuments { messageSnapshot, error in
+                .addSnapshotListener { messageSnapshot, error in
                     if let error = error {
                         print("Error fetching messages: \(error)")
                         group.leave()
