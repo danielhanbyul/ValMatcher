@@ -322,6 +322,10 @@ struct DMHomeView: View {
         group.notify(queue: .main) {
             self.matches = updatedMatches
             self.totalUnreadMessages = count
+            // Notify the user when there are unread messages
+            if count > 0 {
+                showNotification(title: "New Messages", body: "You have \(count) unread messages.")
+            }
         }
     }
 
