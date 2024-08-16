@@ -104,7 +104,7 @@ struct ContentView: View {
         VStack(spacing: 0) {
             ZStack {
                 if currentIndex < users.count {
-                    UserCardView(user: users[currentIndex])
+                    UserCardView(user: users[currentIndex], onDoubleTap: handleDoubleTap) // Pass the handleDoubleTap function here
                         .onTapGesture(count: 2) {
                             handleDoubleTap()
                         }
@@ -140,6 +140,7 @@ struct ContentView: View {
             }
         }
     }
+
 
     private func handleDoubleTap() {
         print("Double tap detected")
@@ -613,6 +614,7 @@ struct UserCardView: View {
     var newMedia: [MediaItem] = []
     @State private var currentMediaIndex = 0
     @State private var isEditing: Bool = false
+    var onDoubleTap: () -> Void // Add a closure to handle double-tap
 
     var body: some View {
         VStack(spacing: 0) {
@@ -770,6 +772,9 @@ struct UserCardView: View {
                 .fill(Color(.systemGray4))
         )
         .padding()
+        .onTapGesture(count: 2) { // Handle double-tap gesture
+            onDoubleTap()
+        }
         .onTapGesture {
             isEditing.toggle()
         }
