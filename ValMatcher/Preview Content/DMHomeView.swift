@@ -8,6 +8,7 @@
 import SwiftUI
 import FirebaseFirestore
 import FirebaseAuth
+import UserNotifications
 
 struct DMHomeView: View {
     @State private var matches = [Chat]()
@@ -24,7 +25,6 @@ struct DMHomeView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        // Chat section
                         ForEach(matches) { match in
                             matchRow(match: match)
                         }
@@ -72,7 +72,6 @@ struct DMHomeView: View {
                     .padding()
                     Spacer()
 
-                    // Ensure correct display of red dot based on hasUnreadMessages
                     if match.hasUnreadMessages == true {
                         Circle()
                             .fill(Color.red)
@@ -80,7 +79,7 @@ struct DMHomeView: View {
                             .padding(.trailing, 10)
                     }
                 }
-                .background(Color.black.opacity(0.7)) // Background color
+                .background(Color.black.opacity(0.7))
                 .cornerRadius(12)
                 .padding(.horizontal)
                 .padding(.vertical, 5)
@@ -88,7 +87,6 @@ struct DMHomeView: View {
             }
         }
     }
-
 
     private func getRecipientName(for match: Chat) -> String {
         if let currentUserID = currentUserID {
@@ -134,8 +132,7 @@ struct DMHomeView: View {
         }
 
         let db = Firestore.firestore()
-        
-        // Fetch matches where the current user is user1
+
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
@@ -144,14 +141,13 @@ struct DMHomeView: View {
                     print("Error loading matches for user1: \(error.localizedDescription)")
                     return
                 }
-                
+
                 guard let documents = snapshot?.documents else {
                     print("No documents for user1")
                     return
                 }
-                
+
                 var newMatches = documents.compactMap { document -> Chat? in
-                    print("Document data: \(document.data())")
                     do {
                         let match = try document.data(as: Chat.self)
                         return match
@@ -160,7 +156,7 @@ struct DMHomeView: View {
                         return nil
                     }
                 }
-                
+
                 fetchUserNames(for: newMatches) { updatedMatches in
                     self.matches = updatedMatches
                     self.updateUnreadMessagesCount(from: snapshot)
@@ -168,7 +164,6 @@ struct DMHomeView: View {
                 }
             }
 
-        // Fetch matches where the current user is user2
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
@@ -184,7 +179,6 @@ struct DMHomeView: View {
                 }
 
                 var moreMatches = documents.compactMap { document -> Chat? in
-                    print("Document data: \(document.data())")
                     do {
                         let match = try document.data(as: Chat.self)
                         return match
@@ -244,7 +238,7 @@ struct DMHomeView: View {
     private func updateUnreadMessagesCount(from snapshot: QuerySnapshot?) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         var count = 0
-        var updatedMatches = self.matches  // Create a copy to modify
+        var updatedMatches = self.matches
 
         let group = DispatchGroup()
 
@@ -261,12 +255,10 @@ struct DMHomeView: View {
                         return
                     }
                     let unreadCount = messageSnapshot?.documents.count ?? 0
-                    print("Unread count for \(chatID): \(unreadCount)")
 
                     if let matchIndex = updatedMatches.firstIndex(where: { $0.id == chatID }) {
                         let hasUnread = unreadCount > 0
-                        updatedMatches[matchIndex].hasUnreadMessages = hasUnread  // Directly update the match
-                        print("Updated match \(chatID) with hasUnreadMessages: \(hasUnread)")
+                        updatedMatches[matchIndex].hasUnreadMessages = hasUnread
                     }
                     count += unreadCount
                     group.leave()
@@ -274,9 +266,8 @@ struct DMHomeView: View {
         }
 
         group.notify(queue: .main) {
-            self.matches = updatedMatches  // Update state with modified array
+            self.matches = updatedMatches
             self.totalUnreadMessages = count
-            print("Final matches state after update: \(self.matches)")
         }
     }
 
@@ -312,7 +303,7 @@ struct DMHomeView: View {
             print("Error: User not authenticated")
             return
         }
-        
+
         let db = Firestore.firestore()
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
@@ -323,7 +314,7 @@ struct DMHomeView: View {
                 }
                 self.updateUnreadMessagesCount(from: snapshot)
             }
-        
+
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
@@ -333,6 +324,16 @@ struct DMHomeView: View {
                 }
                 self.updateUnreadMessagesCount(from: snapshot)
             }
+    }
+
+    private func showNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 }
 
