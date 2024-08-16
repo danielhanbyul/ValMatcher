@@ -53,6 +53,9 @@ struct DMHomeView: View {
             loadMatches()
             listenForUnreadMessages()
         }
+        .onChange(of: isEditing) { _ in
+            loadMatches() // Reload matches when view appears to refresh unread status
+        }
     }
 
     @ViewBuilder
@@ -146,6 +149,7 @@ struct DMHomeView: View {
                 print("Error updating unread messages status: \(error.localizedDescription)")
             } else {
                 print("Updated hasUnreadMessages to \(hasUnread) for matchID \(matchID)")
+                self.loadMatches() // Reload matches to update UI
             }
         }
     }
