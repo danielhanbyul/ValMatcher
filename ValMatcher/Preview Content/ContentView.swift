@@ -516,10 +516,11 @@ struct ContentView: View {
             if self.currentIndex < self.users.count - 1 {
                 self.currentIndex += 1
             } else {
-                self.currentIndex = 0
+                self.currentIndex = 0 // Corrected line here
             }
         }
     }
+
 
     private func deleteImage(at index: Int) {
         users[currentIndex].additionalImages.remove(at: index)
@@ -697,7 +698,7 @@ struct UserCardView: View {
                     Spacer()
                     Text("Age: \(user.age)")
                 }
-                .foregroundColor(.black)  // Changed to black
+                .foregroundColor(.black)
                 .font(.subheadline)
                 .padding(.horizontal)
             }
