@@ -18,10 +18,6 @@ struct DMHomeView: View {
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
 
-    // Define the listeners
-    @State private var listener1: ListenerRegistration?
-    @State private var listener2: ListenerRegistration?
-
     var body: some View {
         ZStack {
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
@@ -57,9 +53,6 @@ struct DMHomeView: View {
         .onAppear {
             loadMatches()
             listenForUnreadMessages()
-        }
-        .onDisappear {
-            removeListeners()
         }
     }
 
@@ -141,7 +134,7 @@ struct DMHomeView: View {
 
         let db = Firestore.firestore()
 
-        listener1 = db.collection("matches")
+        db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
             .addSnapshotListener { snapshot, error in
@@ -155,7 +148,7 @@ struct DMHomeView: View {
                     return
                 }
 
-                var newMatches = documents.compactMap { document -> Chat? in
+                let newMatches = documents.compactMap { document -> Chat? in
                     do {
                         let match = try document.data(as: Chat.self)
                         return match
@@ -166,13 +159,13 @@ struct DMHomeView: View {
                 }
 
                 fetchUserNames(for: newMatches) { updatedMatches in
-                    self.matches = self.removeDuplicateChats(from: updatedMatches)
+                    self.matches = self.mergeAndRemoveDuplicates(existingMatches: self.matches, newMatches: updatedMatches)
                     self.updateUnreadMessagesCount(from: self.matches)
                     print("Loaded matches for user1: \(self.matches)")
                 }
             }
 
-        listener2 = db.collection("matches")
+        db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
             .addSnapshotListener { snapshot, error in
@@ -186,7 +179,7 @@ struct DMHomeView: View {
                     return
                 }
 
-                var moreMatches = documents.compactMap { document -> Chat? in
+                let moreMatches = documents.compactMap { document -> Chat? in
                     do {
                         let match = try document.data(as: Chat.self)
                         return match
@@ -197,8 +190,7 @@ struct DMHomeView: View {
                 }
 
                 fetchUserNames(for: moreMatches) { updatedMatches in
-                    self.matches.append(contentsOf: updatedMatches)
-                    self.matches = self.removeDuplicateChats(from: self.matches)
+                    self.matches = self.mergeAndRemoveDuplicates(existingMatches: self.matches, newMatches: updatedMatches)
                     self.updateUnreadMessagesCount(from: self.matches)
                     print("Loaded matches for user2: \(self.matches)")
                 }
@@ -282,6 +274,20 @@ struct DMHomeView: View {
         }
     }
 
+    private func mergeAndRemoveDuplicates(existingMatches: [Chat], newMatches: [Chat]) -> [Chat] {
+        var combinedMatches = existingMatches
+
+        for newMatch in newMatches {
+            if let index = combinedMatches.firstIndex(where: { $0.id == newMatch.id }) {
+                combinedMatches[index] = newMatch
+            } else {
+                combinedMatches.append(newMatch)
+            }
+        }
+
+        return removeDuplicateChats(from: combinedMatches)
+    }
+
     func deleteSelectedMatches() {
         for matchID in selectedMatches {
             if let index = matches.firstIndex(where: { $0.id == matchID }) {
@@ -316,7 +322,7 @@ struct DMHomeView: View {
         }
 
         let db = Firestore.firestore()
-        listener1 = db.collection("matches")
+        db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
@@ -326,7 +332,7 @@ struct DMHomeView: View {
                 self.updateUnreadMessagesCount(from: self.matches)
             }
 
-        listener2 = db.collection("matches")
+        db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
@@ -335,11 +341,6 @@ struct DMHomeView: View {
                 }
                 self.updateUnreadMessagesCount(from: self.matches)
             }
-    }
-
-    private func removeListeners() {
-        listener1?.remove()
-        listener2?.remove()
     }
 
     private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
