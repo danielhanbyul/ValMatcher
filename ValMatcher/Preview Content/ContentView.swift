@@ -310,6 +310,8 @@ struct ContentView: View {
                 }
             }
     }
+    
+    
 
     private func listenForUnreadMessages() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
@@ -473,6 +475,7 @@ struct ContentView: View {
                     print("Error checking existing chat: \(error.localizedDescription)")
                     return
                 }
+                
                 if querySnapshot?.documents.isEmpty == true {
                     let chatData: [String: Any] = [
                         "user1": currentUserID,
@@ -481,11 +484,11 @@ struct ContentView: View {
                         "user2Name": likedUser.name,
                         "user1Image": userProfileViewModel.user.imageName,
                         "user2Image": likedUser.imageName,
-                        "recipientName": likedUser.name,
                         "hasUnreadMessages": true,
                         "timestamp": Timestamp()
                     ]
 
+                    // Create chat for both users
                     db.collection("chats").addDocument(data: chatData) { error in
                         if let error = error {
                             print("Error creating chat: \(error.localizedDescription)")
@@ -496,6 +499,7 @@ struct ContentView: View {
                 }
             }
     }
+
 
     private func sendNotification(to userID: String, message: String) {
         let db = Firestore.firestore()

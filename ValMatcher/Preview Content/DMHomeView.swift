@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Firebase
 import FirebaseFirestore
 import FirebaseAuth
 import UserNotifications
@@ -147,7 +148,7 @@ struct DMHomeView: View {
                     return
                 }
 
-                var newMatches = documents.compactMap { document -> Chat? in
+                let newMatches = documents.compactMap { document -> Chat? in
                     do {
                         let match = try document.data(as: Chat.self)
                         return match
@@ -158,8 +159,8 @@ struct DMHomeView: View {
                 }
 
                 fetchUserNames(for: newMatches) { updatedMatches in
-                    self.matches = removeDuplicateChats(from: updatedMatches)
-                    self.updateUnreadMessagesCount(from: snapshot)
+                    self.matches = self.mergeAndRemoveDuplicates(existingMatches: self.matches, newMatches: updatedMatches)
+                    self.updateUnreadMessagesCount(from: self.matches)
                     print("Loaded matches for user1: \(self.matches)")
                 }
             }
@@ -178,7 +179,7 @@ struct DMHomeView: View {
                     return
                 }
 
-                var moreMatches = documents.compactMap { document -> Chat? in
+                let moreMatches = documents.compactMap { document -> Chat? in
                     do {
                         let match = try document.data(as: Chat.self)
                         return match
@@ -189,9 +190,8 @@ struct DMHomeView: View {
                 }
 
                 fetchUserNames(for: moreMatches) { updatedMatches in
-                    self.matches.append(contentsOf: updatedMatches)
-                    self.matches = removeDuplicateChats(from: self.matches)
-                    self.updateUnreadMessagesCount(from: snapshot)
+                    self.matches = self.mergeAndRemoveDuplicates(existingMatches: self.matches, newMatches: updatedMatches)
+                    self.updateUnreadMessagesCount(from: self.matches)
                     print("Loaded matches for user2: \(self.matches)")
                 }
             }
@@ -235,17 +235,17 @@ struct DMHomeView: View {
         }
     }
 
-    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot?) {
+    private func updateUnreadMessagesCount(from matches: [Chat]) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         var count = 0
-        var updatedMatches = self.matches
-
         let group = DispatchGroup()
 
-        snapshot?.documents.forEach { document in
+        var updatedMatches = matches
+
+        for (index, match) in updatedMatches.enumerated() {
+            guard let matchID = match.id else { continue }
             group.enter()
-            let chatID = document.documentID
-            Firestore.firestore().collection("matches").document(chatID).collection("messages")
+            Firestore.firestore().collection("matches").document(matchID).collection("messages")
                 .whereField("senderID", isNotEqualTo: currentUserID)
                 .whereField("isRead", isEqualTo: false)
                 .getDocuments { messageSnapshot, error in
@@ -254,21 +254,38 @@ struct DMHomeView: View {
                         group.leave()
                         return
                     }
+
                     let unreadCount = messageSnapshot?.documents.count ?? 0
 
-                    if let matchIndex = updatedMatches.firstIndex(where: { $0.id == chatID }) {
-                        let hasUnread = unreadCount > 0
-                        updatedMatches[matchIndex].hasUnreadMessages = hasUnread
+                    if unreadCount > 0 {
+                        updatedMatches[index].hasUnreadMessages = true
+                    } else {
+                        updatedMatches[index].hasUnreadMessages = false
                     }
+
                     count += unreadCount
                     group.leave()
                 }
         }
 
         group.notify(queue: .main) {
-            self.matches = updatedMatches
             self.totalUnreadMessages = count
+            self.matches = updatedMatches
         }
+    }
+
+    private func mergeAndRemoveDuplicates(existingMatches: [Chat], newMatches: [Chat]) -> [Chat] {
+        var combinedMatches = existingMatches
+
+        for newMatch in newMatches {
+            if let index = combinedMatches.firstIndex(where: { $0.id == newMatch.id }) {
+                combinedMatches[index] = newMatch
+            } else {
+                combinedMatches.append(newMatch)
+            }
+        }
+
+        return removeDuplicateChats(from: combinedMatches)
     }
 
     func deleteSelectedMatches() {
@@ -312,7 +329,7 @@ struct DMHomeView: View {
                     print("Error fetching matches: \(error)")
                     return
                 }
-                self.updateUnreadMessagesCount(from: snapshot)
+                self.updateUnreadMessagesCount(from: self.matches)
             }
 
         db.collection("matches")
@@ -322,7 +339,7 @@ struct DMHomeView: View {
                     print("Error fetching matches: \(error)")
                     return
                 }
-                self.updateUnreadMessagesCount(from: snapshot)
+                self.updateUnreadMessagesCount(from: self.matches)
             }
     }
 

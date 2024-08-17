@@ -116,12 +116,18 @@ struct ChatView: View {
                 }
 
                 guard let documents = snapshot?.documents else {
-                    print("No messages")
+                    print("No messages found")
                     return
                 }
 
                 self.messages = documents.compactMap { document in
                     try? document.data(as: Message.self)
+                }
+
+                if self.messages.isEmpty {
+                    print("Messages array is empty after fetching")
+                } else {
+                    print("Messages successfully loaded")
                 }
 
                 // Mark messages as read
@@ -180,17 +186,27 @@ struct ChatView: View {
 
     private func updateHasUnreadMessages(for matchID: String, hasUnread: Bool) {
         let db = Firestore.firestore()
-        db.collection("matches").document(matchID).updateData([
-            "hasUnreadMessages": hasUnread
-        ]) { error in
-            if let error = error {
-                print("Error updating unread messages status: \(error.localizedDescription)")
+        let matchRef = db.collection("matches").document(matchID)
+        
+        matchRef.getDocument { document, error in
+            if let document = document, document.exists {
+                matchRef.updateData([
+                    "hasUnreadMessages": hasUnread
+                ]) { error in
+                    if let error = error {
+                        print("Error updating unread messages status: \(error.localizedDescription)")
+                    } else {
+                        print("Updated hasUnreadMessages to \(hasUnread) for matchID \(matchID)")
+                    }
+                }
             } else {
-                print("Updated hasUnreadMessages to \(hasUnread) for matchID \(matchID)")
+                print("No document exists for matchID: \(matchID)")
             }
         }
     }
+
 }
+
 
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
