@@ -170,15 +170,16 @@ struct ChatView: View {
     private func markMessagesAsRead() {
         let db = Firestore.firestore()
         let batch = db.batch()
+        
         messages.filter { !$0.isCurrentUser && !$0.isRead }.forEach { message in
             let messageRef = db.collection("matches").document(matchID).collection("messages").document(message.id ?? "")
             batch.updateData(["isRead": true], forDocument: messageRef)
         }
+        
         batch.commit { error in
             if let error = error {
                 print("Error marking messages as read: \(error.localizedDescription)")
             } else {
-                // Update hasUnreadMessages field in the match document
                 updateHasUnreadMessages(for: matchID, hasUnread: false)
             }
         }
@@ -188,22 +189,18 @@ struct ChatView: View {
         let db = Firestore.firestore()
         let matchRef = db.collection("matches").document(matchID)
         
-        matchRef.getDocument { document, error in
-            if let document = document, document.exists {
-                matchRef.updateData([
-                    "hasUnreadMessages": hasUnread
-                ]) { error in
-                    if let error = error {
-                        print("Error updating unread messages status: \(error.localizedDescription)")
-                    } else {
-                        print("Updated hasUnreadMessages to \(hasUnread) for matchID \(matchID)")
-                    }
-                }
+        matchRef.updateData([
+            "hasUnreadMessages": hasUnread
+        ]) { error in
+            if let error = error {
+                print("Error updating unread messages status: \(error.localizedDescription)")
             } else {
-                print("No document exists for matchID: \(matchID)")
+                NotificationCenter.default.post(name: Notification.Name("UnreadMessagesUpdated"), object: nil)
+                print("Updated hasUnreadMessages to \(hasUnread) for matchID \(matchID)")
             }
         }
     }
+
 
 }
 

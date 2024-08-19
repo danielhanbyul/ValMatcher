@@ -101,8 +101,13 @@ struct ContentView: View {
                 fetchUsers()
                 fetchIncomingLikes()
                 listenForUnreadMessages()
+                
+                NotificationCenter.default.addObserver(forName: Notification.Name("UnreadMessagesUpdated"), object: nil, queue: .main) { _ in
+                    self.listenForUnreadMessages()
+                }
             }
         }
+
     }
 
     private var userCardStack: some View {
@@ -318,8 +323,10 @@ struct ContentView: View {
             print("Error: User not authenticated")
             return
         }
-        
+
         let db = Firestore.firestore()
+        
+        // Listen for changes in matches where the current user is user1
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
@@ -329,7 +336,8 @@ struct ContentView: View {
                 }
                 self.updateUnreadMessagesCount(from: snapshot)
             }
-        
+
+        // Listen for changes in matches where the current user is user2
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
@@ -345,30 +353,31 @@ struct ContentView: View {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         var count = 0
         let group = DispatchGroup()
-        
+
         snapshot?.documents.forEach { document in
             group.enter()
             Firestore.firestore().collection("matches").document(document.documentID).collection("messages")
                 .whereField("senderID", isNotEqualTo: currentUserID)
                 .whereField("isRead", isEqualTo: false)
-                .getDocuments { messageSnapshot, error in
+                .addSnapshotListener { messageSnapshot, error in
                     if let error = error {
                         print("Error fetching messages: \(error)")
                         return
                     }
                     let newMessagesCount = messageSnapshot?.documents.count ?? 0
-                    if newMessagesCount > 0 {
-                        self.notifyUserOfNewMessages(count: newMessagesCount)
-                    }
                     count += newMessagesCount
                     group.leave()
                 }
         }
-        
+
         group.notify(queue: .main) {
             self.unreadMessagesCount = count
+            if count > 0 {
+                self.notifyUserOfNewMessages(count: count)
+            }
         }
     }
+
 
     private func notifyUserOfNewMessages(count: Int) {
         // Trigger an in-app notification or a system notification for new messages
