@@ -341,6 +341,50 @@ struct DMHomeView: View {
                 }
                 self.updateUnreadMessagesCount(from: self.matches)
             }
+
+        // Listen for changes in the messages collection
+        db.collection("matches")
+            .whereField("user1", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error fetching messages: \(error)")
+                    return
+                }
+                snapshot?.documentChanges.forEach { change in
+                    if change.type == .added {
+                        self.notifyUserOfNewMessages(count: 1)
+                    }
+                }
+            }
+
+        db.collection("matches")
+            .whereField("user2", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error fetching messages: \(error)")
+                    return
+                }
+                snapshot?.documentChanges.forEach { change in
+                    if change.type == .added {
+                        self.notifyUserOfNewMessages(count: 1)
+                    }
+                }
+            }
+    }
+
+    private func notifyUserOfNewMessages(count: Int) {
+        // Trigger an in-app notification
+        let alertMessage = "You have \(count) new message(s)."
+        showNotification(title: "New Message", body: alertMessage)
+
+        // Also trigger a system notification
+        let content = UNMutableNotificationContent()
+        content.title = "New Message"
+        content.body = alertMessage
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 
     private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
