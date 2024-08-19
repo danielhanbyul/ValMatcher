@@ -352,7 +352,10 @@ struct DMHomeView: View {
                 }
                 snapshot?.documentChanges.forEach { change in
                     if change.type == .added {
-                        self.notifyUserOfNewMessages(count: 1)
+                        // Ensure the new document has a non-empty "text" field
+                        if let text = change.document.data()["text"] as? String, !text.isEmpty {
+                            self.notifyUserOfNewMessages(count: 1)
+                        }
                     }
                 }
             }
@@ -366,7 +369,10 @@ struct DMHomeView: View {
                 }
                 snapshot?.documentChanges.forEach { change in
                     if change.type == .added {
-                        self.notifyUserOfNewMessages(count: 1)
+                        // Ensure the new document has a non-empty "text" field
+                        if let text = change.document.data()["text"] as? String, !text.isEmpty {
+                            self.notifyUserOfNewMessages(count: 1)
+                        }
                     }
                 }
             }
