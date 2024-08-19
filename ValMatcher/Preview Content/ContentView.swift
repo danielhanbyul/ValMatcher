@@ -322,29 +322,35 @@ struct ContentView: View {
 
         let db = Firestore.firestore()
 
-        db.collection("matches")
+        // Listen for changes in matches where the current user is user1 or user2
+        let userMatchesRef = db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching matches: \(error)")
-                    return
-                }
-                self.updateUnreadMessagesCount(from: snapshot)
-            }
-
-        db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching matches: \(error)")
-                    return
-                }
-                self.updateUnreadMessagesCount(from: snapshot)
+        
+        userMatchesRef.addSnapshotListener { snapshot, error in
+            if let error = error {
+                print("Error fetching matches: \(error)")
+                return
             }
+            self.updateUnreadMessagesCount(from: snapshot)
+        }
 
-        // Listen for real-time messages in the chat collections
-        listenForNewMessages(in: db, currentUserID: currentUserID)
+        // Listen for changes in the messages subcollection
+        userMatchesRef.addSnapshotListener { snapshot, error in
+            if let error = error {
+                print("Error fetching messages: \(error)")
+                return
+            }
+            snapshot?.documentChanges.forEach { change in
+                if change.type == .added {
+                    self.notifyUserOfNewMessages(count: 1)
+                    // Update the unread message count in real-time
+                    self.updateUnreadMessagesCount()
+                }
+            }
+        }
     }
+
 
     private func listenForNewMessages(in db: Firestore, currentUserID: String) {
         // Real-time listener for user1
