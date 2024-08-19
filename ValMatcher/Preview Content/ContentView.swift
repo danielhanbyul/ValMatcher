@@ -359,9 +359,10 @@ struct ContentView: View {
             Firestore.firestore().collection("matches").document(document.documentID).collection("messages")
                 .whereField("senderID", isNotEqualTo: currentUserID)
                 .whereField("isRead", isEqualTo: false)
-                .addSnapshotListener { messageSnapshot, error in
+                .getDocuments { messageSnapshot, error in
                     if let error = error {
                         print("Error fetching messages: \(error)")
+                        group.leave()  // Make sure to call leave even if there's an error
                         return
                     }
                     let newMessagesCount = messageSnapshot?.documents.count ?? 0
@@ -372,11 +373,11 @@ struct ContentView: View {
 
         group.notify(queue: .main) {
             self.unreadMessagesCount = count
-            if count > 0 {
-                self.notifyUserOfNewMessages(count: count)
-            }
+            // Notify observers that the unread messages count has been updated
+            NotificationCenter.default.post(name: Notification.Name("UnreadMessagesUpdated"), object: nil)
         }
     }
+
 
 
     private func notifyUserOfNewMessages(count: Int) {
