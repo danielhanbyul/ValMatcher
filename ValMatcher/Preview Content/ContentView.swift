@@ -26,12 +26,15 @@ struct ContentView: View {
     @State private var notificationCount = 0
     @State private var acknowledgedNotifications: Set<String> = []
     @State private var unreadMessagesCount = 0
-    
+
+    // Dictionary to store the last processed timestamp for each match
+    @State private var lastProcessedTimestamp: [String: Timestamp] = [:]
+
     enum InteractionResult {
         case liked
         case passed
     }
-    
+
     var body: some View {
         ZStack {
             // Matching background with ProfileView
@@ -41,7 +44,7 @@ struct ContentView: View {
                 endPoint: .bottom
             )
             .edgesIgnoringSafeArea(.all)
-            
+
             ScrollView {
                 VStack(spacing: 0) {
                     if currentIndex < users.count {
@@ -136,14 +139,14 @@ struct ContentView: View {
 
             userInfoView
                 .padding(.horizontal)
-            
+
             if !users[currentIndex].additionalImages.isEmpty {
                 userAdditionalImagesView
                     .padding(.horizontal)
             }
         }
     }
-    
+
     private var noMoreUsersView: some View {
         VStack {
             Text("No more users")
@@ -152,7 +155,7 @@ struct ContentView: View {
                 .padding()
         }
     }
-    
+
     private func interactionResultView(_ result: InteractionResult) -> some View {
         Group {
             if result == .liked {
@@ -170,7 +173,7 @@ struct ContentView: View {
             }
         }
     }
-    
+
     private var userInfoView: some View {
         VStack(alignment: .leading, spacing: 20) {
             ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
@@ -310,16 +313,15 @@ struct ContentView: View {
                 }
             }
     }
-    
-    
 
     private func listenForUnreadMessages() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
             return
         }
-        
+
         let db = Firestore.firestore()
+
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
@@ -329,7 +331,7 @@ struct ContentView: View {
                 }
                 self.updateUnreadMessagesCount(from: snapshot)
             }
-        
+
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
@@ -340,47 +342,91 @@ struct ContentView: View {
                 self.updateUnreadMessagesCount(from: snapshot)
             }
 
-        // Listen for changes in the messages collection
+        // Listen for real-time messages in the chat collections
+        listenForNewMessages(in: db, currentUserID: currentUserID)
+    }
+
+    private func listenForNewMessages(in db: Firestore, currentUserID: String) {
+        // Real-time listener for user1
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("Error fetching messages: \(error)")
+                    print("Error fetching matches: \(error)")
                     return
                 }
-                snapshot?.documentChanges.forEach { change in
-                    if change.type == .added {
-                        // Ensure the new document has a non-empty "text" field
-                        if let text = change.document.data()["text"] as? String, !text.isEmpty {
-                            self.notifyUserOfNewMessages(count: 1)
+
+                for document in snapshot?.documents ?? [] {
+                    let matchID = document.documentID
+                    db.collection("matches").document(matchID).collection("messages")
+                        .whereField("senderID", isNotEqualTo: currentUserID)
+                        .whereField("isRead", isEqualTo: false)
+                        .order(by: "timestamp")
+                        .addSnapshotListener { messageSnapshot, error in
+                            if let error = error {
+                                print("Error fetching messages: \(error)")
+                                return
+                            }
+                            self.processNewMessages(messageSnapshot, for: matchID)
                         }
-                    }
                 }
             }
 
+        // Real-time listener for user2
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("Error fetching messages: \(error)")
+                    print("Error fetching matches: \(error)")
                     return
                 }
-                snapshot?.documentChanges.forEach { change in
-                    if change.type == .added {
-                        // Ensure the new document has a non-empty "text" field
-                        if let text = change.document.data()["text"] as? String, !text.isEmpty {
-                            self.notifyUserOfNewMessages(count: 1)
+
+                for document in snapshot?.documents ?? [] {
+                    let matchID = document.documentID
+                    db.collection("matches").document(matchID).collection("messages")
+                        .whereField("senderID", isNotEqualTo: currentUserID)
+                        .whereField("isRead", isEqualTo: false)
+                        .order(by: "timestamp")
+                        .addSnapshotListener { messageSnapshot, error in
+                            if let error = error {
+                                print("Error fetching messages: \(error)")
+                                return
+                            }
+                            self.processNewMessages(messageSnapshot, for: matchID)
                         }
-                    }
                 }
             }
     }
 
-    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot?) {
+    private func processNewMessages(_ messageSnapshot: QuerySnapshot?, for matchID: String) {
+        guard let documents = messageSnapshot?.documents else { return }
+
+        for document in documents {
+            let data = document.data()
+            let timestamp = data["timestamp"] as? Timestamp ?? Timestamp()
+
+            // Check if this message is newer than the last processed message for this match
+            if let lastTimestamp = lastProcessedTimestamp[matchID], timestamp.seconds <= lastTimestamp.seconds {
+                continue // Skip this message as it's already processed
+            }
+
+            // Update the last processed timestamp for this match
+            lastProcessedTimestamp[matchID] = timestamp
+
+            // Notify the user of the new message
+            notifyUserOfNewMessages(count: 1)
+        }
+
+        // Update the unread message count in real-time
+        updateUnreadMessagesCount()
+    }
+
+
+    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot? = nil) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         var count = 0
         let group = DispatchGroup()
-        
+
         snapshot?.documents.forEach { document in
             group.enter()
             Firestore.firestore().collection("matches").document(document.documentID).collection("messages")
@@ -389,17 +435,14 @@ struct ContentView: View {
                 .getDocuments { messageSnapshot, error in
                     if let error = error {
                         print("Error fetching messages: \(error)")
+                        group.leave()
                         return
                     }
-                    let newMessagesCount = messageSnapshot?.documents.count ?? 0
-                    if newMessagesCount > 0 {
-                        self.notifyUserOfNewMessages(count: newMessagesCount)
-                    }
-                    count += newMessagesCount
+                    count += messageSnapshot?.documents.count ?? 0
                     group.leave()
                 }
         }
-        
+
         group.notify(queue: .main) {
             self.unreadMessagesCount = count
         }
@@ -407,13 +450,23 @@ struct ContentView: View {
 
     private func notifyUserOfNewMessages(count: Int) {
         // Trigger an in-app notification
-        alertMessage = "You have \(count) new message(s)."
-        showAlert = true
+        let alertMessage = "You have \(count) new message(s)."
+        showNotification(title: "New Message", body: alertMessage)
 
         // Also trigger a system notification
         let content = UNMutableNotificationContent()
         content.title = "New Message"
-        content.body = "You have a new message"
+        content.body = alertMessage
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    private func showNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
@@ -422,7 +475,7 @@ struct ContentView: View {
 
     private func likeAction() {
         interactionResult = .liked
-        
+
         moveToNextUser()
 
         guard let currentUserID = Auth.auth().currentUser?.uid else {
@@ -509,7 +562,7 @@ struct ContentView: View {
 
     private func createDMChat(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
         let db = Firestore.firestore()
-        
+
         // Check if a chat already exists between the two users
         db.collection("chats")
             .whereField("user1", isEqualTo: currentUserID)
@@ -519,7 +572,7 @@ struct ContentView: View {
                     print("Error checking existing chat: \(error.localizedDescription)")
                     return
                 }
-                
+
                 if querySnapshot?.documents.isEmpty == true {
                     let chatData: [String: Any] = [
                         "user1": currentUserID,
@@ -544,7 +597,6 @@ struct ContentView: View {
             }
     }
 
-
     private func sendNotification(to userID: String, message: String) {
         let db = Firestore.firestore()
         let notificationData: [String: Any] = [
@@ -564,7 +616,7 @@ struct ContentView: View {
 
     private func passAction() {
         interactionResult = .passed
-        
+
         moveToNextUser()
     }
 
@@ -608,7 +660,7 @@ struct NotificationsView: View {
         ZStack {
             LinearGradient(gradient: Gradient(colors: [Color.black, Color.gray]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
-            
+
             VStack {
                 if notifications.isEmpty {
                     Text("No notifications")
@@ -706,7 +758,7 @@ struct UserCardView: View {
                 }
                 .tabViewStyle(PageTabViewStyle())
                 .frame(height: UIScreen.main.bounds.height * 0.5)
-                
+
                 HStack {
                     Button(action: {
                         currentMediaIndex = max(currentMediaIndex - 1, 0)
@@ -719,9 +771,9 @@ struct UserCardView: View {
                             .clipShape(Circle())
                     }
                     .padding(.leading, 20)
-                    
+
                     Spacer()
-                    
+
                     Button(action: {
                         currentMediaIndex = min(currentMediaIndex + 1, (user.additionalImages.count + newMedia.count) - 1)
                     }) {
@@ -734,7 +786,7 @@ struct UserCardView: View {
                     }
                     .padding(.trailing, 20)
                 }
-                
+
                 VStack {
                     Spacer()
                     HStack {
@@ -748,7 +800,7 @@ struct UserCardView: View {
                     .padding(.bottom, 20)
                 }
             }
-            
+
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Username: \(user.name)")
