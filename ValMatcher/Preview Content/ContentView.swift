@@ -9,6 +9,7 @@ import Firebase
 import FirebaseFirestore
 import AVKit
 import FirebaseAnalytics
+import UserNotifications
 
 struct ContentView: View {
     @StateObject var userProfileViewModel: UserProfileViewModel
@@ -355,13 +356,43 @@ struct ContentView: View {
             let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
 
             if !newMessages.isEmpty {
-                let unreadCount = newMessages.count
-                self.updateUnreadMessagesCount()
-                self.notifyUserOfNewMessages(count: unreadCount)
+                // Assume that all new messages are from the same user in a single update
+                let firstNewMessage = newMessages.first
+                let senderID = firstNewMessage?.document.data()["senderID"] as? String
+                let messageText = firstNewMessage?.document.data()["text"] as? String ?? "You have a new message"
+                
+                if let senderID = senderID {
+                    db.collection("users").document(senderID).getDocument { document, error in
+                        if let error = error {
+                            print("Error fetching sender's name: \(error)")
+                            return
+                        }
+
+                        let senderName = document?.data()?["name"] as? String ?? "Unknown User"
+                        self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
+                        self.updateUnreadMessagesCount()
+                    }
+                } else {
+                    self.updateUnreadMessagesCount()
+                }
             }
         }
     }
 
+    private func notifyUserOfNewMessages(senderName: String, messageText: String) {
+        // Trigger an in-app notification
+        let alertMessage = "\(senderName): \(messageText)"
+        showNotification(title: "New Message", body: alertMessage)
+
+        // Also trigger a system notification
+        let content = UNMutableNotificationContent()
+        content.title = "New Message from \(senderName)"
+        content.body = messageText
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
 
     private func updateUnreadMessagesCount(from snapshot: QuerySnapshot? = nil) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
@@ -387,21 +418,6 @@ struct ContentView: View {
         group.notify(queue: .main) {
             self.unreadMessagesCount = count
         }
-    }
-
-    private func notifyUserOfNewMessages(count: Int) {
-        // Trigger an in-app notification
-        let alertMessage = "You have \(count) new message(s)."
-        showNotification(title: "New Message", body: alertMessage)
-
-        // Also trigger a system notification
-        let content = UNMutableNotificationContent()
-        content.title = "New Message"
-        content.body = alertMessage
-        content.sound = .default
-
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
     }
 
     private func showNotification(title: String, body: String) {
@@ -630,6 +646,7 @@ struct NotificationsView: View {
         }
     }
 }
+
 
 struct UserCardView: View {
     var user: UserProfile
