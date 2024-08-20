@@ -11,66 +11,6 @@ import FirebaseFirestore
 import FirebaseAuth
 import UserNotifications
 
-import SwiftUI
-import Firebase
-import Combine
-
-class FirebaseCombineManager: ObservableObject {
-    @Published var unreadMessagesCount = 0
-    private var cancellables: Set<AnyCancellable> = []
-    
-    // Method to listen for unread messages
-    func startListening(currentUserID: String) {
-        let db = Firestore.firestore()
-        
-        // Create a listener for Firestore snapshots and wrap it in a Combine publisher
-        let listener = db.collection("matches")
-            .whereField("user1", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching matches: \(error)")
-                    return
-                }
-                self.handleSnapshot(snapshot, currentUserID: currentUserID)
-            }
-        
-        // Keep a reference to the listener to manage its lifecycle
-        let _ = listener  // In a real implementation, you might store this reference if needed
-    }
-    
-    // Handle snapshot changes
-    private func handleSnapshot(_ snapshot: QuerySnapshot?, currentUserID: String) {
-        var totalUnread = 0
-        let group = DispatchGroup()
-
-        snapshot?.documents.forEach { document in
-            group.enter()
-            let matchID = document.documentID
-            Firestore.firestore().collection("matches").document(matchID).collection("messages")
-                .whereField("senderID", isNotEqualTo: currentUserID)
-                .whereField("isRead", isEqualTo: false)
-                .getDocuments { messageSnapshot, error in
-                    if let error = error {
-                        print("Error fetching messages: \(error)")
-                        group.leave()
-                        return
-                    }
-                    totalUnread += messageSnapshot?.documents.count ?? 0
-                    group.leave()
-                }
-        }
-
-        group.notify(queue: .main) {
-            self.unreadMessagesCount = totalUnread
-        }
-    }
-    
-    // To stop the listener and clear Combine's cancellables
-    func stopListening() {
-        cancellables.forEach { $0.cancel() }
-        cancellables.removeAll()
-    }
-}
 
 struct DMHomeView: View {
     @State private var matches = [Chat]()
