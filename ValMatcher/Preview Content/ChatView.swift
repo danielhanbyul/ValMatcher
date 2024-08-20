@@ -153,6 +153,7 @@ struct ChatView: View {
                 print("Message sent successfully")
                 self.newMessage = ""
                 self.scrollToBottom = true
+                updateHasUnreadMessages(for: matchID, hasUnread: true)
             }
         }
     }
@@ -200,8 +201,6 @@ struct ChatView: View {
             }
         }
     }
-
-
 }
 
 

@@ -11,19 +11,12 @@ import FirebaseFirestore
 import FirebaseAuth
 import UserNotifications
 
-
 struct DMHomeView: View {
     @State private var matches = [Chat]()
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
-    
-    @State private var unreadMessagesCount: Int = 0
-
-    var hasUnreadMessages: Bool {
-        return unreadMessagesCount > 0
-    }
 
     var body: some View {
         ZStack {
@@ -247,7 +240,6 @@ struct DMHomeView: View {
         var count = 0
         let group = DispatchGroup()
 
-        // Create a mutable copy of matches
         var updatedMatches = matches
 
         for (index, match) in updatedMatches.enumerated() {
@@ -278,11 +270,9 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-            self.matches = updatedMatches  // Update the matches array with the modified values
-            self.unreadMessagesCount = count  // Ensure this updates the badge in ContentView
+            self.matches = updatedMatches
         }
     }
-
 
     private func mergeAndRemoveDuplicates(existingMatches: [Chat], newMatches: [Chat]) -> [Chat] {
         var combinedMatches = existingMatches
@@ -332,59 +322,61 @@ struct DMHomeView: View {
         }
 
         let db = Firestore.firestore()
-
-        // Set up listener for new messages
-        db.collection("matches")
+        
+        let matchQuery = db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching matches: \(error)")
-                    return
-                }
+            .whereField("user2", isEqualTo: currentUserID)
 
-                self.updateUnreadMessagesCount(from: self.matches)
+        matchQuery.addSnapshotListener { snapshot, error in
+            if let error = error {
+                print("Error fetching matches: \(error)")
+                return
+            }
 
-                snapshot?.documentChanges.forEach { change in
-                    if change.type == .added {
-                        if let match = try? change.document.data(as: Chat.self) {
-                            db.collection("matches").document(match.id!).collection("messages")
-                                .whereField("isRead", isEqualTo: false)
-                                .whereField("senderID", isNotEqualTo: currentUserID)
-                                .addSnapshotListener { messageSnapshot, error in
-                                    if let error = error {
-                                        print("Error fetching new messages: \(error)")
-                                        return
-                                    }
-
-                                    if let messages = messageSnapshot?.documents, let lastMessage = messages.last {
-                                        if let senderName = match.user1 == currentUserID ? match.user2Name : match.user1Name,
-                                           let messageText = lastMessage.data()["text"] as? String {
-                                            self.notifyUserOfNewMessages(senderName: senderName, message: messageText)
-                                        }
-                                    }
-                                    self.updateUnreadMessagesCount(from: self.matches)
-                                }
-                        }
-                    }
+            snapshot?.documents.forEach { document in
+                if let matchID = document.documentID as String? {
+                    self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID)
                 }
             }
+        }
     }
 
-    private func notifyUserOfNewMessages(senderName: String, message: String) {
+    private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
+        let messageQuery = db.collection("matches").document(matchID).collection("messages")
+            .whereField("senderID", isNotEqualTo: currentUserID)
+            .whereField("isRead", isEqualTo: false)
+            .order(by: "timestamp")
+
+        messageQuery.addSnapshotListener { messageSnapshot, error in
+            if let error = error {
+                print("Error fetching messages: \(error)")
+                return
+            }
+
+            let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
+
+            if !newMessages.isEmpty {
+                let unreadCount = newMessages.count
+                self.updateUnreadMessagesCount(from: self.matches) // Fix the error by passing self.matches
+                self.notifyUserOfNewMessages(count: unreadCount)
+            }
+        }
+    }
+
+    private func notifyUserOfNewMessages(count: Int) {
         // Trigger an in-app notification
-        let alertMessage = "\(senderName): \(message)"
+        let alertMessage = "You have \(count) new message(s)."
         showNotification(title: "New Message", body: alertMessage)
 
         // Also trigger a system notification
         let content = UNMutableNotificationContent()
-        content.title = senderName
-        content.body = message
+        content.title = "New Message"
+        content.body = alertMessage
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
-
 
     private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
         var uniqueChats = [Chat]()
@@ -413,7 +405,6 @@ struct DMHomeView: View {
         UNUserNotificationCenter.current().add(request)
     }
 }
-
 
 let dateFormatter: DateFormatter = {
     let formatter = DateFormatter()
