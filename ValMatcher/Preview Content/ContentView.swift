@@ -27,9 +27,7 @@ struct ContentView: View {
     @State private var notificationCount = 0
     @State private var acknowledgedNotifications: Set<String> = []
     @State private var unreadMessagesCount = 0
-
-    // Dictionary to store the last processed timestamp for each match
-    @State private var lastProcessedTimestamp: [String: Timestamp] = [:]
+    @State private var messageListeners: [String: ListenerRegistration] = [:]  // Dictionary to hold listeners
 
     enum InteractionResult {
         case liked
@@ -335,7 +333,10 @@ struct ContentView: View {
 
             snapshot?.documents.forEach { document in
                 if let matchID = document.documentID as String? {
-                    self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID)
+                    if self.messageListeners[matchID] == nil {
+                        // Only set up a new listener if one doesn't already exist
+                        self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID)
+                    }
                 }
             }
         }
@@ -347,7 +348,8 @@ struct ContentView: View {
             .whereField("isRead", isEqualTo: false)
             .order(by: "timestamp")
 
-        messageQuery.addSnapshotListener { messageSnapshot, error in
+        // Store the listener in the dictionary
+        let listener = messageQuery.addSnapshotListener { messageSnapshot, error in
             if let error = error {
                 print("Error fetching messages: \(error)")
                 return
@@ -356,20 +358,10 @@ struct ContentView: View {
             let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
 
             if !newMessages.isEmpty {
-                // Assume that all new messages are from the same user in a single update
                 let firstNewMessage = newMessages.first
                 let senderID = firstNewMessage?.document.data()["senderID"] as? String
                 let messageText = firstNewMessage?.document.data()["text"] as? String ?? "You have a new message"
-
-                // Update hasUnreadMessages to true
-                db.collection("matches").document(matchID).updateData(["hasUnreadMessages": true]) { err in
-                    if let err = err {
-                        print("Error updating hasUnreadMessages: \(err)")
-                    } else {
-                        print("hasUnreadMessages updated to true for matchID \(matchID)")
-                    }
-                }
-
+                
                 if let senderID = senderID {
                     db.collection("users").document(senderID).getDocument { document, error in
                         if let error = error {
@@ -386,8 +378,10 @@ struct ContentView: View {
                 }
             }
         }
-    }
 
+        // Store the listener so it remains active
+        self.messageListeners[matchID] = listener
+    }
 
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
         // Trigger an in-app notification
@@ -401,15 +395,8 @@ struct ContentView: View {
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request) { (error) in
-            if let error = error {
-                print("Error showing notification: \(error.localizedDescription)")
-            } else {
-                print("Notification successfully triggered for new message from \(senderName)")
-            }
-        }
+        UNUserNotificationCenter.current().add(request)
     }
-
 
     private func updateUnreadMessagesCount(from snapshot: QuerySnapshot? = nil) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
