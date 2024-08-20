@@ -11,6 +11,59 @@ import FirebaseFirestore
 import FirebaseAuth
 import UserNotifications
 
+class FirebaseListenerManager: ObservableObject {
+    static let shared = FirebaseListenerManager()
+    
+    @Published var unreadMessagesCount: Int = 0
+    
+    private var listeners: [ListenerRegistration] = []
+
+    func startListeningForUnreadMessages(currentUserID: String) {
+        let db = Firestore.firestore()
+        let query = db.collection("matches").whereField("user1", isEqualTo: currentUserID)
+        
+        let listener = query.addSnapshotListener { [weak self] snapshot, error in
+            if let error = error {
+                print("Error fetching matches: \(error)")
+                return
+            }
+            self?.updateUnreadMessagesCount(from: snapshot)
+        }
+        
+        listeners.append(listener)
+    }
+    
+    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot?) {
+        var count = 0
+        let group = DispatchGroup()
+
+        snapshot?.documents.forEach { document in
+            group.enter()
+            Firestore.firestore().collection("matches").document(document.documentID).collection("messages")
+                .whereField("isRead", isEqualTo: false)
+                .getDocuments { messageSnapshot, error in
+                    if let error = error {
+                        print("Error fetching messages: \(error)")
+                        group.leave()
+                        return
+                    }
+                    count += messageSnapshot?.documents.count ?? 0
+                    group.leave()
+                }
+        }
+
+        group.notify(queue: .main) {
+            self.unreadMessagesCount = count
+        }
+    }
+    
+    func stopListening() {
+        listeners.forEach { $0.remove() }
+        listeners.removeAll()
+    }
+}
+
+
 struct DMHomeView: View {
     @State private var matches = [Chat]()
     @State private var currentUserID = Auth.auth().currentUser?.uid
