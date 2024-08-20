@@ -332,28 +332,32 @@ struct ContentView: View {
                 print("Error fetching matches: \(error)")
                 return
             }
+            
+            // Update the unread message count based on the new snapshot
             self.updateUnreadMessagesCount(from: snapshot)
-        }
 
-        // Listen for changes in the messages subcollection
-        userMatchesRef.addSnapshotListener { snapshot, error in
-            if let error = error {
-                print("Error fetching messages: \(error)")
-                return
-            }
+            // Listen for changes in the messages subcollection for the matched users
             snapshot?.documentChanges.forEach { change in
                 if change.type == .added {
+                    // Notify user of new messages if a new message is added
                     self.notifyUserOfNewMessages(count: 1)
                     // Update the unread message count in real-time
-                    self.updateUnreadMessagesCount()
+                    self.updateUnreadMessagesCount(from: snapshot)
                 }
             }
         }
     }
 
 
-    private func listenForNewMessages(in db: Firestore, currentUserID: String) {
-        // Real-time listener for user1
+
+    func listenForNewMessages() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("Error: User not authenticated")
+            return
+        }
+
+        let db = Firestore.firestore()
+
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
@@ -361,24 +365,9 @@ struct ContentView: View {
                     print("Error fetching matches: \(error)")
                     return
                 }
-
-                for document in snapshot?.documents ?? [] {
-                    let matchID = document.documentID
-                    db.collection("matches").document(matchID).collection("messages")
-                        .whereField("senderID", isNotEqualTo: currentUserID)
-                        .whereField("isRead", isEqualTo: false)
-                        .order(by: "timestamp")
-                        .addSnapshotListener { messageSnapshot, error in
-                            if let error = error {
-                                print("Error fetching messages: \(error)")
-                                return
-                            }
-                            self.processNewMessages(messageSnapshot, for: matchID)
-                        }
-                }
+                self.updateUnreadMessagesCount(from: snapshot)
             }
 
-        // Real-time listener for user2
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
@@ -386,49 +375,11 @@ struct ContentView: View {
                     print("Error fetching matches: \(error)")
                     return
                 }
-
-                for document in snapshot?.documents ?? [] {
-                    let matchID = document.documentID
-                    db.collection("matches").document(matchID).collection("messages")
-                        .whereField("senderID", isNotEqualTo: currentUserID)
-                        .whereField("isRead", isEqualTo: false)
-                        .order(by: "timestamp")
-                        .addSnapshotListener { messageSnapshot, error in
-                            if let error = error {
-                                print("Error fetching messages: \(error)")
-                                return
-                            }
-                            self.processNewMessages(messageSnapshot, for: matchID)
-                        }
-                }
+                self.updateUnreadMessagesCount(from: snapshot)
             }
     }
 
-    private func processNewMessages(_ messageSnapshot: QuerySnapshot?, for matchID: String) {
-        guard let documents = messageSnapshot?.documents else { return }
-
-        for document in documents {
-            let data = document.data()
-            let timestamp = data["timestamp"] as? Timestamp ?? Timestamp()
-
-            // Check if this message is newer than the last processed message for this match
-            if let lastTimestamp = lastProcessedTimestamp[matchID], timestamp.seconds <= lastTimestamp.seconds {
-                continue // Skip this message as it's already processed
-            }
-
-            // Update the last processed timestamp for this match
-            lastProcessedTimestamp[matchID] = timestamp
-
-            // Notify the user of the new message
-            notifyUserOfNewMessages(count: 1)
-        }
-
-        // Update the unread message count in real-time
-        updateUnreadMessagesCount()
-    }
-
-
-    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot? = nil) {
+    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot?) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         var count = 0
         let group = DispatchGroup()
@@ -451,8 +402,16 @@ struct ContentView: View {
 
         group.notify(queue: .main) {
             self.unreadMessagesCount = count
+            updateBadgeCount() // Update the app badge with the total unread count
         }
     }
+    
+    private func updateBadgeCount() {
+        DispatchQueue.main.async {
+            UIApplication.shared.applicationIconBadgeNumber = self.unreadMessagesCount
+        }
+    }
+
 
     private func notifyUserOfNewMessages(count: Int) {
         // Trigger an in-app notification
@@ -654,9 +613,12 @@ struct BadgeView: View {
                 .background(Color.red)
                 .clipShape(Circle())
                 .offset(x: 10, y: -10)
+                .transition(.scale)
+                .animation(.spring())
         }
     }
 }
+
 
 struct NotificationsView: View {
     @Binding var notifications: [String]

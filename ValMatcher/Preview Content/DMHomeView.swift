@@ -17,6 +17,13 @@ struct DMHomeView: View {
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
+    
+    @State private var unreadMessagesCount: Int = 0
+
+    // Computed property to check if there are any unread messages
+    var hasUnreadMessages: Bool {
+        return unreadMessagesCount > 0
+    }
 
     var body: some View {
         ZStack {
