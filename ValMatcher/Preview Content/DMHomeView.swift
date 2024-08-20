@@ -247,6 +247,7 @@ struct DMHomeView: View {
         var count = 0
         let group = DispatchGroup()
 
+        // Create a mutable copy of matches
         var updatedMatches = matches
 
         for (index, match) in updatedMatches.enumerated() {
@@ -277,9 +278,11 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-            self.matches = updatedMatches
+            self.matches = updatedMatches  // Update the matches array with the modified values
+            self.unreadMessagesCount = count  // Ensure this updates the badge in ContentView
         }
     }
+
 
     private func mergeAndRemoveDuplicates(existingMatches: [Chat], newMatches: [Chat]) -> [Chat] {
         var combinedMatches = existingMatches
@@ -341,7 +344,6 @@ struct DMHomeView: View {
 
                 self.updateUnreadMessagesCount(from: self.matches)
 
-                // Notify user of new messages if a new message is added
                 snapshot?.documentChanges.forEach { change in
                     if change.type == .added {
                         if let match = try? change.document.data(as: Chat.self) {
@@ -368,7 +370,6 @@ struct DMHomeView: View {
             }
     }
 
-
     private func notifyUserOfNewMessages(senderName: String, message: String) {
         // Trigger an in-app notification
         let alertMessage = "\(senderName): \(message)"
@@ -376,13 +377,14 @@ struct DMHomeView: View {
 
         // Also trigger a system notification
         let content = UNMutableNotificationContent()
-        content.title = "New Message"
-        content.body = alertMessage
+        content.title = senderName
+        content.body = message
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
+
 
     private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
         var uniqueChats = [Chat]()
