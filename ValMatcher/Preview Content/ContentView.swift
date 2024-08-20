@@ -27,7 +27,6 @@ struct ContentView: View {
     @State private var acknowledgedNotifications: Set<String> = []
     @State private var unreadMessagesCount = 0
 
-    // Dictionary to store the last processed timestamp for each match
     @State private var lastProcessedTimestamp: [String: Timestamp] = [:]
 
     enum InteractionResult {
@@ -37,7 +36,6 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            // Matching background with ProfileView
             LinearGradient(
                 gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]),
                 startPoint: .top,

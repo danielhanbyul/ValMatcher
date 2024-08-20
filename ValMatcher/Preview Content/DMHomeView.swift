@@ -17,6 +17,12 @@ struct DMHomeView: View {
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
+    
+    @State private var unreadMessagesCount: Int = 0
+
+    var hasUnreadMessages: Bool {
+        return unreadMessagesCount > 0
+    }
 
     var body: some View {
         ZStack {
@@ -322,50 +328,49 @@ struct DMHomeView: View {
         }
 
         let db = Firestore.firestore()
-        
-        let matchQuery = db.collection("matches")
+
+        // Set up listener for new messages
+        db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
-            .whereField("user2", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error fetching matches: \(error)")
+                    return
+                }
 
-        matchQuery.addSnapshotListener { snapshot, error in
-            if let error = error {
-                print("Error fetching matches: \(error)")
-                return
-            }
+                self.updateUnreadMessagesCount(from: self.matches)
 
-            snapshot?.documents.forEach { document in
-                if let matchID = document.documentID as String? {
-                    self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID)
+                // Notify user of new messages if a new message is added
+                snapshot?.documentChanges.forEach { change in
+                    if change.type == .added {
+                        if let match = try? change.document.data(as: Chat.self) {
+                            db.collection("matches").document(match.id!).collection("messages")
+                                .whereField("isRead", isEqualTo: false)
+                                .whereField("senderID", isNotEqualTo: currentUserID)
+                                .addSnapshotListener { messageSnapshot, error in
+                                    if let error = error {
+                                        print("Error fetching new messages: \(error)")
+                                        return
+                                    }
+
+                                    if let messages = messageSnapshot?.documents, let lastMessage = messages.last {
+                                        if let senderName = match.user1 == currentUserID ? match.user2Name : match.user1Name,
+                                           let messageText = lastMessage.data()["text"] as? String {
+                                            self.notifyUserOfNewMessages(senderName: senderName, message: messageText)
+                                        }
+                                    }
+                                    self.updateUnreadMessagesCount(from: self.matches)
+                                }
+                        }
+                    }
                 }
             }
-        }
     }
 
-    private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
-        let messageQuery = db.collection("matches").document(matchID).collection("messages")
-            .whereField("senderID", isNotEqualTo: currentUserID)
-            .whereField("isRead", isEqualTo: false)
-            .order(by: "timestamp")
 
-        messageQuery.addSnapshotListener { messageSnapshot, error in
-            if let error = error {
-                print("Error fetching messages: \(error)")
-                return
-            }
-
-            let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
-
-            if !newMessages.isEmpty {
-                let unreadCount = newMessages.count
-                self.updateUnreadMessagesCount(from: self.matches) // Fix the error by passing self.matches
-                self.notifyUserOfNewMessages(count: unreadCount)
-            }
-        }
-    }
-
-    private func notifyUserOfNewMessages(count: Int) {
+    private func notifyUserOfNewMessages(senderName: String, message: String) {
         // Trigger an in-app notification
-        let alertMessage = "You have \(count) new message(s)."
+        let alertMessage = "\(senderName): \(message)"
         showNotification(title: "New Message", body: alertMessage)
 
         // Also trigger a system notification
@@ -405,6 +410,7 @@ struct DMHomeView: View {
         UNUserNotificationCenter.current().add(request)
     }
 }
+
 
 let dateFormatter: DateFormatter = {
     let formatter = DateFormatter()

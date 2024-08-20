@@ -8,6 +8,8 @@
 import SwiftUI
 import Firebase
 import UserNotifications
+import FirebaseMessaging
+
 
 @main
 struct ValMatcherApp: App {
