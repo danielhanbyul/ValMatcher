@@ -10,6 +10,7 @@ import Firebase
 import UserNotifications
 import FirebaseMessaging
 
+
 @main
 struct ValMatcherApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
@@ -22,13 +23,18 @@ struct ValMatcherApp: App {
 }
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-
+    
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Configure Firebase
         FirebaseApp.configure()
         
         // Request notification authorization
-        requestNotificationAuthorization()
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            print("Notification permission granted: \(granted)")
+            if let error = error {
+                print("Error requesting notification permissions: \(error.localizedDescription)")
+            }
+        }
         
         // Set delegate to handle notifications
         UNUserNotificationCenter.current().delegate = self
@@ -75,7 +81,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     private func navigateToChat(withMessageId messageId: String) {
         // Implement navigation logic here
         // For example, trigger a deep link or send a notification within the app to open the chat screen
-        // This logic depends on your app's navigation structure
     }
 
     // Handle silent notifications for background fetches or data updates
@@ -97,14 +102,5 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Implement data fetching logic
         // For example, you could call a function that updates the unread message count or fetches new data
         completion(.newData)
-    }
-
-    private func requestNotificationAuthorization() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if let error = error {
-                print("Error requesting notification permissions: \(error.localizedDescription)")
-            }
-            print("Notification permission granted: \(granted)")
-        }
     }
 }
