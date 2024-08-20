@@ -17,13 +17,6 @@ struct DMHomeView: View {
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
-    
-    @State private var unreadMessagesCount: Int = 0
-
-    // Computed property to check if there are any unread messages
-    var hasUnreadMessages: Bool {
-        return unreadMessagesCount > 0
-    }
 
     var body: some View {
         ZStack {
@@ -329,60 +322,45 @@ struct DMHomeView: View {
         }
 
         let db = Firestore.firestore()
-        db.collection("matches")
+        
+        let matchQuery = db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching matches: \(error)")
-                    return
-                }
-                self.updateUnreadMessagesCount(from: self.matches)
-            }
-
-        db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching matches: \(error)")
-                    return
-                }
-                self.updateUnreadMessagesCount(from: self.matches)
+
+        matchQuery.addSnapshotListener { snapshot, error in
+            if let error = error {
+                print("Error fetching matches: \(error)")
+                return
             }
 
-        // Listen for changes in the messages collection
-        db.collection("matches")
-            .whereField("user1", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching messages: \(error)")
-                    return
+            snapshot?.documents.forEach { document in
+                if let matchID = document.documentID as String? {
+                    self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID)
                 }
-                snapshot?.documentChanges.forEach { change in
-                    if change.type == .added {
-                        // Ensure the new document has a non-empty "text" field
-                        if let text = change.document.data()["text"] as? String, !text.isEmpty {
-                            self.notifyUserOfNewMessages(count: 1)
-                        }
-                    }
-                }
+            }
+        }
+    }
+
+    private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
+        let messageQuery = db.collection("matches").document(matchID).collection("messages")
+            .whereField("senderID", isNotEqualTo: currentUserID)
+            .whereField("isRead", isEqualTo: false)
+            .order(by: "timestamp")
+
+        messageQuery.addSnapshotListener { messageSnapshot, error in
+            if let error = error {
+                print("Error fetching messages: \(error)")
+                return
             }
 
-        db.collection("matches")
-            .whereField("user2", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching messages: \(error)")
-                    return
-                }
-                snapshot?.documentChanges.forEach { change in
-                    if change.type == .added {
-                        // Ensure the new document has a non-empty "text" field
-                        if let text = change.document.data()["text"] as? String, !text.isEmpty {
-                            self.notifyUserOfNewMessages(count: 1)
-                        }
-                    }
-                }
+            let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
+
+            if !newMessages.isEmpty {
+                let unreadCount = newMessages.count
+                self.updateUnreadMessagesCount(from: self.matches) // Fix the error by passing self.matches
+                self.notifyUserOfNewMessages(count: unreadCount)
             }
+        }
     }
 
     private func notifyUserOfNewMessages(count: Int) {

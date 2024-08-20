@@ -321,65 +321,48 @@ struct ContentView: View {
         }
 
         let db = Firestore.firestore()
-
-        // Listen for changes in matches where the current user is user1 or user2
-        let userMatchesRef = db.collection("matches")
+        
+        let matchQuery = db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .whereField("user2", isEqualTo: currentUserID)
-        
-        userMatchesRef.addSnapshotListener { snapshot, error in
+
+        matchQuery.addSnapshotListener { snapshot, error in
             if let error = error {
                 print("Error fetching matches: \(error)")
                 return
             }
-            
-            // Update the unread message count based on the new snapshot
-            self.updateUnreadMessagesCount(from: snapshot)
 
-            // Listen for changes in the messages subcollection for the matched users
-            snapshot?.documentChanges.forEach { change in
-                if change.type == .added {
-                    // Notify user of new messages if a new message is added
-                    self.notifyUserOfNewMessages(count: 1)
-                    // Update the unread message count in real-time
-                    self.updateUnreadMessagesCount(from: snapshot)
+            snapshot?.documents.forEach { document in
+                if let matchID = document.documentID as String? {
+                    self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID)
                 }
             }
         }
     }
 
+    private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
+        let messageQuery = db.collection("matches").document(matchID).collection("messages")
+            .whereField("senderID", isNotEqualTo: currentUserID)
+            .whereField("isRead", isEqualTo: false)
+            .order(by: "timestamp")
 
+        messageQuery.addSnapshotListener { messageSnapshot, error in
+            if let error = error {
+                print("Error fetching messages: \(error)")
+                return
+            }
 
-    func listenForNewMessages() {
-        guard let currentUserID = Auth.auth().currentUser?.uid else {
-            print("Error: User not authenticated")
-            return
+            let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
+
+            if !newMessages.isEmpty {
+                let unreadCount = newMessages.count
+                self.updateUnreadMessagesCount()
+                self.notifyUserOfNewMessages(count: unreadCount)
+            }
         }
-
-        let db = Firestore.firestore()
-
-        db.collection("matches")
-            .whereField("user1", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching matches: \(error)")
-                    return
-                }
-                self.updateUnreadMessagesCount(from: snapshot)
-            }
-
-        db.collection("matches")
-            .whereField("user2", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching matches: \(error)")
-                    return
-                }
-                self.updateUnreadMessagesCount(from: snapshot)
-            }
     }
 
-    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot?) {
+    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot? = nil) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         var count = 0
         let group = DispatchGroup()
@@ -402,16 +385,8 @@ struct ContentView: View {
 
         group.notify(queue: .main) {
             self.unreadMessagesCount = count
-            updateBadgeCount() // Update the app badge with the total unread count
         }
     }
-    
-    private func updateBadgeCount() {
-        DispatchQueue.main.async {
-            UIApplication.shared.applicationIconBadgeNumber = self.unreadMessagesCount
-        }
-    }
-
 
     private func notifyUserOfNewMessages(count: Int) {
         // Trigger an in-app notification
@@ -613,12 +588,9 @@ struct BadgeView: View {
                 .background(Color.red)
                 .clipShape(Circle())
                 .offset(x: 10, y: -10)
-                .transition(.scale)
-                .animation(.spring())
         }
     }
 }
-
 
 struct NotificationsView: View {
     @Binding var notifications: [String]
