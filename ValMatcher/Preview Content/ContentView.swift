@@ -360,7 +360,16 @@ struct ContentView: View {
                 let firstNewMessage = newMessages.first
                 let senderID = firstNewMessage?.document.data()["senderID"] as? String
                 let messageText = firstNewMessage?.document.data()["text"] as? String ?? "You have a new message"
-                
+
+                // Update hasUnreadMessages to true
+                db.collection("matches").document(matchID).updateData(["hasUnreadMessages": true]) { err in
+                    if let err = err {
+                        print("Error updating hasUnreadMessages: \(err)")
+                    } else {
+                        print("hasUnreadMessages updated to true for matchID \(matchID)")
+                    }
+                }
+
                 if let senderID = senderID {
                     db.collection("users").document(senderID).getDocument { document, error in
                         if let error = error {
@@ -379,6 +388,7 @@ struct ContentView: View {
         }
     }
 
+
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
         // Trigger an in-app notification
         let alertMessage = "\(senderName): \(messageText)"
@@ -391,8 +401,15 @@ struct ContentView: View {
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        UNUserNotificationCenter.current().add(request) { (error) in
+            if let error = error {
+                print("Error showing notification: \(error.localizedDescription)")
+            } else {
+                print("Notification successfully triggered for new message from \(senderName)")
+            }
+        }
     }
+
 
     private func updateUnreadMessagesCount(from snapshot: QuerySnapshot? = nil) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
