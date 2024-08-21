@@ -333,13 +333,21 @@ struct DMHomeView: View {
                 return
             }
 
-            // Track the total unread count across all matches
+            // Initialize a dictionary to store unread counts per match
+            var unreadCounts: [String: Int] = [:]
             var totalUnreadCount = 0
 
             snapshot?.documents.forEach { document in
-                if let matchID = document.documentID as String? {
-                    self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID) { unreadCount in
-                        totalUnreadCount += unreadCount
+                let matchID = document.documentID
+                self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID) { unreadCount in
+                    // Adjust the total count based on the difference between old and new counts
+                    let previousCount = unreadCounts[matchID] ?? 0
+                    let difference = unreadCount - previousCount
+                    totalUnreadCount += difference
+                    unreadCounts[matchID] = unreadCount
+
+                    // Update the total unread messages
+                    DispatchQueue.main.async {
                         self.totalUnreadMessages = totalUnreadCount
                     }
                 }
@@ -365,6 +373,7 @@ struct DMHomeView: View {
             completion(unreadCount)
         }
     }
+
 
 
     private func notifyUserOfNewMessages(count: Int) {
