@@ -357,7 +357,7 @@ struct DMHomeView: View {
 
             if !newMessages.isEmpty {
                 let unreadCount = newMessages.count
-                self.updateUnreadMessagesCount(from: self.matches) // Fix the error by passing self.matches
+                self.updateUnreadMessagesCount(from: self.matches)
                 self.notifyUserOfNewMessages(count: unreadCount)
             }
         }

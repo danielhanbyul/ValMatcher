@@ -100,6 +100,7 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear(perform: loadMessages)
+        .onDisappear(perform: markMessagesAsRead)
         .onChange(of: messages) { _ in
             scrollToBottom = true
         }
@@ -129,9 +130,6 @@ struct ChatView: View {
                 } else {
                     print("Messages successfully loaded")
                 }
-
-                // Mark messages as read
-                markMessagesAsRead()
             }
     }
 
@@ -202,7 +200,6 @@ struct ChatView: View {
         }
     }
 }
-
 
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
