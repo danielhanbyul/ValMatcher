@@ -10,7 +10,6 @@ import Firebase
 import UserNotifications
 import FirebaseMessaging
 
-
 @main
 struct ValMatcherApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
@@ -22,26 +21,30 @@ struct ValMatcherApp: App {
     }
 }
 
-class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Configure Firebase
         FirebaseApp.configure()
-        
+
+        // Set the delegate for UNUserNotificationCenter
+        UNUserNotificationCenter.current().delegate = self
+
         // Request notification authorization
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            print("Notification permission granted: \(granted)")
             if let error = error {
                 print("Error requesting notification permissions: \(error.localizedDescription)")
+            } else {
+                print("Notification permission granted: \(granted)")
             }
         }
-        
-        // Set delegate to handle notifications
-        UNUserNotificationCenter.current().delegate = self
-        
+
         // Register for remote notifications
         application.registerForRemoteNotifications()
-        
+
+        // Set the delegate for FCM
+        Messaging.messaging().delegate = self
+
         return true
     }
 
@@ -59,8 +62,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
     // Handle notifications when the app is in the foreground
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        // Show alert, badge, and sound when a notification is received in the foreground
-        completionHandler([.alert, .badge, .sound])
+        // Show the notification as an alert, with sound and badge
+        completionHandler([.banner, .badge, .sound])
     }
 
     // Handle notification tap action
@@ -75,6 +78,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         
         print("Notification received with userInfo: \(userInfo)")
         completionHandler()
+    }
+
+    // Handle token refresh
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        print("Firebase registration token: \(fcmToken ?? "")")
+        // If necessary, send the token to your server
     }
 
     // Custom function to navigate to a specific chat/message when a notification is tapped
