@@ -5,7 +5,6 @@
 //  Created by Daniel Han on 6/6/24.
 //
 import SwiftUI
-import SwiftUI
 import Firebase
 import FirebaseFirestore
 import AVKit
@@ -16,7 +15,6 @@ struct ContentView: View {
     @StateObject var userProfileViewModel: UserProfileViewModel
     @Binding var isSignedIn: Bool
     @StateObject private var firestoreManager = FirestoreManager()
-    @StateObject private var notificationManager = NotificationManager() // Add NotificationManager here
     @State private var hasAnsweredQuestions = false
     @State private var users: [UserProfile] = []
     @State private var currentIndex = 0
@@ -106,9 +104,6 @@ struct ContentView: View {
                 fetchIncomingLikes()
                 listenForUnreadMessages()
             }
-        }
-        .onReceive(notificationManager.$unreadMessagesCount) { count in
-            self.unreadMessagesCount = count
         }
     }
 

@@ -17,7 +17,6 @@ struct DMHomeView: View {
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
-    @StateObject private var notificationManager = NotificationManager()
 
     var body: some View {
         ZStack {
@@ -53,10 +52,7 @@ struct DMHomeView: View {
         })
         .onAppear {
             loadMatches()
-            notificationManager.listenForUnreadMessages() // Start listening for unread messages
-        }
-        .onReceive(notificationManager.$unreadMessagesCount) { count in
-            totalUnreadMessages = count
+            listenForUnreadMessages()
         }
     }
 
@@ -319,6 +315,69 @@ struct DMHomeView: View {
         }
     }
 
+    private func listenForUnreadMessages() {
+        guard let currentUserID = currentUserID else {
+            print("Error: User not authenticated")
+            return
+        }
+
+        let db = Firestore.firestore()
+        
+        let matchQuery = db.collection("matches")
+            .whereField("user1", isEqualTo: currentUserID)
+            .whereField("user2", isEqualTo: currentUserID)
+
+        matchQuery.addSnapshotListener { snapshot, error in
+            if let error = error {
+                print("Error fetching matches: \(error)")
+                return
+            }
+
+            snapshot?.documents.forEach { document in
+                if let matchID = document.documentID as String? {
+                    self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID)
+                }
+            }
+        }
+    }
+
+    private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
+        let messageQuery = db.collection("matches").document(matchID).collection("messages")
+            .whereField("senderID", isNotEqualTo: currentUserID)
+            .whereField("isRead", isEqualTo: false)
+            .order(by: "timestamp")
+
+        messageQuery.addSnapshotListener { messageSnapshot, error in
+            if let error = error {
+                print("Error fetching messages: \(error)")
+                return
+            }
+
+            let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
+
+            if !newMessages.isEmpty {
+                let unreadCount = newMessages.count
+                self.updateUnreadMessagesCount(from: self.matches) // Fix the error by passing self.matches
+                self.notifyUserOfNewMessages(count: unreadCount)
+            }
+        }
+    }
+
+    private func notifyUserOfNewMessages(count: Int) {
+        // Trigger an in-app notification
+        let alertMessage = "You have \(count) new message(s)."
+        showNotification(title: "New Message", body: alertMessage)
+
+        // Also trigger a system notification
+        let content = UNMutableNotificationContent()
+        content.title = "New Message"
+        content.body = alertMessage
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+
     private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
         var uniqueChats = [Chat]()
         var seenPairs = Set<Set<String>>()
@@ -360,91 +419,3 @@ struct DMHomeView_Previews: PreviewProvider {
             .environment(\.colorScheme, .dark)
     }
 }
-
-class NotificationManager: ObservableObject {
-    @Published var notifications: [String] = []
-    @Published var unreadMessagesCount: Int = 0
-    private var messageListeners: [String: ListenerRegistration] = [:]
-
-    init() {
-        setupNotificationListeners()
-        listenForUnreadMessages()
-    }
-
-    private func setupNotificationListeners() {
-        fetchIncomingLikes()
-    }
-
-    private func fetchIncomingLikes() {
-        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-
-        let db = Firestore.firestore()
-        db.collection("likes")
-            .whereField("likedUserID", isEqualTo: currentUserID)
-            .addSnapshotListener { (querySnapshot, error) in
-                guard let snapshot = querySnapshot else {
-                    print("Error fetching likes: \(error?.localizedDescription ?? "No error info")")
-                    return
-                }
-                for document in snapshot.documents {
-                    let data = document.data()
-                    // handle the like notification here
-                }
-            }
-    }
-
-    func listenForUnreadMessages() {
-        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-
-        let db = Firestore.firestore()
-        let matchQuery = db.collection("matches")
-            .whereField("user1", isEqualTo: currentUserID)
-            .whereField("user2", isEqualTo: currentUserID)
-
-        matchQuery.addSnapshotListener { snapshot, error in
-            if let snapshot = snapshot {
-                for document in snapshot.documents {
-                    let matchID = document.documentID
-                    if self.messageListeners[matchID] == nil {
-                        self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID)
-                    }
-                }
-            }
-        }
-    }
-
-    private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
-        let messageQuery = db.collection("matches").document(matchID).collection("messages")
-            .whereField("senderID", isNotEqualTo: currentUserID)
-            .whereField("isRead", isEqualTo: false)
-            .order(by: "timestamp")
-
-        let listener = messageQuery.addSnapshotListener { messageSnapshot, error in
-            if let error = error {
-                print("Error fetching messages: \(error)")
-                return
-            }
-
-            let newMessages = messageSnapshot?.documents.filter { !$0.metadata.hasPendingWrites } ?? []
-            if !newMessages.isEmpty {
-                self.unreadMessagesCount += newMessages.count
-                self.notifications.append("You have new messages!")
-                self.sendNotification("New Message", "You have new messages")
-            }
-        }
-
-        self.messageListeners[matchID] = listener
-    }
-
-    private func sendNotification(_ title: String, _ body: String) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
-    }
-}
-
-
