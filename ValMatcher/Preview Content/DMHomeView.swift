@@ -333,15 +333,21 @@ struct DMHomeView: View {
                 return
             }
 
+            // Track the total unread count across all matches
+            var totalUnreadCount = 0
+
             snapshot?.documents.forEach { document in
                 if let matchID = document.documentID as String? {
-                    self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID)
+                    self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID) { unreadCount in
+                        totalUnreadCount += unreadCount
+                        self.totalUnreadMessages = totalUnreadCount
+                    }
                 }
             }
         }
     }
 
-    private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
+    private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String, completion: @escaping (Int) -> Void) {
         let messageQuery = db.collection("matches").document(matchID).collection("messages")
             .whereField("senderID", isNotEqualTo: currentUserID)
             .whereField("isRead", isEqualTo: false)
@@ -353,15 +359,13 @@ struct DMHomeView: View {
                 return
             }
 
-            let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
+            // Calculate the unread message count
+            let unreadCount = messageSnapshot?.documents.count ?? 0
 
-            if !newMessages.isEmpty {
-                let unreadCount = newMessages.count
-                self.updateUnreadMessagesCount(from: self.matches)
-                self.notifyUserOfNewMessages(count: unreadCount)
-            }
+            completion(unreadCount)
         }
     }
+
 
     private func notifyUserOfNewMessages(count: Int) {
         // Trigger an in-app notification
