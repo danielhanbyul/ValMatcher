@@ -7,6 +7,19 @@
 
 import SwiftUI
 
+import UserNotifications
+
+func requestNotificationPermission() {
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        if granted {
+            print("Notification permission granted.")
+        } else {
+            print("Notification permission denied.")
+        }
+    }
+}
+
+
 struct NotificationBannerView: View {
     let username: String
     let message: String
