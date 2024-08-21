@@ -53,15 +53,7 @@ struct DMHomeView: View {
         .onAppear {
             loadMatches()
             listenForUnreadMessages()
-            NotificationCenter.default.addObserver(forName: Notification.Name("UnreadMessagesUpdated"), object: nil, queue: .main) { _ in
-                // Refresh unread messages count when the notification is received
-                self.listenForUnreadMessages()
-            }
         }
-        .onDisappear {
-            NotificationCenter.default.removeObserver(self, name: Notification.Name("UnreadMessagesUpdated"), object: nil)
-        }
-
     }
 
     @ViewBuilder

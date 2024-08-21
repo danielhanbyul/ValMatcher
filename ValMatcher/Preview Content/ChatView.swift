@@ -99,10 +99,8 @@ struct ChatView: View {
         .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
-        .onAppear {
-            loadMessages()
-            markMessagesAsRead() // Mark messages as read when the view appears
-        }
+        .onAppear(perform: loadMessages)
+        .onDisappear(perform: markMessagesAsRead)
         .onChange(of: messages) { _ in
             scrollToBottom = true
         }
@@ -202,7 +200,6 @@ struct ChatView: View {
         }
     }
 }
-
 
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
