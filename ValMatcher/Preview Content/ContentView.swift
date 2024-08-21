@@ -28,6 +28,8 @@ struct ContentView: View {
     @State private var acknowledgedNotifications: Set<String> = []
     @State private var unreadMessagesCount = 0
     @State private var messageListeners: [String: ListenerRegistration] = [:]  // Dictionary to hold listeners
+    @State private var bannerUsername: String = ""
+    @State private var bannerMessageContent: String = ""
 
     enum InteractionResult {
         case liked
@@ -314,73 +316,78 @@ struct ContentView: View {
     }
 
     private func listenForUnreadMessages() {
-        guard let currentUserID = Auth.auth().currentUser?.uid else {
-            print("Error: User not authenticated")
-            return
-        }
-
-        let db = Firestore.firestore()
-        
-        let matchQuery = db.collection("matches")
-            .whereField("user1", isEqualTo: currentUserID)
-            .whereField("user2", isEqualTo: currentUserID)
-
-        matchQuery.addSnapshotListener { snapshot, error in
-            if let error = error {
-                print("Error fetching matches: \(error)")
+            guard let currentUserID = Auth.auth().currentUser?.uid else {
+                print("Error: User not authenticated")
                 return
             }
 
-            snapshot?.documents.forEach { document in
-                if let matchID = document.documentID as String? {
-                    if self.messageListeners[matchID] == nil {
-                        // Only set up a new listener if one doesn't already exist
-                        self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID)
+            let db = Firestore.firestore()
+            
+            let matchQuery = db.collection("matches")
+                .whereField("user1", isEqualTo: currentUserID)
+                .whereField("user2", isEqualTo: currentUserID)
+
+            matchQuery.addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error fetching matches: \(error)")
+                    return
+                }
+
+                snapshot?.documents.forEach { document in
+                    if let matchID = document.documentID as String? {
+                        if self.messageListeners[matchID] == nil {
+                            self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID)
+                        }
                     }
                 }
             }
         }
-    }
 
-    private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
-        let messageQuery = db.collection("matches").document(matchID).collection("messages")
-            .whereField("senderID", isNotEqualTo: currentUserID)
-            .whereField("isRead", isEqualTo: false)
-            .order(by: "timestamp")
+        private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
+            let messageQuery = db.collection("matches").document(matchID).collection("messages")
+                .whereField("senderID", isNotEqualTo: currentUserID)
+                .whereField("isRead", isEqualTo: false)
+                .order(by: "timestamp")
 
-        // Store the listener in the dictionary
-        let listener = messageQuery.addSnapshotListener { messageSnapshot, error in
-            if let error = error {
-                print("Error fetching messages: \(error)")
-                return
-            }
+            let listener = messageQuery.addSnapshotListener { messageSnapshot, error in
+                if let error = error {
+                    print("Error fetching messages: \(error)")
+                    return
+                }
 
-            let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
+                let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
 
-            if !newMessages.isEmpty {
-                let firstNewMessage = newMessages.first
-                let senderID = firstNewMessage?.document.data()["senderID"] as? String
-                let messageText = firstNewMessage?.document.data()["text"] as? String ?? "You have a new message"
-                
-                if let senderID = senderID {
-                    db.collection("users").document(senderID).getDocument { document, error in
-                        if let error = error {
-                            print("Error fetching sender's name: \(error)")
-                            return
+                if !newMessages.isEmpty {
+                    let firstNewMessage = newMessages.first
+                    let senderID = firstNewMessage?.document.data()["senderID"] as? String
+                    let messageText = firstNewMessage?.document.data()["text"] as? String ?? "You have a new message"
+                    
+                    if let senderID = senderID {
+                        db.collection("users").document(senderID).getDocument { document, error in
+                            if let error = error {
+                                print("Error fetching sender's name: \(error)")
+                                return
+                            }
+
+                            let senderName = document?.data()?["name"] as? String ?? "Unknown User"
+                            self.bannerUsername = senderName
+                            self.bannerMessageContent = messageText
+                            self.showNotificationBanner = true
+
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                                self.showNotificationBanner = false
+                            }
+
+                            self.updateUnreadMessagesCount()
                         }
-
-                        let senderName = document?.data()?["name"] as? String ?? "Unknown User"
-                        self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
+                    } else {
                         self.updateUnreadMessagesCount()
                     }
-                } else {
-                    self.updateUnreadMessagesCount()
                 }
             }
-        }
 
-        // Store the listener so it remains active
-        self.messageListeners[matchID] = listener
+            // Store the listener so it remains active
+            self.messageListeners[matchID] = listener
     }
 
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
@@ -399,30 +406,30 @@ struct ContentView: View {
     }
 
     private func updateUnreadMessagesCount(from snapshot: QuerySnapshot? = nil) {
-        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-        var count = 0
-        let group = DispatchGroup()
+            guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+            var count = 0
+            let group = DispatchGroup()
 
-        snapshot?.documents.forEach { document in
-            group.enter()
-            Firestore.firestore().collection("matches").document(document.documentID).collection("messages")
-                .whereField("senderID", isNotEqualTo: currentUserID)
-                .whereField("isRead", isEqualTo: false)
-                .getDocuments { messageSnapshot, error in
-                    if let error = error {
-                        print("Error fetching messages: \(error)")
+            snapshot?.documents.forEach { document in
+                group.enter()
+                Firestore.firestore().collection("matches").document(document.documentID).collection("messages")
+                    .whereField("senderID", isNotEqualTo: currentUserID)
+                    .whereField("isRead", isEqualTo: false)
+                    .getDocuments { messageSnapshot, error in
+                        if let error = error {
+                            print("Error fetching messages: \(error)")
+                            group.leave()
+                            return
+                        }
+                        count += messageSnapshot?.documents.count ?? 0
                         group.leave()
-                        return
                     }
-                    count += messageSnapshot?.documents.count ?? 0
-                    group.leave()
-                }
-        }
+            }
 
-        group.notify(queue: .main) {
-            self.unreadMessagesCount = count
+            group.notify(queue: .main) {
+                self.unreadMessagesCount = count
+            }
         }
-    }
 
     private func showNotification(title: String, body: String) {
         let content = UNMutableNotificationContent()
