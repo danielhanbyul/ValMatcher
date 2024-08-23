@@ -137,11 +137,6 @@ struct ContentView: View {
 
             userInfoView
                 .padding(.horizontal)
-
-            if !users[currentIndex].additionalImages.isEmpty {
-                userAdditionalImagesView
-                    .padding(.horizontal)
-            }
         }
     }
 
@@ -193,46 +188,6 @@ struct ContentView: View {
                 .background(Color.black.opacity(0.7))
                 .cornerRadius(10)
                 .padding(.horizontal)
-            }
-        }
-    }
-
-    private var userAdditionalImagesView: some View {
-        ScrollView(.horizontal) {
-            HStack {
-                ForEach(users[currentIndex].additionalImages.indices, id: \.self) { index in
-                    if let urlString = users[currentIndex].additionalImages[index],
-                       let url = URL(string: urlString) {
-                        ZStack {
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case .empty:
-                                    ProgressView()
-                                        .frame(width: 100, height: 100)
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 100, height: 100)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                                        .shadow(radius: 5)
-                                case .failure:
-                                    Image(systemName: "photo")
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 100, height: 100)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                                        .background(Color.gray)
-                                        .shadow(radius: 5)
-                                @unknown default:
-                                    EmptyView()
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
     }
