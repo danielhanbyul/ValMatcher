@@ -65,7 +65,7 @@ struct ChatView: View {
                                 }
                                 .padding(.horizontal)
                                 .padding(.top, 5)
-                                .id(message.id)
+                                .id(message.id)  // Ensure that each message has a unique ID
                             }
                         }
                     }
@@ -106,6 +106,7 @@ struct ChatView: View {
         }
     }
 
+    // Loads the messages from Firestore in the correct order (oldest to newest)
     func loadMessages() {
         let db = Firestore.firestore()
         db.collection("matches").document(matchID).collection("messages")
@@ -133,6 +134,7 @@ struct ChatView: View {
             }
     }
 
+    // Sends a message and updates the Firestore database
     func sendMessage() {
         guard !newMessage.isEmpty else { return }
 
@@ -151,11 +153,26 @@ struct ChatView: View {
                 print("Message sent successfully")
                 self.newMessage = ""
                 self.scrollToBottom = true
-                updateHasUnreadMessages(for: matchID, hasUnread: true)
+                self.updateChatTimestamp()
+                self.updateHasUnreadMessages(for: matchID, hasUnread: true)
             }
         }
     }
 
+    func updateChatTimestamp() {
+        let db = Firestore.firestore()
+        db.collection("matches").document(matchID).updateData([
+            "timestamp": FieldValue.serverTimestamp()
+        ]) { error in
+            if let error = error {
+                print("Error updating chat timestamp: \(error.localizedDescription)")
+            } else {
+                print("Chat timestamp updated successfully")
+            }
+        }
+    }
+
+    // Determines whether the date should be shown before a message
     private func shouldShowDate(for message: Message) -> Bool {
         guard let index = messages.firstIndex(of: message) else { return false }
         if index == 0 {
@@ -166,6 +183,7 @@ struct ChatView: View {
         return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
     }
 
+    // Marks the messages as read in the Firestore database
     private func markMessagesAsRead() {
         let db = Firestore.firestore()
         let batch = db.batch()
@@ -184,6 +202,7 @@ struct ChatView: View {
         }
     }
 
+    // Updates the "hasUnreadMessages" field in Firestore
     private func updateHasUnreadMessages(for matchID: String, hasUnread: Bool) {
         let db = Firestore.firestore()
         let matchRef = db.collection("matches").document(matchID)
@@ -201,6 +220,7 @@ struct ChatView: View {
     }
 }
 
+// Date formatters for date and time display
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateStyle = .long
