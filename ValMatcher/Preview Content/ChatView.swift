@@ -4,7 +4,6 @@
 //
 //  Created by Daniel Han on 7/22/24.
 //
-
 import SwiftUI
 import Firebase
 import FirebaseFirestore
@@ -65,7 +64,7 @@ struct ChatView: View {
                                 }
                                 .padding(.horizontal)
                                 .padding(.top, 5)
-                                .id(message.id)  // Ensure that each message has a unique ID
+                                .id(message.id)
                             }
                         }
                     }
@@ -99,15 +98,35 @@ struct ChatView: View {
         .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
-        .onAppear(perform: loadMessages)
+        .onAppear(perform: setupChatListener)
         .onDisappear(perform: markMessagesAsRead)
-        .onChange(of: messages) { _ in
-            scrollToBottom = true
+    }
+
+    func sendMessage() {
+        guard !newMessage.isEmpty, let currentUserID = currentUserID else { return }
+
+        let db = Firestore.firestore()
+        let messageData: [String: Any] = [
+            "senderID": currentUserID,
+            "content": newMessage,
+            "timestamp": FieldValue.serverTimestamp(),
+            "isRead": false
+        ]
+
+        db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
+            if let error = error {
+                print("Error sending message: \(error.localizedDescription)")
+            } else {
+                self.newMessage = ""
+                self.scrollToBottom = true
+
+                // Notify DMHomeView to update the chat list immediately
+                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
+            }
         }
     }
 
-    // Loads the messages from Firestore in the correct order (oldest to newest)
-    func loadMessages() {
+    private func setupChatListener() {
         let db = Firestore.firestore()
         db.collection("matches").document(matchID).collection("messages")
             .order(by: "timestamp", descending: false)
@@ -131,59 +150,13 @@ struct ChatView: View {
                 } else {
                     print("Messages successfully loaded")
                 }
+
+                // Notify DMHomeView to refresh the chat list for all chats
+                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
             }
     }
 
-    // Sends a message and updates the Firestore database
-    func sendMessage() {
-        guard !newMessage.isEmpty else { return }
 
-        let db = Firestore.firestore()
-        let messageData: [String: Any] = [
-            "senderID": currentUserID ?? "",
-            "content": newMessage,
-            "timestamp": FieldValue.serverTimestamp(),
-            "isRead": false
-        ]
-
-        db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
-            if let error = error {
-                print("Error sending message: \(error.localizedDescription)")
-            } else {
-                print("Message sent successfully")
-                self.newMessage = ""
-                self.scrollToBottom = true
-                self.updateChatTimestamp()
-                self.updateHasUnreadMessages(for: matchID, hasUnread: true)
-            }
-        }
-    }
-
-    func updateChatTimestamp() {
-        let db = Firestore.firestore()
-        db.collection("matches").document(matchID).updateData([
-            "timestamp": FieldValue.serverTimestamp()
-        ]) { error in
-            if let error = error {
-                print("Error updating chat timestamp: \(error.localizedDescription)")
-            } else {
-                print("Chat timestamp updated successfully")
-            }
-        }
-    }
-
-    // Determines whether the date should be shown before a message
-    private func shouldShowDate(for message: Message) -> Bool {
-        guard let index = messages.firstIndex(of: message) else { return false }
-        if index == 0 {
-            return true
-        }
-        let previousMessage = messages[index - 1]
-        let calendar = Calendar.current
-        return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
-    }
-
-    // Marks the messages as read in the Firestore database
     private func markMessagesAsRead() {
         let db = Firestore.firestore()
         let batch = db.batch()
@@ -197,26 +170,17 @@ struct ChatView: View {
             if let error = error {
                 print("Error marking messages as read: \(error.localizedDescription)")
             } else {
-                updateHasUnreadMessages(for: matchID, hasUnread: false)
+                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
             }
         }
     }
 
-    // Updates the "hasUnreadMessages" field in Firestore
-    private func updateHasUnreadMessages(for matchID: String, hasUnread: Bool) {
-        let db = Firestore.firestore()
-        let matchRef = db.collection("matches").document(matchID)
-        
-        matchRef.updateData([
-            "hasUnreadMessages": hasUnread
-        ]) { error in
-            if let error = error {
-                print("Error updating unread messages status: \(error.localizedDescription)")
-            } else {
-                NotificationCenter.default.post(name: Notification.Name("UnreadMessagesUpdated"), object: nil)
-                print("Updated hasUnreadMessages to \(hasUnread) for matchID \(matchID)")
-            }
-        }
+    private func shouldShowDate(for message: Message) -> Bool {
+        guard let index = messages.firstIndex(of: message) else { return false }
+        if index == 0 { return true }
+        let previousMessage = messages[index - 1]
+        let calendar = Calendar.current
+        return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
     }
 }
 

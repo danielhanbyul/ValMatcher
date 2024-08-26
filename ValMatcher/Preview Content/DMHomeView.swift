@@ -55,10 +55,17 @@ struct DMHomeView: View {
         .onAppear {
             loadMatches()
             listenForUnreadMessages()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {  // Sort after initial load
+
+            NotificationCenter.default.addObserver(forName: Notification.Name("RefreshChatList"), object: nil, queue: .main) { _ in
+                loadMatches()
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.shouldSortChats = true
             }
         }
+
+
     }
 
     @ViewBuilder
