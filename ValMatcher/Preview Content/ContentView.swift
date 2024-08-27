@@ -314,18 +314,20 @@ struct ContentView: View {
                 return
             }
 
+            // Check for new messages that are added and are unread
             let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
 
             var newUnreadMessagesCount = 0
-            
+
             for change in newMessages {
                 let newMessage = change.document
                 let senderID = newMessage.data()["senderID"] as? String
                 let messageText = newMessage.data()["text"] as? String ?? "You have a new message"
+                let timestamp = newMessage.data()["timestamp"] as? Timestamp
                 let isRead = newMessage.data()["isRead"] as? Bool ?? true
-                
-                // Ensure the banner shows for each new message, as long as it's unread and from another user
-                if !isRead, senderID != currentUserID {
+
+                // Check if the message was just added in real-time (avoid past messages)
+                if let timestamp = timestamp, timestamp.dateValue().timeIntervalSinceNow > -5, !isRead, senderID != currentUserID {
                     newUnreadMessagesCount += 1
                     db.collection("users").document(senderID!).getDocument { document, error in
                         if let error = error {
