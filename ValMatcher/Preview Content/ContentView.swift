@@ -321,18 +321,23 @@ struct ContentView: View {
                 let senderID = firstNewMessage?.document.data()["senderID"] as? String
                 let messageText = firstNewMessage?.document.data()["text"] as? String ?? "You have a new message"
                 let isRead = firstNewMessage?.document.data()["isRead"] as? Bool ?? true
-
-                // Only notify if the message is unread and not sent by the current user
-                if let senderID = senderID, senderID != currentUserID && !isRead {
-                    db.collection("users").document(senderID).getDocument { document, error in
+                
+                if let messageID = firstNewMessage?.document.documentID, !isRead, senderID != currentUserID {
+                    db.collection("users").document(senderID!).getDocument { document, error in
                         if let error = error {
                             print("Error fetching sender's name: \(error)")
                             return
                         }
 
                         let senderName = document?.data()?["name"] as? String ?? "Unknown User"
-                        self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
-                        self.updateUnreadMessagesCount()
+                        let alertMessage = "\(senderName): \(messageText)"
+
+                        // Ensure the notification is only sent once per message
+                        if !self.notifications.contains(alertMessage) {
+                            self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
+                            self.updateUnreadMessagesCount()
+                            self.notifications.append(alertMessage) // Add to notifications to prevent duplicates
+                        }
                     }
                 }
             }
@@ -371,9 +376,10 @@ struct ContentView: View {
 
 
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
-        // Trigger an in-app notification
+        // Trigger an in-app notification (Banner)
         let alertMessage = "\(senderName): \(messageText)"
-        showNotification(title: "New Message", body: alertMessage)
+        self.bannerMessage = alertMessage
+        self.showNotificationBanner = true
 
         // Also trigger a system notification
         let content = UNMutableNotificationContent()
