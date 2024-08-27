@@ -316,6 +316,8 @@ struct ContentView: View {
 
             let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
 
+            var newUnreadMessagesCount = 0
+            
             for change in newMessages {
                 let newMessage = change.document
                 let senderID = newMessage.data()["senderID"] as? String
@@ -324,6 +326,7 @@ struct ContentView: View {
                 
                 // Ensure the banner shows for each new message, as long as it's unread and from another user
                 if !isRead, senderID != currentUserID {
+                    newUnreadMessagesCount += 1
                     db.collection("users").document(senderID!).getDocument { document, error in
                         if let error = error {
                             print("Error fetching sender's name: \(error)")
@@ -332,16 +335,33 @@ struct ContentView: View {
 
                         let senderName = document?.data()?["name"] as? String ?? "Unknown User"
                         self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
-                        self.updateUnreadMessagesCount()
                     }
                 }
             }
+
+            // Update the unread messages count after processing all new messages
+            self.unreadMessagesCount += newUnreadMessagesCount
         }
 
         // Store the listener so it remains active
         self.messageListeners[matchID] = listener
     }
 
+    private func notifyUserOfNewMessages(senderName: String, messageText: String) {
+        // Trigger an in-app notification (Banner)
+        let alertMessage = "\(senderName): \(messageText)"
+        self.bannerMessage = alertMessage
+        self.showNotificationBanner = true
+
+        // Also trigger a system notification
+        let content = UNMutableNotificationContent()
+        content.title = "New Message from \(senderName)"
+        content.body = messageText
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
 
     private func updateUnreadMessagesCount() {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
@@ -369,22 +389,6 @@ struct ContentView: View {
             }
     }
 
-
-    private func notifyUserOfNewMessages(senderName: String, messageText: String) {
-        // Trigger an in-app notification (Banner)
-        let alertMessage = "\(senderName): \(messageText)"
-        self.bannerMessage = alertMessage
-        self.showNotificationBanner = true
-
-        // Also trigger a system notification
-        let content = UNMutableNotificationContent()
-        content.title = "New Message from \(senderName)"
-        content.body = messageText
-        content.sound = .default
-
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
-    }
 
     
 
