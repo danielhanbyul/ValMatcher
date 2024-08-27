@@ -314,10 +314,7 @@ struct ContentView: View {
                 return
             }
 
-            // Check for new messages that are added and are unread
             let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
-
-            var newUnreadMessagesCount = 0
 
             for change in newMessages {
                 let newMessage = change.document
@@ -328,7 +325,6 @@ struct ContentView: View {
 
                 // Check if the message was just added in real-time (avoid past messages)
                 if let timestamp = timestamp, timestamp.dateValue().timeIntervalSinceNow > -5, !isRead, senderID != currentUserID {
-                    newUnreadMessagesCount += 1
                     db.collection("users").document(senderID!).getDocument { document, error in
                         if let error = error {
                             print("Error fetching sender's name: \(error)")
@@ -337,16 +333,25 @@ struct ContentView: View {
 
                         let senderName = document?.data()?["name"] as? String ?? "Unknown User"
                         self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
+                        self.updateUnreadMessagesCount(from: change.document)
                     }
                 }
             }
-
-            // Update the unread messages count after processing all new messages
-            self.unreadMessagesCount += newUnreadMessagesCount
         }
 
         // Store the listener so it remains active
         self.messageListeners[matchID] = listener
+    }
+
+    private func updateUnreadMessagesCount(from document: QueryDocumentSnapshot) {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+
+        let senderID = document.data()["senderID"] as? String
+        let isRead = document.data()["isRead"] as? Bool ?? true
+
+        if senderID != currentUserID && !isRead {
+            self.unreadMessagesCount += 1
+        }
     }
 
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
@@ -363,32 +368,6 @@ struct ContentView: View {
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
-    }
-
-    private func updateUnreadMessagesCount() {
-        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-
-        let db = Firestore.firestore()
-        var count = 0
-        let group = DispatchGroup()
-
-        Firestore.firestore().collection("matches")
-            .whereField("user1", isEqualTo: currentUserID)
-            .getDocuments { snapshot, error in
-                snapshot?.documents.forEach { document in
-                    group.enter()
-                    Firestore.firestore().collection("matches").document(document.documentID).collection("messages")
-                        .whereField("senderID", isNotEqualTo: currentUserID)
-                        .whereField("isRead", isEqualTo: false)
-                        .getDocuments { messageSnapshot, error in
-                            count += messageSnapshot?.documents.count ?? 0
-                            group.leave()
-                        }
-                }
-                group.notify(queue: .main) {
-                    self.unreadMessagesCount = count
-                }
-            }
     }
 
 
