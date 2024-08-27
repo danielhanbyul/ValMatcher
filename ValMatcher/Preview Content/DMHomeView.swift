@@ -9,6 +9,7 @@ import SwiftUI
 import Firebase
 import FirebaseFirestore
 import FirebaseAuth
+import FirebaseFirestoreSwift
 import UserNotifications
 
 struct DMHomeView: View {
@@ -17,6 +18,7 @@ struct DMHomeView: View {
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
+    @State private var shouldSortChats = true  // Set to true by default to sort on first load
 
     var body: some View {
         ZStack {
@@ -53,13 +55,27 @@ struct DMHomeView: View {
         .onAppear {
             loadMatches()
             listenForUnreadMessages()
+
+            NotificationCenter.default.addObserver(forName: Notification.Name("RefreshChatList"), object: nil, queue: .main) { _ in
+                loadMatches()
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.shouldSortChats = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            loadMatches() // Refresh matches when app becomes active
         }
     }
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
         HStack {
-            NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))) {
+            NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))
+                            .onAppear {
+                                markMessagesAsRead(for: match) // Mark messages as read when entering chat
+                            }) {
                 HStack {
                     if let currentUserID = currentUserID {
                         userImageView(currentUserID: currentUserID, match: match)
@@ -246,8 +262,7 @@ struct DMHomeView: View {
             guard let matchID = match.id else { continue }
             group.enter()
             Firestore.firestore().collection("matches").document(matchID).collection("messages")
-                .whereField("senderID", isNotEqualTo: currentUserID)
-                .whereField("isRead", isEqualTo: false)
+                .order(by: "timestamp", descending: true)  // Order messages by timestamp
                 .getDocuments { messageSnapshot, error in
                     if let error = error {
                         print("Error fetching messages: \(error)")
@@ -255,12 +270,21 @@ struct DMHomeView: View {
                         return
                     }
 
-                    let unreadCount = messageSnapshot?.documents.count ?? 0
+                    let unreadCount = messageSnapshot?.documents.filter { document in
+                        let senderID = document.data()["senderID"] as? String ?? ""
+                        let isRead = document.data()["isRead"] as? Bool ?? true
+                        return senderID != currentUserID && !isRead
+                    }.count ?? 0
 
                     if unreadCount > 0 {
                         updatedMatches[index].hasUnreadMessages = true
                     } else {
                         updatedMatches[index].hasUnreadMessages = false
+                    }
+
+                    // Update the latest message timestamp for sorting
+                    if let latestMessage = messageSnapshot?.documents.first {
+                        updatedMatches[index].timestamp = latestMessage.data()["timestamp"] as? Timestamp
                     }
 
                     count += unreadCount
@@ -270,22 +294,17 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-            self.matches = updatedMatches
-        }
-    }
 
-    private func mergeAndRemoveDuplicates(existingMatches: [Chat], newMatches: [Chat]) -> [Chat] {
-        var combinedMatches = existingMatches
+            // Sort the matches based on the most recent message timestamp
+            self.matches = updatedMatches.sorted {
+                ($0.timestamp?.dateValue() ?? Date.distantPast) > ($1.timestamp?.dateValue() ?? Date.distantPast)
+            }
 
-        for newMatch in newMatches {
-            if let index = combinedMatches.firstIndex(where: { $0.id == newMatch.id }) {
-                combinedMatches[index] = newMatch
-            } else {
-                combinedMatches.append(newMatch)
+            // Send notification for unread messages on first load
+            if count > 0 {
+                notifyUserOfNewMessages(count: count)
             }
         }
-
-        return removeDuplicateChats(from: combinedMatches)
     }
 
     func deleteSelectedMatches() {
@@ -346,7 +365,12 @@ struct DMHomeView: View {
                     totalUnreadCount += difference
                     unreadCounts[matchID] = unreadCount
 
-                    // Update the total unread messages
+                    if difference > 0 {
+                        DispatchQueue.main.async {
+                            self.shouldSortChats = true  // Only sort if there is a significant change
+                        }
+                    }
+
                     DispatchQueue.main.async {
                         self.totalUnreadMessages = totalUnreadCount
                     }
@@ -374,7 +398,30 @@ struct DMHomeView: View {
         }
     }
 
+    private func markMessagesAsRead(for match: Chat) {
+        guard let matchID = match.id, let currentUserID = currentUserID else { return }
+        let db = Firestore.firestore()
+        
+        let messagesQuery = db.collection("matches").document(matchID).collection("messages")
+            .whereField("senderID", isNotEqualTo: currentUserID)
+            .whereField("isRead", isEqualTo: false)
 
+        messagesQuery.getDocuments { snapshot, error in
+            if let error = error {
+                print("Error marking messages as read: \(error.localizedDescription)")
+                return
+            }
+
+            snapshot?.documents.forEach { document in
+                document.reference.updateData(["isRead": true])
+            }
+
+            // Update the local match object to reflect the change
+            if let index = self.matches.firstIndex(where: { $0.id == matchID }) {
+                self.matches[index].hasUnreadMessages = false
+            }
+        }
+    }
 
     private func notifyUserOfNewMessages(count: Int) {
         // Trigger an in-app notification
@@ -389,6 +436,20 @@ struct DMHomeView: View {
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
+    }
+
+    private func mergeAndRemoveDuplicates(existingMatches: [Chat], newMatches: [Chat]) -> [Chat] {
+        var combinedMatches = existingMatches
+
+        for newMatch in newMatches {
+            if let index = combinedMatches.firstIndex(where: { $0.id == newMatch.id }) {
+                combinedMatches[index] = newMatch
+            } else {
+                combinedMatches.append(newMatch)
+            }
+        }
+
+        return removeDuplicateChats(from: combinedMatches)
     }
 
     private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
