@@ -20,6 +20,7 @@ struct DMHomeView: View {
     @Binding var totalUnreadMessages: Int
     @State private var shouldSortChats = true  // Set to true by default to sort on first load
     @State private var receivedNewMessage = false // State to track if a new message was received during the session
+    @State private var selectedChat: Chat? // The chat that the user is trying to open
 
     var body: some View {
         ZStack {
@@ -35,7 +36,7 @@ struct DMHomeView: View {
                     }
                 }
                 .padding(.top, 10)
-                
+
                 if isEditing && !selectedMatches.isEmpty {
                     Button(action: deleteSelectedMatches) {
                         Text("Delete Selected")
@@ -54,29 +55,41 @@ struct DMHomeView: View {
                 .foregroundColor(.white)
         })
         .onAppear {
-            loadMatches()
-            listenForUnreadMessages()
-
-            NotificationCenter.default.addObserver(forName: Notification.Name("RefreshChatList"), object: nil, queue: .main) { _ in
-                loadMatches()
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.shouldSortChats = true
-            }
+            setupListeners()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            loadMatches() // Refresh matches when app becomes active
+            setupListeners()
         }
+        .background(
+            NavigationLink(
+                destination: ChatView(matchID: selectedChat?.id ?? "", recipientName: getRecipientName(for: selectedChat))
+                    .onAppear {
+                        if let chat = selectedChat {
+                            DispatchQueue.global().async {
+                                markMessagesAsRead(for: chat)
+                            }
+                        }
+                    },
+                isActive: Binding(
+                    get: { selectedChat != nil },
+                    set: { if !$0 { selectedChat = nil } }
+                )
+            ) {
+                EmptyView()
+            }
+        )
     }
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
         HStack {
-            NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))
-                            .onAppear {
-                                markMessagesAsRead(for: match) // Mark messages as read when entering chat
-                            }) {
+            Button(action: {
+                selectedChat = match
+                // Optimistically update UI to remove the red dot
+                if let index = matches.firstIndex(where: { $0.id == match.id }) {
+                    matches[index].hasUnreadMessages = false
+                }
+            }) {
                 HStack {
                     if let currentUserID = currentUserID {
                         userImageView(currentUserID: currentUserID, match: match)
@@ -106,11 +119,9 @@ struct DMHomeView: View {
         }
     }
 
-    private func getRecipientName(for match: Chat) -> String {
-        if let currentUserID = currentUserID {
-            return currentUserID == match.user1 ? (match.user2Name ?? "Unknown User") : (match.user1Name ?? "Unknown User")
-        }
-        return "Unknown User"
+    private func getRecipientName(for match: Chat?) -> String {
+        guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
+        return currentUserID == match.user1 ? (match.user2Name ?? "Unknown User") : (match.user1Name ?? "Unknown User")
     }
 
     @ViewBuilder
@@ -140,6 +151,19 @@ struct DMHomeView: View {
             Image(systemName: "person.circle.fill")
                 .resizable()
                 .frame(width: 50, height: 50)
+        }
+    }
+
+    private func setupListeners() {
+        loadMatches()
+        listenForUnreadMessages()
+
+        NotificationCenter.default.addObserver(forName: Notification.Name("RefreshChatList"), object: nil, queue: .main) { _ in
+            loadMatches()
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.shouldSortChats = true
         }
     }
 
@@ -427,11 +451,6 @@ struct DMHomeView: View {
 
             snapshot?.documents.forEach { document in
                 document.reference.updateData(["isRead": true])
-            }
-
-            // Update the local match object to reflect the change
-            if let index = self.matches.firstIndex(where: { $0.id == matchID }) {
-                self.matches[index].hasUnreadMessages = false
             }
         }
     }
