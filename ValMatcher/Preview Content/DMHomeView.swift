@@ -64,8 +64,6 @@ struct DMHomeView: View {
                 self.shouldSortChats = true
             }
         }
-
-
     }
 
     @ViewBuilder
@@ -208,7 +206,6 @@ struct DMHomeView: View {
                 }
             }
     }
-
 
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
         var updatedMatches = matches
@@ -448,7 +445,6 @@ struct DMHomeView: View {
         UNUserNotificationCenter.current().add(request)
     }
 }
-
 
 let dateFormatter: DateFormatter = {
     let formatter = DateFormatter()
