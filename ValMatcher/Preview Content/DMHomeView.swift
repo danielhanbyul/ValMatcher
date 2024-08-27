@@ -19,6 +19,7 @@ struct DMHomeView: View {
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
     @State private var shouldSortChats = true  // Set to true by default to sort on first load
+    @State private var receivedNewMessage = false // State to track if a new message was received during the session
 
     var body: some View {
         ZStack {
@@ -300,9 +301,10 @@ struct DMHomeView: View {
                 ($0.timestamp?.dateValue() ?? Date.distantPast) > ($1.timestamp?.dateValue() ?? Date.distantPast)
             }
 
-            // Send notification for unread messages on first load
-            if count > 0 {
+            // Trigger notification only if a new message was received
+            if self.receivedNewMessage {
                 notifyUserOfNewMessages(count: count)
+                self.receivedNewMessage = false // Reset the flag after notification
             }
         }
     }
@@ -358,7 +360,7 @@ struct DMHomeView: View {
 
             snapshot?.documents.forEach { document in
                 let matchID = document.documentID
-                self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID) { unreadCount in
+                self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID) { unreadCount, latestMessage in
                     // Adjust the total count based on the difference between old and new counts
                     let previousCount = unreadCounts[matchID] ?? 0
                     let difference = unreadCount - previousCount
@@ -374,16 +376,22 @@ struct DMHomeView: View {
                     DispatchQueue.main.async {
                         self.totalUnreadMessages = totalUnreadCount
                     }
+
+                    // If there is a new message and the app is active, show the banner notification
+                    if difference > 0 && UIApplication.shared.applicationState == .active {
+                        self.receivedNewMessage = true
+                        if let latestMessage = latestMessage, latestMessage.data()["senderID"] as? String != currentUserID {
+                            self.showInAppNotification(for: latestMessage)
+                        }
+                    }
                 }
             }
         }
     }
 
-    private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String, completion: @escaping (Int) -> Void) {
+    private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String, completion: @escaping (Int, QueryDocumentSnapshot?) -> Void) {
         let messageQuery = db.collection("matches").document(matchID).collection("messages")
-            .whereField("senderID", isNotEqualTo: currentUserID)
-            .whereField("isRead", isEqualTo: false)
-            .order(by: "timestamp")
+            .order(by: "timestamp", descending: true)
 
         messageQuery.addSnapshotListener { messageSnapshot, error in
             if let error = error {
@@ -391,10 +399,15 @@ struct DMHomeView: View {
                 return
             }
 
-            // Calculate the unread message count
-            let unreadCount = messageSnapshot?.documents.count ?? 0
+            // Calculate the unread message count and get the latest message
+            let unreadMessages = messageSnapshot?.documents.filter { document in
+                let senderID = document.data()["senderID"] as? String ?? ""
+                let isRead = document.data()["isRead"] as? Bool ?? true
+                return senderID != currentUserID && !isRead
+            }
+            let latestMessage = messageSnapshot?.documents.first
 
-            completion(unreadCount)
+            completion(unreadMessages?.count ?? 0, latestMessage)
         }
     }
 
@@ -424,18 +437,20 @@ struct DMHomeView: View {
     }
 
     private func notifyUserOfNewMessages(count: Int) {
-        // Trigger an in-app notification
-        let alertMessage = "You have \(count) new message(s)."
+        guard count > 0 else { return }
+        // Send notification only if the app is not active
+        if UIApplication.shared.applicationState != .active {
+            let alertMessage = "You have \(count) new message(s)."
+            showNotification(title: "New Message", body: alertMessage)
+        }
+    }
+
+    private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
+        guard let senderName = latestMessage.data()["senderName"] as? String,
+              let messageText = latestMessage.data()["text"] as? String else { return }
+
+        let alertMessage = "\(senderName): \(messageText)"
         showNotification(title: "New Message", body: alertMessage)
-
-        // Also trigger a system notification
-        let content = UNMutableNotificationContent()
-        content.title = "New Message"
-        content.body = alertMessage
-        content.sound = .default
-
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
     }
 
     private func mergeAndRemoveDuplicates(existingMatches: [Chat], newMatches: [Chat]) -> [Chat] {
