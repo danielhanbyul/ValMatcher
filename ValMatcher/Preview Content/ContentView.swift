@@ -316,6 +316,7 @@ struct ContentView: View {
 
             let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
 
+            // Only process new messages once per change
             for change in newMessages {
                 let newMessage = change.document
                 let senderID = newMessage.data()["senderID"] as? String
@@ -323,8 +324,9 @@ struct ContentView: View {
                 let timestamp = newMessage.data()["timestamp"] as? Timestamp
                 let isRead = newMessage.data()["isRead"] as? Bool ?? true
 
-                // Check if the message was just added in real-time (avoid past messages)
-                if let timestamp = timestamp, timestamp.dateValue().timeIntervalSinceNow > -5, !isRead, senderID != currentUserID {
+                // Ensure the message is new and unread, and filter out past messages
+                if let timestamp = timestamp, !isRead, senderID != currentUserID, timestamp.dateValue().timeIntervalSinceNow > -5 {
+                    // Fetch the sender's name and send a single notification
                     db.collection("users").document(senderID!).getDocument { document, error in
                         if let error = error {
                             print("Error fetching sender's name: \(error)")
@@ -333,7 +335,7 @@ struct ContentView: View {
 
                         let senderName = document?.data()?["name"] as? String ?? "Unknown User"
                         self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
-                        self.updateUnreadMessagesCount(from: change.document)
+                        self.updateUnreadMessagesCount(for: matchID, messageID: change.document.documentID)
                     }
                 }
             }
@@ -343,14 +345,21 @@ struct ContentView: View {
         self.messageListeners[matchID] = listener
     }
 
-    private func updateUnreadMessagesCount(from document: QueryDocumentSnapshot) {
+    private func updateUnreadMessagesCount(for matchID: String, messageID: String) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
 
-        let senderID = document.data()["senderID"] as? String
-        let isRead = document.data()["isRead"] as? Bool ?? true
+        let db = Firestore.firestore()
+        let messageRef = db.collection("matches").document(matchID).collection("messages").document(messageID)
 
-        if senderID != currentUserID && !isRead {
-            self.unreadMessagesCount += 1
+        messageRef.getDocument { document, error in
+            if let document = document, document.exists {
+                let senderID = document.data()?["senderID"] as? String
+                let isRead = document.data()?["isRead"] as? Bool ?? true
+
+                if senderID != currentUserID && !isRead {
+                    self.unreadMessagesCount += 1
+                }
+            }
         }
     }
 
