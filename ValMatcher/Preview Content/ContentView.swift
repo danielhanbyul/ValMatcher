@@ -316,13 +316,14 @@ struct ContentView: View {
 
             let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
 
-            if !newMessages.isEmpty {
-                let firstNewMessage = newMessages.first
-                let senderID = firstNewMessage?.document.data()["senderID"] as? String
-                let messageText = firstNewMessage?.document.data()["text"] as? String ?? "You have a new message"
-                let isRead = firstNewMessage?.document.data()["isRead"] as? Bool ?? true
+            for change in newMessages {
+                let newMessage = change.document
+                let senderID = newMessage.data()["senderID"] as? String
+                let messageText = newMessage.data()["text"] as? String ?? "You have a new message"
+                let isRead = newMessage.data()["isRead"] as? Bool ?? true
                 
-                if let messageID = firstNewMessage?.document.documentID, !isRead, senderID != currentUserID {
+                // Ensure the banner shows for each new message, as long as it's unread and from another user
+                if !isRead, senderID != currentUserID {
                     db.collection("users").document(senderID!).getDocument { document, error in
                         if let error = error {
                             print("Error fetching sender's name: \(error)")
@@ -330,14 +331,8 @@ struct ContentView: View {
                         }
 
                         let senderName = document?.data()?["name"] as? String ?? "Unknown User"
-                        let alertMessage = "\(senderName): \(messageText)"
-
-                        // Ensure the notification is only sent once per message
-                        if !self.notifications.contains(alertMessage) {
-                            self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
-                            self.updateUnreadMessagesCount()
-                            self.notifications.append(alertMessage) // Add to notifications to prevent duplicates
-                        }
+                        self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
+                        self.updateUnreadMessagesCount()
                     }
                 }
             }
