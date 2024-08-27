@@ -277,24 +277,28 @@ struct ContentView: View {
         }
 
         let db = Firestore.firestore()
-        
-        let matchQuery = db.collection("matches")
-            .whereField("user1", isEqualTo: currentUserID)
-            .whereField("user2", isEqualTo: currentUserID)
+        let matchesRef = db.collection("matches")
 
-        matchQuery.addSnapshotListener { snapshot, error in
+        // Listen for changes in the matches collection where the current user is involved
+        matchesRef.whereField("user1", isEqualTo: currentUserID).addSnapshotListener { snapshot, error in
             if let error = error {
                 print("Error fetching matches: \(error)")
                 return
             }
 
             snapshot?.documents.forEach { document in
-                if let matchID = document.documentID as String? {
-                    if self.messageListeners[matchID] == nil {
-                        // Only set up a new listener if one doesn't already exist
-                        self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID)
-                    }
-                }
+                self.listenForNewMessages(in: db, matchID: document.documentID, currentUserID: currentUserID)
+            }
+        }
+
+        matchesRef.whereField("user2", isEqualTo: currentUserID).addSnapshotListener { snapshot, error in
+            if let error = error {
+                print("Error fetching matches: \(error)")
+                return
+            }
+
+            snapshot?.documents.forEach { document in
+                self.listenForNewMessages(in: db, matchID: document.documentID, currentUserID: currentUserID)
             }
         }
     }
@@ -316,8 +320,10 @@ struct ContentView: View {
                 let firstNewMessage = newMessages.first
                 let senderID = firstNewMessage?.document.data()["senderID"] as? String
                 let messageText = firstNewMessage?.document.data()["text"] as? String ?? "You have a new message"
-                
-                if let senderID = senderID, senderID != currentUserID {
+                let isRead = firstNewMessage?.document.data()["isRead"] as? Bool ?? true
+
+                // Only notify if the message is unread and not sent by the current user
+                if let senderID = senderID, senderID != currentUserID && !isRead {
                     db.collection("users").document(senderID).getDocument { document, error in
                         if let error = error {
                             print("Error fetching sender's name: \(error)")
@@ -328,18 +334,6 @@ struct ContentView: View {
                         self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
                         self.updateUnreadMessagesCount()
                     }
-                } else if senderID == currentUserID {
-                    // Notify the other user (receiver)
-                    db.collection("users").document(currentUserID).getDocument { document, error in
-                        if let error = error {
-                            print("Error fetching receiver's name: \(error)")
-                            return
-                        }
-
-                        let receiverName = document?.data()?["name"] as? String ?? "Unknown User"
-                        self.notifyUserOfNewMessages(senderName: receiverName, messageText: messageText)
-                        self.updateUnreadMessagesCount()
-                    }
                 }
             }
         }
@@ -347,6 +341,34 @@ struct ContentView: View {
         // Store the listener so it remains active
         self.messageListeners[matchID] = listener
     }
+
+
+    private func updateUnreadMessagesCount() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+
+        let db = Firestore.firestore()
+        var count = 0
+        let group = DispatchGroup()
+
+        Firestore.firestore().collection("matches")
+            .whereField("user1", isEqualTo: currentUserID)
+            .getDocuments { snapshot, error in
+                snapshot?.documents.forEach { document in
+                    group.enter()
+                    Firestore.firestore().collection("matches").document(document.documentID).collection("messages")
+                        .whereField("senderID", isNotEqualTo: currentUserID)
+                        .whereField("isRead", isEqualTo: false)
+                        .getDocuments { messageSnapshot, error in
+                            count += messageSnapshot?.documents.count ?? 0
+                            group.leave()
+                        }
+                }
+                group.notify(queue: .main) {
+                    self.unreadMessagesCount = count
+                }
+            }
+    }
+
 
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
         // Trigger an in-app notification
@@ -363,31 +385,7 @@ struct ContentView: View {
         UNUserNotificationCenter.current().add(request)
     }
 
-    private func updateUnreadMessagesCount(from snapshot: QuerySnapshot? = nil) {
-        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-        var count = 0
-        let group = DispatchGroup()
-
-        snapshot?.documents.forEach { document in
-            group.enter()
-            Firestore.firestore().collection("matches").document(document.documentID).collection("messages")
-                .whereField("senderID", isNotEqualTo: currentUserID)
-                .whereField("isRead", isEqualTo: false)
-                .getDocuments { messageSnapshot, error in
-                    if let error = error {
-                        print("Error fetching messages: \(error)")
-                        group.leave()
-                        return
-                    }
-                    count += messageSnapshot?.documents.count ?? 0
-                    group.leave()
-                }
-        }
-
-        group.notify(queue: .main) {
-            self.unreadMessagesCount = count
-        }
-    }
+    
 
     private func showNotification(title: String, body: String) {
         let content = UNMutableNotificationContent()
