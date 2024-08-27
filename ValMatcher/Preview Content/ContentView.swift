@@ -104,6 +104,9 @@ struct ContentView: View {
                 listenForUnreadMessages()  // Ensure that the listeners are set up for new messages
             }
         }
+        .onChange(of: users) { _ in
+            listenForUnreadMessages()
+        }
     }
 
     private var userCardStack: some View {
