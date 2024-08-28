@@ -33,35 +33,44 @@ struct DMHomeView: View {
     @Binding var totalUnreadMessages: Int
     @State private var shouldSortChats = true
     @State private var receivedNewMessage = false
-    @State private var selectedChat: Chat? // The chat that the user is trying to open
+    @State private var selectedChat: Chat?
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
+    @State private var debounceTimer: Timer?
+    @State private var isLoading = true // New state for loading
+    @State private var messageListeners: [String: ListenerRegistration] = [:] // Track listeners for each match
 
     var body: some View {
         ZStack {
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
 
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        ForEach(matches) { match in
-                            matchRow(match: match)
+            if isLoading {
+                ProgressView("Loading...")
+                    .foregroundColor(.white)
+            } else {
+                VStack(spacing: 0) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            ForEach(matches) { match in
+                                matchRow(match: match)
+                            }
                         }
                     }
-                }
-                .padding(.top, 10)
+                    .padding(.top, 10)
 
-                if isEditing && !selectedMatches.isEmpty {
-                    Button(action: deleteSelectedMatches) {
-                        Text("Delete Selected")
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.red)
-                            .cornerRadius(8)
+                    if isEditing && !selectedMatches.isEmpty {
+                        Button(action: deleteSelectedMatches) {
+                            Text("Delete Selected")
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.red)
+                                .cornerRadius(8)
+                        }
+                        .padding()
                     }
-                    .padding()
                 }
+                .animation(nil, value: matches) // Disable animation during data updates
             }
         }
         .navigationBarTitle("Messages", displayMode: .inline)
@@ -70,14 +79,26 @@ struct DMHomeView: View {
                 .foregroundColor(.white)
         })
         .onAppear {
-            setupListeners()
+            if matches.isEmpty {
+                loadMatches()
+            }
+        }
+        .onDisappear {
+            removeListeners()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             setupListeners()
         }
         .background(
             NavigationLink(
-                destination: selectedChatView(),
+                destination: ChatView(matchID: selectedChat?.id ?? "", recipientName: getRecipientName(for: selectedChat))
+                    .onAppear {
+                        if let chat = selectedChat {
+                            DispatchQueue.global().async {
+                                markMessagesAsRead(for: chat)
+                            }
+                        }
+                    },
                 isActive: Binding(
                     get: { selectedChat != nil },
                     set: { if !$0 { selectedChat = nil } }
@@ -88,20 +109,6 @@ struct DMHomeView: View {
         )
         .alert(isPresented: $showNotificationBanner) {
             Alert(title: Text("New Message"), message: Text(bannerMessage), dismissButton: .default(Text("OK")))
-        }
-    }
-
-    @ViewBuilder
-    private func selectedChatView() -> some View {
-        if let selectedChat = selectedChat {
-            ChatView(matchID: selectedChat.id ?? "", recipientName: getRecipientName(for: selectedChat))
-                .onAppear {
-                    DispatchQueue.global().async {
-                        markMessagesAsRead(for: selectedChat)
-                    }
-                }
-        } else {
-            EmptyView()
         }
     }
 
@@ -180,10 +187,12 @@ struct DMHomeView: View {
 
     private func setupListeners() {
         loadMatches()
-        listenForUnreadMessages()
 
-        NotificationCenter.default.addObserver(forName: Notification.Name("RefreshChatList"), object: nil, queue: .main) { _ in
-            loadMatches()
+        NotificationCenter.default.addObserver(forName: Notification.Name("RefreshChatList"), object: nil, queue: .main) { [self] _ in
+            self.debounceTimer?.invalidate()
+            self.debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                self.loadMatches()
+            }
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -199,6 +208,7 @@ struct DMHomeView: View {
 
         let db = Firestore.firestore()
 
+        // Fetch matches where the current user is user1
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
@@ -226,10 +236,12 @@ struct DMHomeView: View {
                 fetchUserNames(for: newMatches) { updatedMatches in
                     self.matches = self.mergeAndRemoveDuplicates(existingMatches: self.matches, newMatches: updatedMatches)
                     self.updateUnreadMessagesCount(from: self.matches)
+                    self.addMessageListeners(for: updatedMatches)
                     print("Loaded matches for user1: \(self.matches)")
                 }
             }
 
+        // Fetch matches where the current user is user2
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
@@ -257,7 +269,13 @@ struct DMHomeView: View {
                 fetchUserNames(for: moreMatches) { updatedMatches in
                     self.matches = self.mergeAndRemoveDuplicates(existingMatches: self.matches, newMatches: updatedMatches)
                     self.updateUnreadMessagesCount(from: self.matches)
+                    self.addMessageListeners(for: updatedMatches)
                     print("Loaded matches for user2: \(self.matches)")
+
+                    // Set isLoading to false after data is loaded and sorted
+                    DispatchQueue.main.async {
+                        self.isLoading = false
+                    }
                 }
             }
     }
@@ -354,6 +372,46 @@ struct DMHomeView: View {
         }
     }
 
+    private func addMessageListeners(for matches: [Chat]) {
+        guard let currentUserID = currentUserID else { return }
+        let db = Firestore.firestore()
+
+        for match in matches {
+            guard let matchID = match.id else { continue }
+
+            if messageListeners[matchID] == nil {
+                let listener = db.collection("matches").document(matchID).collection("messages")
+                    .order(by: "timestamp", descending: true)
+                    .limit(to: 1)
+                    .addSnapshotListener { snapshot, error in
+                        if let error = error {
+                            print("Error listening for new messages: \(error)")
+                            return
+                        }
+
+                        guard let document = snapshot?.documents.first else { return }
+
+                        let senderID = document.data()["senderID"] as? String ?? ""
+                        let isRead = document.data()["isRead"] as? Bool ?? true
+
+                        if senderID != currentUserID && !isRead {
+                            DispatchQueue.main.async {
+                                self.updateUnreadMessagesCount(from: self.matches)
+                            }
+                        }
+                    }
+                messageListeners[matchID] = listener
+            }
+        }
+    }
+
+    private func removeListeners() {
+        for listener in messageListeners.values {
+            listener.remove()
+        }
+        messageListeners.removeAll()
+    }
+
     func deleteSelectedMatches() {
         for matchID in selectedMatches {
             if let index = matches.firstIndex(where: { $0.id == matchID }) {
@@ -388,7 +446,7 @@ struct DMHomeView: View {
         }
 
         let db = Firestore.firestore()
-        
+
         let matchQuery = db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .whereField("user2", isEqualTo: currentUserID)
@@ -455,7 +513,7 @@ struct DMHomeView: View {
     private func markMessagesAsRead(for match: Chat) {
         guard let matchID = match.id, let currentUserID = currentUserID else { return }
         let db = Firestore.firestore()
-        
+
         let messagesQuery = db.collection("matches").document(matchID).collection("messages")
             .whereField("senderID", isNotEqualTo: currentUserID)
             .whereField("isRead", isEqualTo: false)
@@ -475,10 +533,6 @@ struct DMHomeView: View {
             batch.commit { error in
                 if let error = error {
                     print("Error committing batch: \(error.localizedDescription)")
-                } else {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
-                    }
                 }
             }
         }
