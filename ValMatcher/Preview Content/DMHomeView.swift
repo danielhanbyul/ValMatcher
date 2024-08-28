@@ -77,14 +77,7 @@ struct DMHomeView: View {
         }
         .background(
             NavigationLink(
-                destination: ChatView(matchID: selectedChat?.id ?? "", recipientName: getRecipientName(for: selectedChat))
-                    .onAppear {
-                        if let chat = selectedChat {
-                            DispatchQueue.global().async {
-                                markMessagesAsRead(for: chat)
-                            }
-                        }
-                    },
+                destination: selectedChatView(),
                 isActive: Binding(
                     get: { selectedChat != nil },
                     set: { if !$0 { selectedChat = nil } }
@@ -95,6 +88,20 @@ struct DMHomeView: View {
         )
         .alert(isPresented: $showNotificationBanner) {
             Alert(title: Text("New Message"), message: Text(bannerMessage), dismissButton: .default(Text("OK")))
+        }
+    }
+
+    @ViewBuilder
+    private func selectedChatView() -> some View {
+        if let selectedChat = selectedChat {
+            ChatView(matchID: selectedChat.id ?? "", recipientName: getRecipientName(for: selectedChat))
+                .onAppear {
+                    DispatchQueue.global().async {
+                        markMessagesAsRead(for: selectedChat)
+                    }
+                }
+        } else {
+            EmptyView()
         }
     }
 
