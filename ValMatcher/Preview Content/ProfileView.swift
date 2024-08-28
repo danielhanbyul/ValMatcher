@@ -8,7 +8,6 @@
 import SwiftUI
 import Firebase
 import FirebaseStorage
-import AVKit
 
 struct ProfileView: View {
     @ObservedObject var viewModel: UserProfileViewModel
@@ -17,14 +16,14 @@ struct ProfileView: View {
     @State private var isEditing = false
     @State private var showingImagePicker = false
     @State private var newMedia: [MediaItem] = []
-    @State private var additionalMedia: [MediaItem] = []
+    @State private var additionalImages: [String] = []
     @State private var updatedAnswers: [String: String] = [:]
     @State private var showingSettings = false
     @State private var isShowingLoginView = false
     @State private var selectedImages: Set<Int> = []
     @State private var currentIndex: Int = 0 // To track the current image being displayed
 
-    let maxMediaCount = 3 // Maximum number of media items allowed
+    let maxImageCount = 3 // Maximum number of images allowed
 
     var body: some View {
         VStack {
@@ -45,11 +44,11 @@ struct ProfileView: View {
                     UserCardView(user: viewModel.user)
                     
                     if isEditing {
-                        editableMediaList
-                        addMediaButton
+                        editableImageList
+                        addImageButton
                         deleteSelectedButton
                     } else {
-                        displayMediaList
+                        displayImageList
                     }
                     
                     questionAnswersSection
@@ -122,26 +121,35 @@ struct ProfileView: View {
         }
     }
 
-    // View to display images/videos in non-edit mode
-    private var displayMediaList: some View {
+    // View to display images in non-edit mode
+    private var displayImageList: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 15) {
                 Spacer() // Add a spacer to push content towards the center
-                ForEach(additionalMedia) { media in
-                    if let image = media.image {
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 100, height: 100)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                            .shadow(radius: 5)
-                    } else if let videoURL = media.videoURL {
-                        VideoPlayer(player: AVPlayer(url: videoURL))
-                            .frame(width: 100, height: 100)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                            .shadow(radius: 5)
+                ForEach(additionalImages, id: \.self) { urlString in
+                    if let url = URL(string: urlString), !url.absoluteString.isEmpty {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .empty:
+                                ProgressView()
+                            case .success(let image):
+                                image.resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 100, height: 100)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                    .shadow(radius: 5)
+                            case .failure:
+                                Image(systemName: "photo")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 100, height: 100)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                            @unknown default:
+                                EmptyView()
+                            }
+                        }
                     }
                 }
                 Spacer() // Add another spacer to center the content
@@ -150,49 +158,59 @@ struct ProfileView: View {
         }
     }
 
-    private var editableMediaList: some View {
+
+    private var editableImageList: some View {
         VStack(alignment: .leading, spacing: 15) {
-            ForEach(additionalMedia.indices, id: \.self) { index in
-                let media = additionalMedia[index]
-                HStack {
-                    if let image = media.image {
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 100, height: 100)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                            .shadow(radius: 5)
-                    } else if let videoURL = media.videoURL {
-                        VideoPlayer(player: AVPlayer(url: videoURL))
-                            .frame(width: 100, height: 100)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                            .shadow(radius: 5)
-                    }
+            ForEach(additionalImages.indices, id: \.self) { index in
+                let urlString = additionalImages[index]
+                if let url = URL(string: urlString), !url.absoluteString.isEmpty {
+                    HStack {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .empty:
+                                ProgressView()
+                            case .success(let image):
+                                image.resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 100, height: 100)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                    .shadow(radius: 5)
+                            case .failure:
+                                Image(systemName: "photo")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 100, height: 100)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                            @unknown default:
+                                EmptyView()
+                            }
+                        }
 
-                    Spacer()
+                        Spacer()
 
-                    // Delete Button for each image/video
-                    Button(action: {
-                        deleteMedia(at: index)
-                    }) {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
-                            .padding(4)
-                            .background(Color.white)
-                            .clipShape(Circle())
-                            .shadow(radius: 3)
+                        // Delete Button for each image
+                        Button(action: {
+                            deleteImage(at: index)
+                        }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                                .padding(4)
+                                .background(Color.white)
+                                .clipShape(Circle())
+                                .shadow(radius: 3)
+                        }
+                        .padding(.trailing, 10)
                     }
-                    .padding(.trailing, 10)
+                    .padding(.vertical, 5)
                 }
-                .padding(.vertical, 5)
             }
         }
         .padding(.horizontal)
     }
 
-    private var addMediaButton: some View {
+    private var addImageButton: some View {
         Button(action: {
             self.showingImagePicker = true
         }) {
@@ -202,16 +220,16 @@ struct ProfileView: View {
                 .background(Color.blue)
                 .cornerRadius(8)
         }
-        .disabled(additionalMedia.count >= maxMediaCount)
+        .disabled(additionalImages.count >= maxImageCount)
     }
 
     private var deleteSelectedButton: some View {
         Group {
             if !selectedImages.isEmpty {
                 Button(action: {
-                    deleteSelectedMedia()
+                    deleteSelectedImages()
                 }) {
-                    Text("Delete Selected Media")
+                    Text("Delete Selected Images")
                         .foregroundColor(.white)
                         .padding()
                         .background(Color.red)
@@ -250,18 +268,10 @@ struct ProfileView: View {
     // MARK: - Functions
 
     private func initializeEditValues() {
-        additionalMedia = viewModel.user.additionalImages.compactMap { url -> MediaItem? in
-            if url.lowercased().hasSuffix(".jpg") || url.lowercased().hasSuffix(".jpeg") || url.lowercased().hasSuffix(".png") {
-                return MediaItem(image: UIImage(contentsOfFile: url))
-            } else if url.lowercased().hasSuffix(".mp4") || url.lowercased().hasSuffix(".mov") {
-                return MediaItem(videoURL: URL(string: url))
-            } else {
-                return nil
-            }
-        }.filter { $0.image != nil || $0.videoURL != nil }
+        additionalImages = viewModel.user.additionalImages.compactMap { $0 }.filter { !$0.isEmpty }
         updatedAnswers = viewModel.user.answers
         selectedImages.removeAll()
-        currentIndex = 0 // Reset to the first media
+        currentIndex = 0 // Reset to the first image
     }
 
     private func saveProfile() {
@@ -274,20 +284,14 @@ struct ProfileView: View {
         guard !newMedia.isEmpty else { return }
         
         uploadNewMedia { urls in
-            self.additionalMedia.append(contentsOf: urls.map {
-                if $0.lowercased().hasSuffix(".jpg") || $0.lowercased().hasSuffix(".jpeg") || $0.lowercased().hasSuffix(".png") {
-                    return MediaItem(image: UIImage(contentsOfFile: $0))
-                } else {
-                    return MediaItem(videoURL: URL(string: $0))
-                }
-            })
+            self.additionalImages.append(contentsOf: urls)
             
-            // Update the profile with the newly added media
+            // Update the profile with the newly added images
             self.viewModel.updateUserProfile(
                 newAge: self.viewModel.user.age,
                 newRank: self.viewModel.user.rank,
                 newServer: self.viewModel.user.server,
-                additionalImages: self.additionalMedia.compactMap { $0.image != nil ? $0.image!.description : $0.videoURL!.absoluteString },
+                additionalImages: self.additionalImages.map { $0 },
                 updatedAnswers: self.updatedAnswers
             )
             
@@ -296,13 +300,16 @@ struct ProfileView: View {
         }
     }
 
-    // Function to delete a single image/video at a given index
-    private func deleteMedia(at index: Int) {
-        let media = additionalMedia[index]
-        additionalMedia.remove(at: index)
+    // Function to delete a single image at a given index
+    private func deleteImage(at index: Int) {
+        let urlString = additionalImages[index]
+        
+        // Remove the image from the UI immediately
+        additionalImages.remove(at: index)
+        
         // Adjust current index if necessary
-        if currentIndex >= additionalMedia.count {
-            currentIndex = max(0, additionalMedia.count - 1)
+        if currentIndex >= additionalImages.count {
+            currentIndex = max(0, additionalImages.count - 1)
         }
         
         // Update the view model with the changes
@@ -310,32 +317,28 @@ struct ProfileView: View {
             newAge: self.viewModel.user.age,
             newRank: self.viewModel.user.rank,
             newServer: self.viewModel.user.server,
-            additionalImages: self.additionalMedia.compactMap { $0.image != nil ? $0.image!.description : $0.videoURL!.absoluteString },
+            additionalImages: self.additionalImages.map { $0 },
             updatedAnswers: self.updatedAnswers
         )
         
-        // Proceed to delete the media from Firebase in the background
-        if let image = media.image {
-            deleteImageFromStorageAndFirestore(url: image.description)
-        } else if let videoURL = media.videoURL {
-            deleteImageFromStorageAndFirestore(url: videoURL.absoluteString)
-        }
+        // Proceed to delete the image from Firebase in the background
+        deleteImageFromStorageAndFirestore(url: urlString)
     }
 
-    private func deleteSelectedMedia() {
+    private func deleteSelectedImages() {
         let indexesToDelete = Array(selectedImages).sorted(by: >)
-        let mediaToDelete = indexesToDelete.map { additionalMedia[$0] }
+        let urlsToDelete = indexesToDelete.map { additionalImages[$0] }
         
-        // Remove media from UI immediately
+        // Remove images from UI immediately
         for index in indexesToDelete {
-            additionalMedia.remove(at: index)
+            additionalImages.remove(at: index)
         }
         
         selectedImages.removeAll() // Clear selection
         
         // Adjust current index if necessary
-        if currentIndex >= additionalMedia.count {
-            currentIndex = max(0, additionalMedia.count - 1)
+        if currentIndex >= additionalImages.count {
+            currentIndex = max(0, additionalImages.count - 1)
         }
         
         // Update the view model with the changes
@@ -343,17 +346,13 @@ struct ProfileView: View {
             newAge: self.viewModel.user.age,
             newRank: self.viewModel.user.rank,
             newServer: self.viewModel.user.server,
-            additionalImages: self.additionalMedia.compactMap { $0.image != nil ? $0.image!.description : $0.videoURL!.absoluteString },
+            additionalImages: self.additionalImages.map { $0 },
             updatedAnswers: self.updatedAnswers
         )
         
-        // Proceed to delete media from Firebase
-        for media in mediaToDelete {
-            if let image = media.image {
-                deleteImageFromStorageAndFirestore(url: image.description)
-            } else if let videoURL = media.videoURL {
-                deleteImageFromStorageAndFirestore(url: videoURL.absoluteString)
-            }
+        // Proceed to delete images from Firebase
+        for urlString in urlsToDelete {
+            deleteImageFromStorageAndFirestore(url: urlString)
         }
     }
 
@@ -376,9 +375,9 @@ struct ProfileView: View {
             "additionalImages": FieldValue.arrayRemove([url])
         ]) { error in
             if let error = error {
-                print("Error removing media URL from Firestore: \(error.localizedDescription)")
+                print("Error removing image URL from Firestore: \(error.localizedDescription)")
             } else {
-                print("Successfully removed media URL from Firestore")
+                print("Successfully removed image URL from Firestore")
             }
         }
     }
@@ -409,22 +408,6 @@ struct ProfileView: View {
                         dispatchGroup.leave()
                     }
                 }
-            } else if let videoURL = media.videoURL {
-                let fileName = UUID().uuidString + ".mp4"
-                let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
-                storageRef.putFile(from: videoURL, metadata: nil) { _, error in
-                    if let error = error {
-                        print("Error uploading video: \(error.localizedDescription)")
-                        dispatchGroup.leave()
-                        return
-                    }
-                    storageRef.downloadURL { url, error in
-                        if let downloadURL = url {
-                            uploadedURLs.append(downloadURL.absoluteString)
-                        }
-                        dispatchGroup.leave()
-                    }
-                }
             }
         }
 
@@ -441,9 +424,9 @@ struct ProfileView: View {
             "additionalImages": FieldValue.arrayUnion(urls)
         ]) { error in
             if let error = error {
-                print("Error saving media URLs to Firestore: \(error.localizedDescription)")
+                print("Error saving image URLs to Firestore: \(error.localizedDescription)")
             } else {
-                print("Successfully saved media URLs to Firestore")
+                print("Successfully saved image URLs to Firestore")
             }
         }
     }

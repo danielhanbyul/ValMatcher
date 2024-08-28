@@ -316,14 +316,27 @@ struct ContentView: View {
 
             let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
 
+            // Only process new messages once per change
             for change in newMessages {
                 let newMessage = change.document
                 let senderID = newMessage.data()["senderID"] as? String
+                let messageText = newMessage.data()["text"] as? String ?? "You have a new message"
+                let timestamp = newMessage.data()["timestamp"] as? Timestamp
                 let isRead = newMessage.data()["isRead"] as? Bool ?? true
 
-                // Update the unread message count without triggering notifications
-                if !isRead, senderID != currentUserID {
-                    self.updateUnreadMessagesCount()
+                // Ensure the message is new and unread, and filter out past messages
+                if let timestamp = timestamp, !isRead, senderID != currentUserID, timestamp.dateValue().timeIntervalSinceNow > -5 {
+                    // Fetch the sender's name and send a notification without displaying the banner
+                    db.collection("users").document(senderID!).getDocument { document, error in
+                        if let error = error {
+                            print("Error fetching sender's name: \(error)")
+                            return
+                        }
+
+                        let senderName = document?.data()?["name"] as? String ?? "Unknown User"
+                        self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
+                        self.updateUnreadMessagesCount(for: matchID, messageID: change.document.documentID)
+                    }
                 }
             }
         }
@@ -332,32 +345,37 @@ struct ContentView: View {
         self.messageListeners[matchID] = listener
     }
 
-
-    private func updateUnreadMessagesCount() {
+    private func updateUnreadMessagesCount(for matchID: String, messageID: String) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
 
         let db = Firestore.firestore()
-        var count = 0
-        let group = DispatchGroup()
+        let messageRef = db.collection("matches").document(matchID).collection("messages").document(messageID)
 
-        Firestore.firestore().collection("matches")
-            .whereField("user1", isEqualTo: currentUserID)
-            .getDocuments { snapshot, error in
-                snapshot?.documents.forEach { document in
-                    group.enter()
-                    Firestore.firestore().collection("matches").document(document.documentID).collection("messages")
-                        .whereField("senderID", isNotEqualTo: currentUserID)
-                        .whereField("isRead", isEqualTo: false)
-                        .getDocuments { messageSnapshot, error in
-                            count += messageSnapshot?.documents.count ?? 0
-                            group.leave()
-                        }
-                }
-                group.notify(queue: .main) {
-                    self.unreadMessagesCount = count
+        messageRef.getDocument { document, error in
+            if let document = document, document.exists {
+                let senderID = document.data()?["senderID"] as? String
+                let isRead = document.data()?["isRead"] as? Bool ?? true
+
+                if senderID != currentUserID && !isRead {
+                    self.unreadMessagesCount += 1
                 }
             }
+        }
     }
+
+    private func notifyUserOfNewMessages(senderName: String, messageText: String) {
+        // No banner notification
+
+        // Trigger a system notification
+        let content = UNMutableNotificationContent()
+        content.title = "New Message from \(senderName)"
+        content.body = messageText
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+
 
     
 

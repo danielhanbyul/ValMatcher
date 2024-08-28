@@ -404,9 +404,6 @@ struct DMHomeView: View {
                     // If there is a new message and the app is active, show the banner notification
                     if difference > 0 && UIApplication.shared.applicationState == .active {
                         self.receivedNewMessage = true
-                        if let latestMessage = latestMessage, latestMessage.data()["senderID"] as? String != currentUserID {
-                            self.showInAppNotification(for: latestMessage)
-                        }
                     }
                 }
             }
@@ -464,14 +461,6 @@ struct DMHomeView: View {
         }
     }
 
-    private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
-        guard let senderName = latestMessage.data()["senderName"] as? String,
-              let messageText = latestMessage.data()["text"] as? String else { return }
-
-        let alertMessage = "\(senderName): \(messageText)"
-        showNotification(title: "New Message", body: alertMessage)
-    }
-
     private func mergeAndRemoveDuplicates(existingMatches: [Chat], newMatches: [Chat]) -> [Chat] {
         var combinedMatches = existingMatches
 
@@ -513,6 +502,7 @@ struct DMHomeView: View {
         UNUserNotificationCenter.current().add(request)
     }
 }
+
 
 let dateFormatter: DateFormatter = {
     let formatter = DateFormatter()
