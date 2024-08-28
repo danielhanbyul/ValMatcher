@@ -27,7 +27,8 @@ struct ContentView: View {
     @State private var notificationCount = 0
     @State private var acknowledgedNotifications: Set<String> = []
     @State private var unreadMessagesCount = 0
-    @State private var messageListeners: [String: ListenerRegistration] = [:]  // Dictionary to hold listeners
+    @State private var messageListeners: [String: MessageListener] = [:]
+
 
     enum InteractionResult {
         case liked
@@ -307,7 +308,6 @@ struct ContentView: View {
         let messageQuery = db.collection("matches").document(matchID).collection("messages")
             .order(by: "timestamp")
 
-        // Store the listener in the dictionary
         let listener = messageQuery.addSnapshotListener { messageSnapshot, error in
             if let error = error {
                 print("Error fetching messages: \(error)")
@@ -323,9 +323,7 @@ struct ContentView: View {
                 let timestamp = newMessage.data()["timestamp"] as? Timestamp
                 let isRead = newMessage.data()["isRead"] as? Bool ?? true
 
-                // Ensure the message is new, unread, and from another user
                 if let timestamp = timestamp, !isRead, senderID != currentUserID, timestamp.dateValue().timeIntervalSinceNow > -5 {
-                    // Fetch the sender's name and send a notification
                     db.collection("users").document(senderID!).getDocument { document, error in
                         if let error = error {
                             print("Error fetching sender's name: \(error)")
@@ -340,10 +338,8 @@ struct ContentView: View {
             }
         }
 
-        // Store the listener so it remains active
-        self.messageListeners[matchID] = listener
+        self.messageListeners[matchID] = MessageListener(listener: listener)
     }
-
 
     private func updateUnreadMessagesCount(for matchID: String, messageID: String) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
@@ -357,11 +353,17 @@ struct ContentView: View {
                 let isRead = document.data()?["isRead"] as? Bool ?? true
 
                 if senderID != currentUserID && !isRead {
-                    self.unreadMessagesCount += 1
+                    if var listener = self.messageListeners[matchID], !listener.isAlreadyCounted(messageID: messageID) {
+                        self.unreadMessagesCount += 1
+                        listener.markAsCounted(messageID: messageID)
+                        self.messageListeners[matchID] = listener
+                    }
                 }
             }
         }
     }
+
+
 
     private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
         guard UIApplication.shared.applicationState == .active else {
