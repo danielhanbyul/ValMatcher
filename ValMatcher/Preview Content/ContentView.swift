@@ -363,13 +363,25 @@ struct ContentView: View {
         }
     }
 
-    private func notifyUserOfNewMessages(senderName: String, messageText: String) {
-        // Trigger a banner and system notification for each new message
+    private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
+        guard UIApplication.shared.applicationState == .active else {
+            return // Prevent in-app notification if the app is not in the foreground
+        }
+        
+        guard let senderName = latestMessage.data()["senderName"] as? String,
+              let messageText = latestMessage.data()["text"] as? String else { return }
+
         let alertMessage = "\(senderName): \(messageText)"
         self.bannerMessage = alertMessage
         self.showNotificationBanner = true
+    }
 
-        // Trigger a system notification
+    private func notifyUserOfNewMessages(senderName: String, messageText: String) {
+        guard UIApplication.shared.applicationState != .active else {
+            return // Prevent system notification if the app is in the foreground
+        }
+
+        // System notification
         let content = UNMutableNotificationContent()
         content.title = "New Message from \(senderName)"
         content.body = messageText
@@ -378,7 +390,6 @@ struct ContentView: View {
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
-
 
 
     
