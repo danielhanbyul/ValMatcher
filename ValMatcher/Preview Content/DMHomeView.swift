@@ -37,8 +37,8 @@ struct DMHomeView: View {
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
     @State private var debounceTimer: Timer?
-    @State private var isLoading = true // New state for loading
-    @State private var messageListeners: [String: ListenerRegistration] = [:] // Track listeners for each match
+    @State private var isLoading = true
+    @State private var messageListeners: [String: ListenerRegistration] = [:]
 
     var body: some View {
         ZStack {
@@ -46,7 +46,6 @@ struct DMHomeView: View {
                 .edgesIgnoringSafeArea(.all)
 
             if isLoading {
-                // Show a loading indicator while data is being loaded
                 ProgressView("Loading...")
                     .foregroundColor(.white)
             } else {
@@ -71,7 +70,7 @@ struct DMHomeView: View {
                         .padding()
                     }
                 }
-                .animation(nil, value: matches) // Disable animation during data updates
+                .animation(nil, value: matches)
             }
         }
         .navigationBarTitle("Messages", displayMode: .inline)
@@ -99,6 +98,9 @@ struct DMHomeView: View {
                                 markMessagesAsRead(for: chat)
                             }
                         }
+                    }
+                    .onDisappear {
+                        refreshChatAfterReadingMessages()
                     },
                 isActive: Binding(
                     get: { selectedChat != nil },
@@ -187,7 +189,6 @@ struct DMHomeView: View {
     }
 
     private func setupListeners() {
-        // We will load matches only when necessary to reduce unnecessary reloads
         loadMatches()
 
         NotificationCenter.default.addObserver(forName: Notification.Name("RefreshChatList"), object: nil, queue: .main) { [self] _ in
@@ -210,7 +211,6 @@ struct DMHomeView: View {
 
         let db = Firestore.firestore()
 
-        // Fetch matches where the current user is user1
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
@@ -243,7 +243,6 @@ struct DMHomeView: View {
                 }
             }
 
-        // Fetch matches where the current user is user2
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .order(by: "timestamp", descending: true)
@@ -274,7 +273,6 @@ struct DMHomeView: View {
                     self.addMessageListeners(for: updatedMatches)
                     print("Loaded matches for user2: \(self.matches)")
 
-                    // Set isLoading to false after data is loaded and sorted
                     DispatchQueue.main.async {
                         self.isLoading = false
                     }
@@ -535,12 +533,16 @@ struct DMHomeView: View {
             batch.commit { error in
                 if let error = error {
                     print("Error committing batch: \(error.localizedDescription)")
-                } else {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
-                    }
                 }
             }
+        }
+    }
+
+    private func refreshChatAfterReadingMessages() {
+        guard let selectedChatID = selectedChat?.id else { return }
+
+        if let index = matches.firstIndex(where: { $0.id == selectedChatID }) {
+            matches[index].hasUnreadMessages = false
         }
     }
 
