@@ -316,7 +316,6 @@ struct ContentView: View {
 
             let newMessages = messageSnapshot?.documentChanges.filter { $0.type == .added } ?? []
 
-            // Only process new messages once per change
             for change in newMessages {
                 let newMessage = change.document
                 let senderID = newMessage.data()["senderID"] as? String
@@ -324,9 +323,9 @@ struct ContentView: View {
                 let timestamp = newMessage.data()["timestamp"] as? Timestamp
                 let isRead = newMessage.data()["isRead"] as? Bool ?? true
 
-                // Ensure the message is new and unread, and filter out past messages
+                // Ensure the message is new, unread, and from another user
                 if let timestamp = timestamp, !isRead, senderID != currentUserID, timestamp.dateValue().timeIntervalSinceNow > -5 {
-                    // Fetch the sender's name and send a notification without displaying the banner
+                    // Fetch the sender's name and send a notification
                     db.collection("users").document(senderID!).getDocument { document, error in
                         if let error = error {
                             print("Error fetching sender's name: \(error)")
@@ -344,6 +343,7 @@ struct ContentView: View {
         // Store the listener so it remains active
         self.messageListeners[matchID] = listener
     }
+
 
     private func updateUnreadMessagesCount(for matchID: String, messageID: String) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
@@ -364,7 +364,10 @@ struct ContentView: View {
     }
 
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
-        // No banner notification
+        // Trigger a banner and system notification for each new message
+        let alertMessage = "\(senderName): \(messageText)"
+        self.bannerMessage = alertMessage
+        self.showNotificationBanner = true
 
         // Trigger a system notification
         let content = UNMutableNotificationContent()
@@ -375,6 +378,7 @@ struct ContentView: View {
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
+
 
 
     

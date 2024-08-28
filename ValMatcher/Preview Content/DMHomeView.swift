@@ -18,9 +18,11 @@ struct DMHomeView: View {
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
-    @State private var shouldSortChats = true  // Set to true by default to sort on first load
-    @State private var receivedNewMessage = false // State to track if a new message was received during the session
+    @State private var shouldSortChats = true
+    @State private var receivedNewMessage = false
     @State private var selectedChat: Chat? // The chat that the user is trying to open
+    @State private var showNotificationBanner = false
+    @State private var bannerMessage = ""
 
     var body: some View {
         ZStack {
@@ -78,6 +80,9 @@ struct DMHomeView: View {
                 EmptyView()
             }
         )
+        .alert(isPresented: $showNotificationBanner) {
+            Alert(title: Text("New Message"), message: Text(bannerMessage), dismissButton: .default(Text("OK")))
+        }
     }
 
     @ViewBuilder
@@ -85,7 +90,6 @@ struct DMHomeView: View {
         HStack {
             Button(action: {
                 selectedChat = match
-                // Optimistically update UI to remove the red dot
                 if let index = matches.firstIndex(where: { $0.id == match.id }) {
                     matches[index].hasUnreadMessages = false
                 }
@@ -287,7 +291,7 @@ struct DMHomeView: View {
             guard let matchID = match.id else { continue }
             group.enter()
             Firestore.firestore().collection("matches").document(matchID).collection("messages")
-                .order(by: "timestamp", descending: true)  // Order messages by timestamp
+                .order(by: "timestamp", descending: true)
                 .getDocuments { messageSnapshot, error in
                     if let error = error {
                         print("Error fetching messages: \(error)")
@@ -307,7 +311,6 @@ struct DMHomeView: View {
                         updatedMatches[index].hasUnreadMessages = false
                     }
 
-                    // Update the latest message timestamp for sorting
                     if let latestMessage = messageSnapshot?.documents.first {
                         updatedMatches[index].timestamp = latestMessage.data()["timestamp"] as? Timestamp
                     }
@@ -320,15 +323,13 @@ struct DMHomeView: View {
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
 
-            // Sort the matches based on the most recent message timestamp
             self.matches = updatedMatches.sorted {
                 ($0.timestamp?.dateValue() ?? Date.distantPast) > ($1.timestamp?.dateValue() ?? Date.distantPast)
             }
 
-            // Trigger notification only if a new message was received
             if self.receivedNewMessage {
                 notifyUserOfNewMessages(count: count)
-                self.receivedNewMessage = false // Reset the flag after notification
+                self.receivedNewMessage = false
             }
         }
     }
@@ -378,14 +379,12 @@ struct DMHomeView: View {
                 return
             }
 
-            // Initialize a dictionary to store unread counts per match
             var unreadCounts: [String: Int] = [:]
             var totalUnreadCount = 0
 
             snapshot?.documents.forEach { document in
                 let matchID = document.documentID
                 self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID) { unreadCount, latestMessage in
-                    // Adjust the total count based on the difference between old and new counts
                     let previousCount = unreadCounts[matchID] ?? 0
                     let difference = unreadCount - previousCount
                     totalUnreadCount += difference
@@ -393,7 +392,7 @@ struct DMHomeView: View {
 
                     if difference > 0 {
                         DispatchQueue.main.async {
-                            self.shouldSortChats = true  // Only sort if there is a significant change
+                            self.shouldSortChats = true
                         }
                     }
 
@@ -401,9 +400,11 @@ struct DMHomeView: View {
                         self.totalUnreadMessages = totalUnreadCount
                     }
 
-                    // If there is a new message and the app is active, show the banner notification
                     if difference > 0 && UIApplication.shared.applicationState == .active {
                         self.receivedNewMessage = true
+                        if let latestMessage = latestMessage, latestMessage.data()["senderID"] as? String != currentUserID {
+                            self.showInAppNotification(for: latestMessage)
+                        }
                     }
                 }
             }
@@ -420,7 +421,6 @@ struct DMHomeView: View {
                 return
             }
 
-            // Calculate the unread message count and get the latest message
             let unreadMessages = messageSnapshot?.documents.filter { document in
                 let senderID = document.data()["senderID"] as? String ?? ""
                 let isRead = document.data()["isRead"] as? Bool ?? true
@@ -446,19 +446,39 @@ struct DMHomeView: View {
                 return
             }
 
+            let batch = db.batch()
             snapshot?.documents.forEach { document in
-                document.reference.updateData(["isRead": true])
+                let messageRef = document.reference
+                batch.updateData(["isRead": true], forDocument: messageRef)
+            }
+
+            batch.commit { error in
+                if let error = error {
+                    print("Error committing batch: \(error.localizedDescription)")
+                } else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
+                    }
+                }
             }
         }
     }
 
     private func notifyUserOfNewMessages(count: Int) {
         guard count > 0 else { return }
-        // Send notification only if the app is not active
         if UIApplication.shared.applicationState != .active {
             let alertMessage = "You have \(count) new message(s)."
             showNotification(title: "New Message", body: alertMessage)
         }
+    }
+
+    private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
+        guard let senderName = latestMessage.data()["senderName"] as? String,
+              let messageText = latestMessage.data()["text"] as? String else { return }
+
+        let alertMessage = "\(senderName): \(messageText)"
+        self.bannerMessage = alertMessage
+        self.showNotificationBanner = true
     }
 
     private func mergeAndRemoveDuplicates(existingMatches: [Chat], newMatches: [Chat]) -> [Chat] {
@@ -502,7 +522,6 @@ struct DMHomeView: View {
         UNUserNotificationCenter.current().add(request)
     }
 }
-
 
 let dateFormatter: DateFormatter = {
     let formatter = DateFormatter()
