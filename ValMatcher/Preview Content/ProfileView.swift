@@ -8,6 +8,8 @@
 import SwiftUI
 import Firebase
 import FirebaseStorage
+import AVKit
+import PhotosUI
 
 struct ProfileView: View {
     @ObservedObject var viewModel: UserProfileViewModel
@@ -22,6 +24,8 @@ struct ProfileView: View {
     @State private var isShowingLoginView = false
     @State private var selectedImages: Set<Int> = []
     @State private var currentIndex: Int = 0 // To track the current image being displayed
+    @State private var videoURL: URL? = nil // Updated to URL? type
+    @State private var showingVideoPicker = false // To trigger video picker
 
     let maxImageCount = 3 // Maximum number of images allowed
 
@@ -46,9 +50,11 @@ struct ProfileView: View {
                     if isEditing {
                         editableImageList
                         addImageButton
+                        addVideoButton // Add video button
                         deleteSelectedButton
                     } else {
                         displayImageList
+                        displayVideo // Display video if available
                     }
                     
                     questionAnswersSection
@@ -62,6 +68,10 @@ struct ProfileView: View {
         .sheet(isPresented: $showingImagePicker) {
             ImagePicker(selectedMedia: $newMedia)
                 .onDisappear(perform: saveMedia)
+        }
+        .sheet(isPresented: $showingVideoPicker) {
+            VideoPicker(selectedVideoURL: $videoURL)
+                .onDisappear(perform: saveVideo)
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView(user: $viewModel.user, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
@@ -157,7 +167,19 @@ struct ProfileView: View {
             .padding(.horizontal)
         }
     }
-
+    
+    private var displayVideo: some View {
+        Group {
+            if let url = videoURL {
+                VideoPlayer(player: AVPlayer(url: url))
+                    .frame(height: 200)
+                    .cornerRadius(10)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                    .shadow(radius: 5)
+                    .padding()
+            }
+        }
+    }
 
     private var editableImageList: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -223,6 +245,19 @@ struct ProfileView: View {
         .disabled(additionalImages.count >= maxImageCount)
     }
 
+    private var addVideoButton: some View {
+        Button(action: {
+            self.showingVideoPicker = true
+        }) {
+            Text("Add Video")
+                .foregroundColor(.white)
+                .padding()
+                .background(Color.blue)
+                .cornerRadius(8)
+        }
+        .disabled(videoURL != nil) // Only allow one video
+    }
+
     private var deleteSelectedButton: some View {
         Group {
             if !selectedImages.isEmpty {
@@ -269,6 +304,7 @@ struct ProfileView: View {
 
     private func initializeEditValues() {
         additionalImages = viewModel.user.additionalImages.compactMap { $0 }.filter { !$0.isEmpty }
+        videoURL = viewModel.user.videoURL.flatMap { URL(string: $0) }
         updatedAnswers = viewModel.user.answers
         selectedImages.removeAll()
         currentIndex = 0 // Reset to the first image
@@ -293,10 +329,29 @@ struct ProfileView: View {
                 newServer: self.viewModel.user.server,
                 additionalImages: self.additionalImages.map { $0 },
                 updatedAnswers: self.updatedAnswers
+                // Removed videoURL here
             )
             
             // Reset newMedia for next upload
             self.newMedia.removeAll()
+        }
+    }
+
+    private func saveVideo() {
+        guard let selectedVideoURL = videoURL else { return }
+        
+        uploadVideo(selectedVideoURL) { url in
+            self.videoURL = url
+            
+            // Update the profile with the newly added video
+            self.viewModel.updateUserProfile(
+                newAge: self.viewModel.user.age,
+                newRank: self.viewModel.user.rank,
+                newServer: self.viewModel.user.server,
+                additionalImages: self.additionalImages.map { $0 },
+                updatedAnswers: self.updatedAnswers
+                // Removed videoURL here
+            )
         }
     }
 
@@ -319,6 +374,7 @@ struct ProfileView: View {
             newServer: self.viewModel.user.server,
             additionalImages: self.additionalImages.map { $0 },
             updatedAnswers: self.updatedAnswers
+            // Removed videoURL here
         )
         
         // Proceed to delete the image from Firebase in the background
@@ -348,6 +404,7 @@ struct ProfileView: View {
             newServer: self.viewModel.user.server,
             additionalImages: self.additionalImages.map { $0 },
             updatedAnswers: self.updatedAnswers
+            // Removed videoURL here
         )
         
         // Proceed to delete images from Firebase
@@ -366,6 +423,25 @@ struct ProfileView: View {
                 removeImageURLFromFirestore(url: url)
             }
         }
+    }
+
+    private func deleteVideo() {
+        guard let videoURL = videoURL else { return }
+        
+        deleteImageFromStorageAndFirestore(url: videoURL.absoluteString)
+        
+        // Remove video URL from the profile
+        self.videoURL = nil
+        
+        // Update the view model with the changes
+        self.viewModel.updateUserProfile(
+            newAge: self.viewModel.user.age,
+            newRank: self.viewModel.user.rank,
+            newServer: self.viewModel.user.server,
+            additionalImages: self.additionalImages.map { $0 },
+            updatedAnswers: self.updatedAnswers
+            // Removed videoURL here
+        )
     }
 
     private func removeImageURLFromFirestore(url: String) {
@@ -417,6 +493,25 @@ struct ProfileView: View {
         }
     }
 
+    private func uploadVideo(_ videoURL: URL, completion: @escaping (URL) -> Void) {
+        let fileName = UUID().uuidString + ".mp4"
+        let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
+        let metadata = StorageMetadata()
+        metadata.contentType = "video/mp4"
+        
+        storageRef.putFile(from: videoURL, metadata: metadata) { _, error in
+            if let error = error {
+                print("Error uploading video: \(error.localizedDescription)")
+                return
+            }
+            storageRef.downloadURL { url, error in
+                if let downloadURL = url {
+                    completion(downloadURL)
+                }
+            }
+        }
+    }
+
     private func saveImageURLsToFirestore(_ urls: [String]) {
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(viewModel.user.id ?? "")
@@ -438,4 +533,49 @@ struct ProfileView: View {
             selectedImages.insert(index)
         }
     }
+}
+
+// MARK: - VideoPicker Implementation
+
+struct VideoPicker: UIViewControllerRepresentable {
+    @Binding var selectedVideoURL: URL?
+
+    class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        var parent: VideoPicker
+
+        init(parent: VideoPicker) {
+            self.parent = parent
+        }
+
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            picker.dismiss(animated: true)
+            guard let result = results.first else { return }
+
+            if result.itemProvider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+                result.itemProvider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { (url, error) in
+                    if let url = url {
+                        DispatchQueue.main.async {
+                            self.parent.selectedVideoURL = url
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var config = PHPickerConfiguration()
+        config.filter = .videos
+        config.selectionLimit = 1
+
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
 }

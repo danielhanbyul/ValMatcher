@@ -18,4 +18,5 @@ struct UserProfile: Identifiable, Codable, Equatable {
     var answers: [String: String]
     var hasAnsweredQuestions: Bool
     var additionalImages: [String?]
+    var videoURL: String?
 }
