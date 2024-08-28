@@ -12,7 +12,6 @@ import FirebaseAuth
 import FirebaseFirestoreSwift
 import UserNotifications
 
-
 struct MessageListener {
     let listener: ListenerRegistration
     private(set) var countedMessageIDs: Set<String> = []
@@ -296,36 +295,57 @@ struct DMHomeView: View {
 
     private func updateUnreadMessagesCount(from matches: [Chat]) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-        var totalUnreadCount = 0
-
+        var count = 0
         let group = DispatchGroup()
 
-        for match in matches {
+        var updatedMatches = matches
+
+        for (index, match) in updatedMatches.enumerated() {
             guard let matchID = match.id else { continue }
             group.enter()
-            let messageQuery = Firestore.firestore().collection("matches").document(matchID).collection("messages")
-                .whereField("isRead", isEqualTo: false)
-                .whereField("senderID", isNotEqualTo: currentUserID)
+            Firestore.firestore().collection("matches").document(matchID).collection("messages")
+                .order(by: "timestamp", descending: true)
+                .getDocuments { messageSnapshot, error in
+                    if let error = error {
+                        print("Error fetching messages: \(error)")
+                        group.leave()
+                        return
+                    }
 
-            messageQuery.getDocuments { snapshot, error in
-                if let error = error {
-                    print("Error fetching unread messages: \(error)")
+                    let unreadCount = messageSnapshot?.documents.filter { document in
+                        let senderID = document.data()["senderID"] as? String ?? ""
+                        let isRead = document.data()["isRead"] as? Bool ?? true
+                        return senderID != currentUserID && !isRead
+                    }.count ?? 0
+
+                    if unreadCount > 0 {
+                        updatedMatches[index].hasUnreadMessages = true
+                    } else {
+                        updatedMatches[index].hasUnreadMessages = false
+                    }
+
+                    if let latestMessage = messageSnapshot?.documents.first {
+                        updatedMatches[index].timestamp = latestMessage.data()["timestamp"] as? Timestamp
+                    }
+
+                    count += unreadCount
                     group.leave()
-                    return
                 }
-
-                let unreadCount = snapshot?.documents.count ?? 0
-                totalUnreadCount += unreadCount
-
-                group.leave()
-            }
         }
 
         group.notify(queue: .main) {
-            self.totalUnreadMessages = totalUnreadCount
+            self.totalUnreadMessages = count
+
+            self.matches = updatedMatches.sorted {
+                ($0.timestamp?.dateValue() ?? Date.distantPast) > ($1.timestamp?.dateValue() ?? Date.distantPast)
+            }
+
+            if self.receivedNewMessage {
+                notifyUserOfNewMessages(count: count)
+                self.receivedNewMessage = false
+            }
         }
     }
-
 
     func deleteSelectedMatches() {
         for matchID in selectedMatches {
