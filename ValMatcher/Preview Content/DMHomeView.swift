@@ -46,6 +46,7 @@ struct DMHomeView: View {
                 .edgesIgnoringSafeArea(.all)
 
             if isLoading {
+                // Show a loading indicator while data is being loaded
                 ProgressView("Loading...")
                     .foregroundColor(.white)
             } else {
@@ -186,6 +187,7 @@ struct DMHomeView: View {
     }
 
     private func setupListeners() {
+        // We will load matches only when necessary to reduce unnecessary reloads
         loadMatches()
 
         NotificationCenter.default.addObserver(forName: Notification.Name("RefreshChatList"), object: nil, queue: .main) { [self] _ in
@@ -533,6 +535,10 @@ struct DMHomeView: View {
             batch.commit { error in
                 if let error = error {
                     print("Error committing batch: \(error.localizedDescription)")
+                } else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
+                    }
                 }
             }
         }
