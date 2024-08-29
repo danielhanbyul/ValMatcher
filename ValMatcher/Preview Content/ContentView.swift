@@ -29,6 +29,9 @@ struct ContentView: View {
     @State private var unreadMessagesCount = 0
     @State private var messageListeners: [String: MessageListener] = [:]
 
+    // Added States
+    @State private var interactedUsers: Set<String> = []
+    @State private var lastRefreshDate: Date? = nil
 
     enum InteractionResult {
         case liked
@@ -99,10 +102,10 @@ struct ContentView: View {
             })
         }
         .onAppear {
-            if users.isEmpty {
-                fetchUsers()
-                fetchIncomingLikes()
-                listenForUnreadMessages()  // Ensure that the listeners are set up for new messages
+            self.loadInteractedUsers { success in
+                if success {
+                    fetchUsers()  // Fetch users after loading interacted users
+                }
             }
         }
         .onChange(of: users) { _ in
@@ -146,7 +149,7 @@ struct ContentView: View {
 
     private var noMoreUsersView: some View {
         VStack {
-            Text("No more users")
+            Text("No more users available")
                 .font(.largeTitle)
                 .foregroundColor(.white)
                 .padding()
@@ -203,15 +206,30 @@ struct ContentView: View {
         }
 
         let db = Firestore.firestore()
+
         db.collection("users").getDocuments { (querySnapshot, error) in
             if let error = error {
                 print("Error fetching users: \(error)")
                 return
             }
+
+            // Filter out users that have been interacted with
             self.users = querySnapshot?.documents.compactMap { document in
                 let user = try? document.data(as: UserProfile.self)
-                return user?.id != currentUserID ? user : nil
+                if let userID = user?.id, userID != currentUserID && !self.interactedUsers.contains(userID) {
+                    return user
+                }
+                return nil
             } ?? []
+
+            // Check if there are any users left
+            if self.users.isEmpty {
+                self.currentIndex = 0
+                self.users.removeAll()
+            }
+
+            // Log the number of users after filtering
+            print("Users after filtering: \(self.users.count)")
         }
     }
 
@@ -363,8 +381,6 @@ struct ContentView: View {
         }
     }
 
-
-
     private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
         guard UIApplication.shared.applicationState == .active else {
             return // Prevent in-app notification if the app is not in the foreground
@@ -393,9 +409,6 @@ struct ContentView: View {
         UNUserNotificationCenter.current().add(request)
     }
 
-
-    
-
     private func showNotification(title: String, body: String) {
         let content = UNMutableNotificationContent()
         content.title = title
@@ -409,10 +422,7 @@ struct ContentView: View {
     private func likeAction() {
         interactionResult = .liked
 
-        moveToNextUser()
-
-        guard let currentUserID = Auth.auth().currentUser?.uid else {
-            print("Error: User not authenticated")
+        guard currentIndex < users.count else {
             return
         }
 
@@ -423,11 +433,13 @@ struct ContentView: View {
             return
         }
 
+        moveToNextUser()
+
         let db = Firestore.firestore()
 
         DispatchQueue.global(qos: .background).async {
             let likeData: [String: Any] = [
-                "likingUserID": currentUserID,
+                "likingUserID": Auth.auth().currentUser?.uid ?? "",
                 "likedUserID": likedUserID,
                 "timestamp": Timestamp()
             ]
@@ -439,7 +451,7 @@ struct ContentView: View {
                 }
 
                 db.collection("likes")
-                    .whereField("likedUserID", isEqualTo: currentUserID)
+                    .whereField("likedUserID", isEqualTo: Auth.auth().currentUser?.uid ?? "")
                     .whereField("likingUserID", isEqualTo: likedUserID)
                     .getDocuments { (querySnapshot, error) in
                         if let error = error {
@@ -448,11 +460,15 @@ struct ContentView: View {
                         }
 
                         if querySnapshot?.isEmpty == false {
-                            self.createMatch(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
+                            self.createMatch(currentUserID: Auth.auth().currentUser?.uid ?? "", likedUserID: likedUserID, likedUser: likedUser)
                         }
                     }
             }
         }
+
+        // Added logic to prevent liked users from reappearing
+        interactedUsers.insert(likedUserID)
+        saveInteractedUsers()
     }
 
     private func createMatch(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
@@ -550,16 +566,73 @@ struct ContentView: View {
     private func passAction() {
         interactionResult = .passed
 
+        guard currentIndex < users.count else {
+            return
+        }
+
+        let skippedUser = users[currentIndex]
+
+        guard let skippedUserID = skippedUser.id else {
+            print("Error: Skipped user does not have an ID")
+            return
+        }
+
         moveToNextUser()
+
+        // Added logic to prevent skipped users from reappearing
+        interactedUsers.insert(skippedUserID)
+        saveInteractedUsers()
     }
 
     private func moveToNextUser() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.interactionResult = nil
-            if self.currentIndex < self.users.count - 1 {
-                self.currentIndex += 1
-            } else {
+
+            self.currentIndex += 1
+
+            if self.currentIndex >= self.users.count {
                 self.currentIndex = 0
+                self.users.removeAll()
+            }
+        }
+    }
+
+    // New function to save all interacted users
+    private func saveInteractedUsers() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(currentUserID)
+
+        userRef.updateData([
+            "interactedUsers": Array(interactedUsers)
+        ]) { error in
+            if let error = error {
+                print("Error saving interacted users: \(error.localizedDescription)")
+            } else {
+                print("Interacted users saved successfully.")
+            }
+        }
+    }
+
+    // New function to load all interacted users
+    private func loadInteractedUsers(completion: @escaping (Bool) -> Void) {
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("Error: User not authenticated")
+            completion(false)
+            return
+        }
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(currentUserID)
+
+        userRef.getDocument { document, error in
+            if let document = document, document.exists {
+                if let interacted = document.data()?["interactedUsers"] as? [String] {
+                    self.interactedUsers = Set(interacted)
+                }
+                completion(true)
+            } else {
+                print("Error loading interacted users: \(error?.localizedDescription ?? "Unknown error")")
+                completion(false)
             }
         }
     }
