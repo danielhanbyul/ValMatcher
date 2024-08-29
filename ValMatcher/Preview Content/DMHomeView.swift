@@ -31,14 +31,19 @@ struct DMHomeView: View {
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
-    @State private var shouldSortChats = true
     @State private var receivedNewMessage = false
     @State private var selectedChat: Chat?
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
-    @State private var debounceTimer: Timer?
     @State private var isLoading = true
-    @State private var messageListeners: [String: ListenerRegistration] = [:]
+    @State private var messageListeners: [String: MessageListener] = [:]
+    // Declare the debounce timer
+        @State private var debounceTimer: Timer?
+        
+        // Optional: Declare a flag for sorting chats, if used
+        @State private var shouldSortChats = true
+    
+
 
     var body: some View {
         ZStack {
@@ -70,7 +75,6 @@ struct DMHomeView: View {
                         .padding()
                     }
                 }
-                .animation(nil, value: matches)
             }
         }
         .navigationBarTitle("Messages", displayMode: .inline)
@@ -91,7 +95,11 @@ struct DMHomeView: View {
         }
         .background(
             NavigationLink(
-                destination: ChatView(matchID: selectedChat?.id ?? "", recipientName: getRecipientName(for: selectedChat))
+                destination: ChatView(matchID: selectedChat?.id ?? "", recipientName: getRecipientName(for: selectedChat), onMessageSentOrReceived: {
+                    // Update DMHomeView when a message is sent or received
+                    self.loadMatches()
+                    self.refreshChatAfterReadingMessages()
+                })
                     .onAppear {
                         if let chat = selectedChat {
                             DispatchQueue.global().async {
@@ -100,7 +108,9 @@ struct DMHomeView: View {
                         }
                     }
                     .onDisappear {
-                        refreshChatAfterReadingMessages()
+                        // Ensure UI reflects updated chat order immediately
+                        self.loadMatches()
+                        self.refreshChatAfterReadingMessages()
                     },
                 isActive: Binding(
                     get: { selectedChat != nil },
@@ -193,8 +203,16 @@ struct DMHomeView: View {
 
         NotificationCenter.default.addObserver(forName: Notification.Name("RefreshChatList"), object: nil, queue: .main) { [self] _ in
             self.debounceTimer?.invalidate()
-            self.debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+
+            // Check if there are new messages or active user interaction
+            if receivedNewMessage {
                 self.loadMatches()
+                self.refreshChatAfterReadingMessages()
+            } else {
+                self.debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { _ in
+                    self.loadMatches()
+                    self.refreshChatAfterReadingMessages()
+                }
             }
         }
 
@@ -202,6 +220,7 @@ struct DMHomeView: View {
             self.shouldSortChats = true
         }
     }
+
 
     func loadMatches() {
         guard let currentUserID = currentUserID else {
@@ -396,18 +415,19 @@ struct DMHomeView: View {
 
                         if senderID != currentUserID && !isRead {
                             DispatchQueue.main.async {
+                                self.receivedNewMessage = true
                                 self.updateUnreadMessagesCount(from: self.matches)
                             }
                         }
                     }
-                messageListeners[matchID] = listener
+                messageListeners[matchID] = MessageListener(listener: listener)
             }
         }
     }
 
     private func removeListeners() {
-        for listener in messageListeners.values {
-            listener.remove()
+        for messageListener in messageListeners.values {
+            messageListener.listener.remove()
         }
         messageListeners.removeAll()
     }
@@ -470,7 +490,7 @@ struct DMHomeView: View {
 
                     if difference > 0 {
                         DispatchQueue.main.async {
-                            self.shouldSortChats = true
+                            self.updateUnreadMessagesCount(from: self.matches)
                         }
                     }
 
@@ -544,6 +564,9 @@ struct DMHomeView: View {
         if let index = matches.firstIndex(where: { $0.id == selectedChatID }) {
             matches[index].hasUnreadMessages = false
         }
+
+        // Ensure the UI reflects the update immediately
+        self.updateUnreadMessagesCount(from: self.matches)
     }
 
     private func notifyUserOfNewMessages(count: Int) {

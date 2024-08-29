@@ -12,6 +12,7 @@ import FirebaseFirestoreSwift
 struct ChatView: View {
     var matchID: String
     var recipientName: String
+    var onMessageSentOrReceived: (() -> Void)? = nil
     @State private var messages: [Message] = []
     @State private var newMessage: String = ""
     @State private var currentUserID = Auth.auth().currentUser?.uid
@@ -156,20 +157,21 @@ struct ChatView: View {
             }
     }
 
-
     private func markMessagesAsRead() {
+        guard let currentUserID = currentUserID else { return }
         let db = Firestore.firestore()
         let batch = db.batch()
-        
+
         messages.filter { !$0.isCurrentUser && !$0.isRead }.forEach { message in
             let messageRef = db.collection("matches").document(matchID).collection("messages").document(message.id ?? "")
             batch.updateData(["isRead": true], forDocument: messageRef)
         }
-        
+
         batch.commit { error in
             if let error = error {
                 print("Error marking messages as read: \(error.localizedDescription)")
             } else {
+                // Notify DMHomeView to refresh the chat list immediately
                 NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
             }
         }
