@@ -475,6 +475,10 @@ struct DMHomeView: View {
             batch.commit { error in
                 if let error = error {
                     print("Error committing batch: \(error.localizedDescription)")
+                } else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
+                    }
                 }
             }
         }
