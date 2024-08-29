@@ -388,6 +388,7 @@ struct DMHomeView: View {
         }
 
         let db = Firestore.firestore()
+        
         let matchQuery = db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .whereField("user2", isEqualTo: currentUserID)
@@ -398,28 +399,31 @@ struct DMHomeView: View {
                 return
             }
 
-            // Use a background queue for handling snapshot
-            DispatchQueue.global().async {
-                var unreadCounts: [String: Int] = [:]
-                var totalUnreadCount = 0
+            var unreadCounts: [String: Int] = [:]
+            var totalUnreadCount = 0
 
-                snapshot?.documents.forEach { document in
-                    let matchID = document.documentID
-                    self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID) { unreadCount, latestMessage in
-                        let previousCount = unreadCounts[matchID] ?? 0
-                        let difference = unreadCount - previousCount
-                        totalUnreadCount += difference
-                        unreadCounts[matchID] = unreadCount
+            snapshot?.documents.forEach { document in
+                let matchID = document.documentID
+                self.listenForNewMessages(in: db, matchID: matchID, currentUserID: currentUserID) { unreadCount, latestMessage in
+                    let previousCount = unreadCounts[matchID] ?? 0
+                    let difference = unreadCount - previousCount
+                    totalUnreadCount += difference
+                    unreadCounts[matchID] = unreadCount
 
+                    if difference > 0 {
                         DispatchQueue.main.async {
-                            self.totalUnreadMessages = totalUnreadCount
+                            self.shouldSortChats = true
+                        }
+                    }
 
-                            if difference > 0 && UIApplication.shared.applicationState == .active {
-                                self.receivedNewMessage = true
-                                if let latestMessage = latestMessage, latestMessage.data()["senderID"] as? String != currentUserID {
-                                    self.showInAppNotification(for: latestMessage)
-                                }
-                            }
+                    DispatchQueue.main.async {
+                        self.totalUnreadMessages = totalUnreadCount
+                    }
+
+                    if difference > 0 && UIApplication.shared.applicationState == .active {
+                        self.receivedNewMessage = true
+                        if let latestMessage = latestMessage, latestMessage.data()["senderID"] as? String != currentUserID {
+                            self.showInAppNotification(for: latestMessage)
                         }
                     }
                 }
@@ -451,39 +455,34 @@ struct DMHomeView: View {
     private func markMessagesAsRead(for match: Chat) {
         guard let matchID = match.id, let currentUserID = currentUserID else { return }
         let db = Firestore.firestore()
+        
+        let messagesQuery = db.collection("matches").document(matchID).collection("messages")
+            .whereField("senderID", isNotEqualTo: currentUserID)
+            .whereField("isRead", isEqualTo: false)
 
-        // Execute in background
-        DispatchQueue.global().async {
-            let messagesQuery = db.collection("matches").document(matchID).collection("messages")
-                .whereField("senderID", isNotEqualTo: currentUserID)
-                .whereField("isRead", isEqualTo: false)
+        messagesQuery.getDocuments { snapshot, error in
+            if let error = error {
+                print("Error marking messages as read: \(error.localizedDescription)")
+                return
+            }
 
-            messagesQuery.getDocuments { snapshot, error in
+            let batch = db.batch()
+            snapshot?.documents.forEach { document in
+                let messageRef = document.reference
+                batch.updateData(["isRead": true], forDocument: messageRef)
+            }
+
+            batch.commit { error in
                 if let error = error {
-                    print("Error marking messages as read: \(error.localizedDescription)")
-                    return
-                }
-
-                let batch = db.batch()
-                snapshot?.documents.forEach { document in
-                    let messageRef = document.reference
-                    batch.updateData(["isRead": true], forDocument: messageRef)
-                }
-
-                batch.commit { error in
-                    if let error = error {
-                        print("Error committing batch: \(error.localizedDescription)")
-                    } else {
-                        // Notify UI update in main thread
-                        DispatchQueue.main.async {
-                            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
-                        }
+                    print("Error committing batch: \(error.localizedDescription)")
+                } else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
                     }
                 }
             }
         }
     }
-
 
     private func notifyUserOfNewMessages(count: Int) {
         guard count > 0 else { return }
