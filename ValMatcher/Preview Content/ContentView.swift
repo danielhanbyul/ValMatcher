@@ -28,7 +28,7 @@ struct ContentView: View {
     @State private var acknowledgedNotifications: Set<String> = []
     @State private var unreadMessagesCount = 0
     @State private var messageListeners: [String: MessageListener] = [:]
-
+    
     // Added States
     @State private var interactedUsers: Set<String> = []
     @State private var lastRefreshDate: Date? = nil
