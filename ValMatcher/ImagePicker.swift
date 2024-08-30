@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import MobileCoreServices
 
 struct ImagePicker: UIViewControllerRepresentable {
     @Binding var selectedMedia: [MediaItem]
@@ -35,9 +36,21 @@ struct ImagePicker: UIViewControllerRepresentable {
                 } else if result.itemProvider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
                     result.itemProvider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { (url, error) in
                         if let url = url {
-                            DispatchQueue.main.async {
-                                self.parent.selectedMedia.append(MediaItem(url: url.absoluteString, type: .video))
+                            // Check if the file exists
+                            if FileManager.default.fileExists(atPath: url.path) {
+                                // Move video to a stable directory
+                                DispatchQueue.main.async {
+                                    if let stableURL = self.copyVideoToDocumentsDirectory(url: url) {
+                                        self.parent.selectedMedia.append(MediaItem(url: stableURL.absoluteString, type: .video))
+                                    } else {
+                                        print("Failed to copy video to documents directory.")
+                                    }
+                                }
+                            } else {
+                                print("Video file does not exist at path: \(url.path)")
                             }
+                        } else {
+                            print("Error loading video: \(error?.localizedDescription ?? "Unknown error")")
                         }
                     }
                 }
@@ -50,10 +63,31 @@ struct ImagePicker: UIViewControllerRepresentable {
             let fileURL = temporaryDirectoryURL.appendingPathComponent(fileName)
 
             if let imageData = image.jpegData(compressionQuality: 0.8) {
-                try? imageData.write(to: fileURL)
-                return fileURL
+                do {
+                    try imageData.write(to: fileURL)
+                    return fileURL
+                } catch {
+                    print("Error saving image to temporary directory: \(error)")
+                }
             }
             return nil
+        }
+
+        private func copyVideoToDocumentsDirectory(url: URL) -> URL? {
+            let fileManager = FileManager.default
+            let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let destinationURL = documentsURL.appendingPathComponent(url.lastPathComponent)
+
+            do {
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    try fileManager.removeItem(at: destinationURL)
+                }
+                try fileManager.copyItem(at: url, to: destinationURL)
+                return destinationURL
+            } catch {
+                print("Error copying video to documents directory: \(error)")
+                return nil
+            }
         }
     }
 
@@ -73,6 +107,7 @@ struct ImagePicker: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
 }
+
 
 struct MediaItem: Identifiable, Codable, Equatable {
     var id = UUID()

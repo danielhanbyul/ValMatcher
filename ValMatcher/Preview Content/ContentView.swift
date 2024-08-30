@@ -703,18 +703,23 @@ struct UserCardView: View {
     var newMedia: [MediaItem] = []
     @State private var currentMediaIndex = 0
 
+    private var allMediaItems: [MediaItem] {
+        user.mediaItems + newMedia
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
                 TabView(selection: $currentMediaIndex) {
-                    ForEach(user.mediaItems.indices, id: \.self) { index in
-                        let mediaItem = user.mediaItems[index]
+                    ForEach(allMediaItems.indices, id: \.self) { index in
+                        let mediaItem = allMediaItems[index]
                         ZStack {
                             if mediaItem.type == .video, let url = URL(string: mediaItem.url) {
                                 VideoPlayer(player: AVPlayer(url: url))
                                     .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
                                     .cornerRadius(20)
                                     .shadow(radius: 10)
+                                    .tag(index)
                             } else if let url = URL(string: mediaItem.url) {
                                 AsyncImage(url: url) { phase in
                                     switch phase {
@@ -742,46 +747,10 @@ struct UserCardView: View {
                                         EmptyView()
                                     }
                                 }
+                                .tag(index)
                             }
                         }
                     }
-                    ForEach(newMedia) { media in
-                        if media.type == .image {
-                            AsyncImage(url: URL(string: media.url)) { phase in
-                                switch phase {
-                                case .empty:
-                                    ProgressView()
-                                        .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                        .clipped()
-                                        .cornerRadius(20)
-                                        .shadow(radius: 10)
-                                case .failure:
-                                    Image(systemName: "photo")
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                        .clipped()
-                                        .cornerRadius(20)
-                                        .background(Color.gray.opacity(0.3))
-                                        .shadow(radius: 10)
-                                @unknown default:
-                                    EmptyView()
-                                }
-                            }
-                        } else if media.type == .video {
-                            VideoPlayer(player: AVPlayer(url: URL(string: media.url)!))
-                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                .cornerRadius(20)
-                                .shadow(radius: 10)
-                        }
-                    }
-
-
                 }
                 .tabViewStyle(PageTabViewStyle())
                 .frame(height: UIScreen.main.bounds.height * 0.5)
@@ -802,7 +771,7 @@ struct UserCardView: View {
                     Spacer()
 
                     Button(action: {
-                        currentMediaIndex = min(currentMediaIndex + 1, (user.mediaItems.count + newMedia.count) - 1)
+                        currentMediaIndex = min(currentMediaIndex + 1, allMediaItems.count - 1)
                     }) {
                         Image(systemName: "chevron.right")
                             .font(.title)
@@ -817,7 +786,7 @@ struct UserCardView: View {
                 VStack {
                     Spacer()
                     HStack {
-                        ForEach(0..<(user.mediaItems.count + newMedia.count), id: \.self) { index in
+                        ForEach(0..<allMediaItems.count, id: \.self) { index in
                             Circle()
                                 .fill(index == currentMediaIndex ? Color.white : Color.gray)
                                 .frame(width: 8, height: 8)
