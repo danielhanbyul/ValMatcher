@@ -31,29 +31,47 @@ struct ImagePicker: UIViewControllerRepresentable {
                                     self.parent.selectedMedia.append(MediaItem(url: url.absoluteString, type: .image))
                                 }
                             }
+                        } else if let error = error {
+                            print("Error loading image: \(error.localizedDescription)")
                         }
                     }
                 } else if result.itemProvider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
                     result.itemProvider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { (url, error) in
                         if let url = url {
-                            // Check if the file exists
-                            if FileManager.default.fileExists(atPath: url.path) {
-                                // Move video to a stable directory
-                                DispatchQueue.main.async {
-                                    if let stableURL = self.copyVideoToDocumentsDirectory(url: url) {
-                                        self.parent.selectedMedia.append(MediaItem(url: stableURL.absoluteString, type: .video))
-                                    } else {
-                                        print("Failed to copy video to documents directory.")
-                                    }
+                            DispatchQueue.main.async {
+                                if let stableURL = self.copyVideoToDocumentsDirectory(url: url) {
+                                    self.parent.selectedMedia.append(MediaItem(url: stableURL.absoluteString, type: .video))
+                                } else {
+                                    print("Failed to copy video to documents directory.")
                                 }
-                            } else {
-                                print("Video file does not exist at path: \(url.path)")
                             }
-                        } else {
-                            print("Error loading video: \(error?.localizedDescription ?? "Unknown error")")
+                        } else if let error = error {
+                            print("Error loading video: \(error.localizedDescription)")
                         }
                     }
                 }
+            }
+        }
+
+        private func copyVideoToDocumentsDirectory(url: URL) -> URL? {
+            let fileManager = FileManager.default
+            let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let destinationURL = documentsURL.appendingPathComponent(UUID().uuidString + ".mov")
+
+            do {
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    try fileManager.removeItem(at: destinationURL)
+                }
+                guard fileManager.fileExists(atPath: url.path) else {
+                    print("Source file does not exist at path: \(url.path)")
+                    return nil
+                }
+                try fileManager.copyItem(at: url, to: destinationURL)
+                print("Video copied to: \(destinationURL.path)")
+                return destinationURL
+            } catch {
+                print("Error copying video to documents directory: \(error)")
+                return nil
             }
         }
 
@@ -72,23 +90,6 @@ struct ImagePicker: UIViewControllerRepresentable {
             }
             return nil
         }
-
-        private func copyVideoToDocumentsDirectory(url: URL) -> URL? {
-            let fileManager = FileManager.default
-            let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
-            let destinationURL = documentsURL.appendingPathComponent(url.lastPathComponent)
-
-            do {
-                if fileManager.fileExists(atPath: destinationURL.path) {
-                    try fileManager.removeItem(at: destinationURL)
-                }
-                try fileManager.copyItem(at: url, to: destinationURL)
-                return destinationURL
-            } catch {
-                print("Error copying video to documents directory: \(error)")
-                return nil
-            }
-        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -96,6 +97,8 @@ struct ImagePicker: UIViewControllerRepresentable {
     }
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
+        requestPhotoLibraryAccessIfNeeded()
+
         var config = PHPickerConfiguration()
         config.filter = .any(of: [.images, .videos])
         config.selectionLimit = 4 - selectedMedia.count // Allow selecting only the remaining slots
@@ -106,8 +109,23 @@ struct ImagePicker: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
-}
 
+    private func requestPhotoLibraryAccessIfNeeded() {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+
+        if status == .notDetermined {
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
+                if newStatus == .authorized {
+                    print("Photo Library Access: Full access granted.")
+                } else if newStatus == .limited {
+                    print("Photo Library Access: Limited access granted.")
+                } else {
+                    print("Photo Library Access: Access denied or restricted.")
+                }
+            }
+        }
+    }
+}
 
 struct MediaItem: Identifiable, Codable, Equatable {
     var id = UUID()

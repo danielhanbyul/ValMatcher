@@ -102,11 +102,14 @@ struct ContentView: View {
             })
         }
         .onAppear {
-            self.loadInteractedUsers { success in
-                if success {
-                    fetchUsers()  // Fetch users after loading interacted users
-                }
-            }
+            if isSignedIn {
+                            requestPhotoLibraryAccess()  // Request access after user is logged in
+                            loadInteractedUsers { success in
+                                if success {
+                                    fetchUsers()  // Fetch users after loading interacted users
+                                }
+                            }
+                        }
         }
         .onChange(of: users) { _ in
             listenForUnreadMessages()
