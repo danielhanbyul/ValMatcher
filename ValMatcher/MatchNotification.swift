@@ -55,7 +55,7 @@ struct MatchNotificationView_Previews: PreviewProvider {
             server: "NA",
             answers: [:],
             hasAnsweredQuestions: true,
-            additionalImages: []
+            mediaItems: [] // Only provide `mediaItems` if that's the correct structure
         ))
         .preferredColorScheme(.dark)
     }

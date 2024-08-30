@@ -41,6 +41,20 @@ struct SettingsView: View {
 
 struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
-        SettingsView(user: .constant(UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, additionalImages: [])), isSignedIn: .constant(true), isShowingLoginView: .constant(false))
+        SettingsView(
+            user: .constant(UserProfile(
+                id: "",
+                name: "",
+                rank: "",
+                imageName: "",
+                age: "",
+                server: "",
+                answers: [:],
+                hasAnsweredQuestions: false,
+                mediaItems: []  // Replace `additionalImages` with `mediaItems`
+            )),
+            isSignedIn: .constant(true),
+            isShowingLoginView: .constant(false)
+        )
     }
 }

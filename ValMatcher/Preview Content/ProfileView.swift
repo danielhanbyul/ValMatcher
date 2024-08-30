@@ -18,16 +18,13 @@ struct ProfileView: View {
     @State private var isEditing = false
     @State private var showingImagePicker = false
     @State private var newMedia: [MediaItem] = []
-    @State private var additionalImages: [String] = []
+    @State private var additionalMedia: [MediaItem] = []
     @State private var updatedAnswers: [String: String] = [:]
     @State private var showingSettings = false
     @State private var isShowingLoginView = false
-    @State private var selectedImages: Set<Int> = []
-    @State private var currentIndex: Int = 0 // To track the current image being displayed
-    @State private var videoURL: URL? = nil // Updated to URL? type
-    @State private var showingVideoPicker = false // To trigger video picker
+    @State private var selectedMediaIndices: Set<Int> = []
 
-    let maxImageCount = 3 // Maximum number of images allowed
+    let maxMediaCount = 4
 
     var body: some View {
         VStack {
@@ -48,13 +45,11 @@ struct ProfileView: View {
                     UserCardView(user: viewModel.user)
                     
                     if isEditing {
-                        editableImageList
-                        addImageButton
-                        addVideoButton // Add video button
+                        editableMediaList
+                        addMediaButton
                         deleteSelectedButton
                     } else {
-                        displayImageList
-                        displayVideo // Display video if available
+                        displayMediaList
                     }
                     
                     questionAnswersSection
@@ -68,10 +63,6 @@ struct ProfileView: View {
         .sheet(isPresented: $showingImagePicker) {
             ImagePicker(selectedMedia: $newMedia)
                 .onDisappear(perform: saveMedia)
-        }
-        .sheet(isPresented: $showingVideoPicker) {
-            VideoPicker(selectedVideoURL: $videoURL)
-                .onDisappear(perform: saveVideo)
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView(user: $viewModel.user, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
@@ -131,14 +122,14 @@ struct ProfileView: View {
         }
     }
 
-    // View to display images in non-edit mode
-    private var displayImageList: some View {
+    // View to display media (images and videos) in non-edit mode
+    private var displayMediaList: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 15) {
-                Spacer() // Add a spacer to push content towards the center
-                ForEach(additionalImages, id: \.self) { urlString in
-                    if let url = URL(string: urlString), !url.absoluteString.isEmpty {
-                        AsyncImage(url: url) { phase in
+                Spacer()
+                ForEach(additionalMedia) { media in
+                    if media.type == .image {
+                        AsyncImage(url: URL(string: media.url)) { phase in
                             switch phase {
                             case .empty:
                                 ProgressView()
@@ -160,34 +151,28 @@ struct ProfileView: View {
                                 EmptyView()
                             }
                         }
+                    } else if media.type == .video {
+                        VideoPlayer(player: AVPlayer(url: URL(string: media.url)!))
+                            .frame(width: 100, height: 100)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                            .shadow(radius: 5)
                     }
                 }
-                Spacer() // Add another spacer to center the content
+                Spacer()
             }
             .padding(.horizontal)
         }
     }
     
-    private var displayVideo: some View {
-        Group {
-            if let url = videoURL {
-                VideoPlayer(player: AVPlayer(url: url))
-                    .frame(height: 200)
-                    .cornerRadius(10)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                    .shadow(radius: 5)
-                    .padding()
-            }
-        }
-    }
-
-    private var editableImageList: some View {
+    // Editable list of media
+    private var editableMediaList: some View {
         VStack(alignment: .leading, spacing: 15) {
-            ForEach(additionalImages.indices, id: \.self) { index in
-                let urlString = additionalImages[index]
-                if let url = URL(string: urlString), !url.absoluteString.isEmpty {
-                    HStack {
-                        AsyncImage(url: url) { phase in
+            ForEach(additionalMedia.indices, id: \.self) { index in
+                let media = additionalMedia[index]
+                HStack {
+                    if media.type == .image {
+                        AsyncImage(url: URL(string: media.url)) { phase in
                             switch phase {
                             case .empty:
                                 ProgressView()
@@ -209,30 +194,36 @@ struct ProfileView: View {
                                 EmptyView()
                             }
                         }
-
-                        Spacer()
-
-                        // Delete Button for each image
-                        Button(action: {
-                            deleteImage(at: index)
-                        }) {
-                            Image(systemName: "trash")
-                                .foregroundColor(.red)
-                                .padding(4)
-                                .background(Color.white)
-                                .clipShape(Circle())
-                                .shadow(radius: 3)
-                        }
-                        .padding(.trailing, 10)
+                    } else if media.type == .video {
+                        VideoPlayer(player: AVPlayer(url: URL(string: media.url)!))
+                            .frame(width: 100, height: 100)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                            .shadow(radius: 5)
                     }
-                    .padding(.vertical, 5)
+
+                    Spacer()
+
+                    // Delete Button for each media item
+                    Button(action: {
+                        deleteMedia(at: index)
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                            .padding(4)
+                            .background(Color.white)
+                            .clipShape(Circle())
+                            .shadow(radius: 3)
+                    }
+                    .padding(.trailing, 10)
                 }
+                .padding(.vertical, 5)
             }
         }
         .padding(.horizontal)
     }
 
-    private var addImageButton: some View {
+    private var addMediaButton: some View {
         Button(action: {
             self.showingImagePicker = true
         }) {
@@ -242,29 +233,16 @@ struct ProfileView: View {
                 .background(Color.blue)
                 .cornerRadius(8)
         }
-        .disabled(additionalImages.count >= maxImageCount)
-    }
-
-    private var addVideoButton: some View {
-        Button(action: {
-            self.showingVideoPicker = true
-        }) {
-            Text("Add Video")
-                .foregroundColor(.white)
-                .padding()
-                .background(Color.blue)
-                .cornerRadius(8)
-        }
-        .disabled(videoURL != nil) // Only allow one video
+        .disabled(additionalMedia.count >= maxMediaCount)
     }
 
     private var deleteSelectedButton: some View {
         Group {
-            if !selectedImages.isEmpty {
+            if !selectedMediaIndices.isEmpty {
                 Button(action: {
-                    deleteSelectedImages()
+                    deleteSelectedMedia()
                 }) {
-                    Text("Delete Selected Images")
+                    Text("Delete Selected Media")
                         .foregroundColor(.white)
                         .padding()
                         .background(Color.red)
@@ -303,11 +281,9 @@ struct ProfileView: View {
     // MARK: - Functions
 
     private func initializeEditValues() {
-        additionalImages = viewModel.user.additionalImages.compactMap { $0 }.filter { !$0.isEmpty }
-        videoURL = viewModel.user.videoURL.flatMap { URL(string: $0) }
+        additionalMedia = viewModel.user.mediaItems // Update this line
         updatedAnswers = viewModel.user.answers
-        selectedImages.removeAll()
-        currentIndex = 0 // Reset to the first image
+        selectedMediaIndices.removeAll()
     }
 
     private func saveProfile() {
@@ -319,263 +295,174 @@ struct ProfileView: View {
     private func saveMedia() {
         guard !newMedia.isEmpty else { return }
         
-        uploadNewMedia { urls in
-            self.additionalImages.append(contentsOf: urls)
+        uploadNewMedia { mediaItems in
+            self.additionalMedia.append(contentsOf: mediaItems)
             
-            // Update the profile with the newly added images
+            // Update the profile with the newly added media
             self.viewModel.updateUserProfile(
                 newAge: self.viewModel.user.age,
                 newRank: self.viewModel.user.rank,
                 newServer: self.viewModel.user.server,
-                additionalImages: self.additionalImages.map { $0 },
+                mediaItems: self.additionalMedia,  // Pass MediaItem array
                 updatedAnswers: self.updatedAnswers
-                // Removed videoURL here
             )
-            
+
             // Reset newMedia for next upload
             self.newMedia.removeAll()
         }
     }
 
-    private func saveVideo() {
-        guard let selectedVideoURL = videoURL else { return }
+    private func deleteMedia(at index: Int) {
+        let mediaItem = additionalMedia[index]
         
-        uploadVideo(selectedVideoURL) { url in
-            self.videoURL = url
-            
-            // Update the profile with the newly added video
-            self.viewModel.updateUserProfile(
-                newAge: self.viewModel.user.age,
-                newRank: self.viewModel.user.rank,
-                newServer: self.viewModel.user.server,
-                additionalImages: self.additionalImages.map { $0 },
-                updatedAnswers: self.updatedAnswers
-                // Removed videoURL here
-            )
-        }
-    }
-
-    // Function to delete a single image at a given index
-    private func deleteImage(at index: Int) {
-        let urlString = additionalImages[index]
-        
-        // Remove the image from the UI immediately
-        additionalImages.remove(at: index)
-        
-        // Adjust current index if necessary
-        if currentIndex >= additionalImages.count {
-            currentIndex = max(0, additionalImages.count - 1)
-        }
+        // Remove the media item from the UI immediately
+        additionalMedia.remove(at: index)
         
         // Update the view model with the changes
         self.viewModel.updateUserProfile(
             newAge: self.viewModel.user.age,
             newRank: self.viewModel.user.rank,
             newServer: self.viewModel.user.server,
-            additionalImages: self.additionalImages.map { $0 },
+            mediaItems: self.additionalMedia,  // Pass MediaItem array
             updatedAnswers: self.updatedAnswers
-            // Removed videoURL here
         )
         
-        // Proceed to delete the image from Firebase in the background
-        deleteImageFromStorageAndFirestore(url: urlString)
+        // Proceed to delete the media item from Firebase in the background
+        deleteMediaFromStorageAndFirestore(mediaItem: mediaItem)
     }
 
-    private func deleteSelectedImages() {
-        let indexesToDelete = Array(selectedImages).sorted(by: >)
-        let urlsToDelete = indexesToDelete.map { additionalImages[$0] }
+    private func deleteSelectedMedia() {
+        let indicesToDelete = Array(selectedMediaIndices).sorted(by: >)
+        let mediaItemsToDelete = indicesToDelete.map { additionalMedia[$0] }
         
-        // Remove images from UI immediately
-        for index in indexesToDelete {
-            additionalImages.remove(at: index)
+        // Remove media items from UI immediately
+        for index in indicesToDelete {
+            additionalMedia.remove(at: index)
         }
         
-        selectedImages.removeAll() // Clear selection
-        
-        // Adjust current index if necessary
-        if currentIndex >= additionalImages.count {
-            currentIndex = max(0, additionalImages.count - 1)
-        }
+        selectedMediaIndices.removeAll() // Clear selection
         
         // Update the view model with the changes
         self.viewModel.updateUserProfile(
             newAge: self.viewModel.user.age,
             newRank: self.viewModel.user.rank,
             newServer: self.viewModel.user.server,
-            additionalImages: self.additionalImages.map { $0 },
+            mediaItems: self.additionalMedia,  // Pass MediaItem array
             updatedAnswers: self.updatedAnswers
-            // Removed videoURL here
         )
         
-        // Proceed to delete images from Firebase
-        for urlString in urlsToDelete {
-            deleteImageFromStorageAndFirestore(url: urlString)
+        // Proceed to delete media items from Firebase
+        for mediaItem in mediaItemsToDelete {
+            deleteMediaFromStorageAndFirestore(mediaItem: mediaItem)
         }
     }
 
-    private func deleteImageFromStorageAndFirestore(url: String) {
-        let storageRef = Storage.storage().reference(forURL: url)
+    private func deleteMediaFromStorageAndFirestore(mediaItem: MediaItem) {
+        let storageRef = Storage.storage().reference(forURL: mediaItem.url)
         storageRef.delete { error in
             if let error = error {
-                print("Error deleting image from storage: \(error.localizedDescription)")
+                print("Error deleting media from storage: \(error.localizedDescription)")
             } else {
-                print("Image deleted from storage")
-                removeImageURLFromFirestore(url: url)
+                print("Media deleted from storage")
+                removeMediaURLFromFirestore(url: mediaItem.url)
             }
         }
     }
 
-    private func deleteVideo() {
-        guard let videoURL = videoURL else { return }
-        
-        deleteImageFromStorageAndFirestore(url: videoURL.absoluteString)
-        
-        // Remove video URL from the profile
-        self.videoURL = nil
-        
-        // Update the view model with the changes
-        self.viewModel.updateUserProfile(
-            newAge: self.viewModel.user.age,
-            newRank: self.viewModel.user.rank,
-            newServer: self.viewModel.user.server,
-            additionalImages: self.additionalImages.map { $0 },
-            updatedAnswers: self.updatedAnswers
-            // Removed videoURL here
-        )
-    }
-
-    private func removeImageURLFromFirestore(url: String) {
+    private func removeMediaURLFromFirestore(url: String) {
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(viewModel.user.id ?? "")
         userRef.updateData([
-            "additionalImages": FieldValue.arrayRemove([url])
+            "mediaItems": FieldValue.arrayRemove([url])
         ]) { error in
             if let error = error {
-                print("Error removing image URL from Firestore: \(error.localizedDescription)")
+                print("Error removing media URL from Firestore: \(error.localizedDescription)")
             } else {
-                print("Successfully removed image URL from Firestore")
+                print("Successfully removed media URL from Firestore")
             }
         }
     }
 
-    private func uploadNewMedia(completion: @escaping ([String]) -> Void) {
+    private func uploadNewMedia(completion: @escaping ([MediaItem]) -> Void) {
         let dispatchGroup = DispatchGroup()
-        var uploadedURLs: [String] = []
+        var uploadedMedia: [MediaItem] = []
 
         for media in newMedia {
             dispatchGroup.enter()
-            if let image = media.image {
-                let fileName = UUID().uuidString + ".jpg"
-                let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
-                let imageData = image.jpegData(compressionQuality: 0.8)!
-                let metadata = StorageMetadata()
-                metadata.contentType = "image/jpeg"
-                
-                storageRef.putData(imageData, metadata: metadata) { _, error in
-                    if let error = error {
-                        print("Error uploading image: \(error.localizedDescription)")
-                        dispatchGroup.leave()
-                        return
-                    }
-                    storageRef.downloadURL { url, error in
-                        if let downloadURL = url {
-                            uploadedURLs.append(downloadURL.absoluteString)
+
+            if media.type == .image {
+                // Access the image from the file system using the URL
+                if let fileURL = URL(string: media.url), let imageData = try? Data(contentsOf: fileURL) {
+                    let fileName = UUID().uuidString + ".jpg"
+                    let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
+                    let metadata = StorageMetadata()
+                    metadata.contentType = "image/jpeg"
+                    
+                    storageRef.putData(imageData, metadata: metadata) { _, error in
+                        if let error = error {
+                            print("Error uploading image: \(error.localizedDescription)")
+                            dispatchGroup.leave()
+                            return
                         }
-                        dispatchGroup.leave()
+                        storageRef.downloadURL { url, error in
+                            if let downloadURL = url {
+                                uploadedMedia.append(MediaItem(url: downloadURL.absoluteString, type: .image))
+                            }
+                            dispatchGroup.leave()
+                        }
                     }
+                } else {
+                    print("Error converting image to data: Could not access image data at URL: \(media.url)")
+                    dispatchGroup.leave()
+                }
+            } else if media.type == .video {
+                // Upload video
+                if let fileURL = URL(string: media.url) {
+                    let fileName = UUID().uuidString + ".mp4"
+                    let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
+                    let metadata = StorageMetadata()
+                    metadata.contentType = "video/mp4"
+                    
+                    storageRef.putFile(from: fileURL, metadata: metadata) { _, error in
+                        if let error = error {
+                            print("Error uploading video: \(error.localizedDescription)")
+                            dispatchGroup.leave()
+                            return
+                        }
+                        storageRef.downloadURL { url, error in
+                            if let downloadURL = url {
+                                uploadedMedia.append(MediaItem(url: downloadURL.absoluteString, type: .video))
+                            }
+                            dispatchGroup.leave()
+                        }
+                    }
+                } else {
+                    print("Error converting video to data: Could not access video data at URL: \(media.url)")
+                    dispatchGroup.leave()
                 }
             }
         }
 
         dispatchGroup.notify(queue: .main) {
-            saveImageURLsToFirestore(uploadedURLs)
-            completion(uploadedURLs)
+            saveMediaURLsToFirestore(uploadedMedia)
+            completion(uploadedMedia)
         }
     }
 
-    private func uploadVideo(_ videoURL: URL, completion: @escaping (URL) -> Void) {
-        let fileName = UUID().uuidString + ".mp4"
-        let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
-        let metadata = StorageMetadata()
-        metadata.contentType = "video/mp4"
-        
-        storageRef.putFile(from: videoURL, metadata: metadata) { _, error in
-            if let error = error {
-                print("Error uploading video: \(error.localizedDescription)")
-                return
-            }
-            storageRef.downloadURL { url, error in
-                if let downloadURL = url {
-                    completion(downloadURL)
-                }
-            }
-        }
-    }
 
-    private func saveImageURLsToFirestore(_ urls: [String]) {
+    private func saveMediaURLsToFirestore(_ mediaItems: [MediaItem]) {
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(viewModel.user.id ?? "")
+        let mediaURLs = mediaItems.map { $0.url }
+        
         userRef.updateData([
-            "additionalImages": FieldValue.arrayUnion(urls)
+            "mediaItems": FieldValue.arrayUnion(mediaURLs)
         ]) { error in
             if let error = error {
-                print("Error saving image URLs to Firestore: \(error.localizedDescription)")
+                print("Error saving media URLs to Firestore: \(error.localizedDescription)")
             } else {
-                print("Successfully saved image URLs to Firestore")
+                print("Successfully saved media URLs to Firestore")
             }
         }
     }
-
-    private func toggleSelection(for index: Int) {
-        if selectedImages.contains(index) {
-            selectedImages.remove(index)
-        } else {
-            selectedImages.insert(index)
-        }
-    }
-}
-
-// MARK: - VideoPicker Implementation
-
-struct VideoPicker: UIViewControllerRepresentable {
-    @Binding var selectedVideoURL: URL?
-
-    class Coordinator: NSObject, PHPickerViewControllerDelegate {
-        var parent: VideoPicker
-
-        init(parent: VideoPicker) {
-            self.parent = parent
-        }
-
-        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-            picker.dismiss(animated: true)
-            guard let result = results.first else { return }
-
-            if result.itemProvider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-                result.itemProvider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { (url, error) in
-                    if let url = url {
-                        DispatchQueue.main.async {
-                            self.parent.selectedVideoURL = url
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-
-    func makeUIViewController(context: Context) -> PHPickerViewController {
-        var config = PHPickerConfiguration()
-        config.filter = .videos
-        config.selectionLimit = 1
-
-        let picker = PHPickerViewController(configuration: config)
-        picker.delegate = context.coordinator
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
 }

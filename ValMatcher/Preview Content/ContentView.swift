@@ -637,9 +637,10 @@ struct ContentView: View {
         }
     }
 
-    private func deleteImage(at index: Int) {
-        users[currentIndex].additionalImages.remove(at: index)
+    private func deleteMedia(at index: Int) {
+        users[currentIndex].mediaItems.remove(at: index)
     }
+
 }
 
 struct BadgeView: View {
@@ -706,62 +707,81 @@ struct UserCardView: View {
         VStack(spacing: 0) {
             ZStack {
                 TabView(selection: $currentMediaIndex) {
-                    ForEach(user.additionalImages.indices, id: \.self) { index in
-                        if let urlString = user.additionalImages[index], let url = URL(string: urlString) {
-                            ZStack {
-                                if url.pathExtension.lowercased() == "mp4" {
-                                    VideoPlayer(player: AVPlayer(url: url))
-                                        .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                        .cornerRadius(20)
-                                        .shadow(radius: 10)
-                                } else {
-                                    AsyncImage(url: url) { phase in
-                                        switch phase {
-                                        case .empty:
-                                            ProgressView()
-                                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                        case .success(let image):
-                                            image
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                                .clipped()
-                                                .cornerRadius(20)
-                                                .shadow(radius: 10)
-                                        case .failure:
-                                            Image(systemName: "photo")
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                                .clipped()
-                                                .cornerRadius(20)
-                                                .background(Color.gray)
-                                                .shadow(radius: 10)
-                                        @unknown default:
-                                            EmptyView()
-                                        }
+                    ForEach(user.mediaItems.indices, id: \.self) { index in
+                        let mediaItem = user.mediaItems[index]
+                        ZStack {
+                            if mediaItem.type == .video, let url = URL(string: mediaItem.url) {
+                                VideoPlayer(player: AVPlayer(url: url))
+                                    .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                    .cornerRadius(20)
+                                    .shadow(radius: 10)
+                            } else if let url = URL(string: mediaItem.url) {
+                                AsyncImage(url: url) { phase in
+                                    switch phase {
+                                    case .empty:
+                                        ProgressView()
+                                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                            .clipped()
+                                            .cornerRadius(20)
+                                            .shadow(radius: 10)
+                                    case .failure:
+                                        Image(systemName: "photo")
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                            .clipped()
+                                            .cornerRadius(20)
+                                            .background(Color.gray.opacity(0.3))
+                                            .shadow(radius: 10)
+                                    @unknown default:
+                                        EmptyView()
                                     }
                                 }
                             }
                         }
                     }
-                    ForEach(newMedia.indices, id: \.self) { index in
-                        let media = newMedia[index]
-                        if let image = media.image {
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                .clipped()
-                                .cornerRadius(20)
-                                .shadow(radius: 10)
-                        } else if let videoURL = media.videoURL {
-                            VideoPlayer(player: AVPlayer(url: videoURL))
+                    ForEach(newMedia) { media in
+                        if media.type == .image {
+                            AsyncImage(url: URL(string: media.url)) { phase in
+                                switch phase {
+                                case .empty:
+                                    ProgressView()
+                                        .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                        .clipped()
+                                        .cornerRadius(20)
+                                        .shadow(radius: 10)
+                                case .failure:
+                                    Image(systemName: "photo")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                        .clipped()
+                                        .cornerRadius(20)
+                                        .background(Color.gray.opacity(0.3))
+                                        .shadow(radius: 10)
+                                @unknown default:
+                                    EmptyView()
+                                }
+                            }
+                        } else if media.type == .video {
+                            VideoPlayer(player: AVPlayer(url: URL(string: media.url)!))
                                 .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
                                 .cornerRadius(20)
                                 .shadow(radius: 10)
                         }
                     }
+
+
                 }
                 .tabViewStyle(PageTabViewStyle())
                 .frame(height: UIScreen.main.bounds.height * 0.5)
@@ -782,7 +802,7 @@ struct UserCardView: View {
                     Spacer()
 
                     Button(action: {
-                        currentMediaIndex = min(currentMediaIndex + 1, (user.additionalImages.count + newMedia.count) - 1)
+                        currentMediaIndex = min(currentMediaIndex + 1, (user.mediaItems.count + newMedia.count) - 1)
                     }) {
                         Image(systemName: "chevron.right")
                             .font(.title)
@@ -797,7 +817,7 @@ struct UserCardView: View {
                 VStack {
                     Spacer()
                     HStack {
-                        ForEach(0..<(user.additionalImages.count + newMedia.count), id: \.self) { index in
+                        ForEach(0..<(user.mediaItems.count + newMedia.count), id: \.self) { index in
                             Circle()
                                 .fill(index == currentMediaIndex ? Color.white : Color.gray)
                                 .frame(width: 8, height: 8)
@@ -820,13 +840,13 @@ struct UserCardView: View {
             }
             .frame(width: UIScreen.main.bounds.width * 0.85)
             .padding()
-            .background(Color(.systemGray5))
+            .background(Color.white.opacity(0.8))
             .cornerRadius(20)
             .padding(.top, 5)
         }
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.systemGray4))
+                .fill(Color.white.opacity(0.6))
         )
         .padding()
     }

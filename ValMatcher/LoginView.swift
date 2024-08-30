@@ -118,6 +118,12 @@ struct LoginView: View {
         db.collection("users").document(userID).getDocument { document, error in
             if let document = document, document.exists {
                 if let data = document.data() {
+                    // Assuming the `mediaItems` field in Firestore is stored as an array of strings (URLs).
+                    let mediaURLs = data["mediaItems"] as? [String] ?? []
+                    let mediaItems = mediaURLs.map { url in
+                        return MediaItem(url: url, type: url.contains(".mp4") ? .video : .image)
+                    }
+                    
                     self.currentUser = UserProfile(
                         id: document.documentID,
                         name: data["name"] as? String ?? "",
@@ -127,12 +133,14 @@ struct LoginView: View {
                         server: data["server"] as? String ?? "",
                         answers: data["answers"] as? [String: String] ?? [:],
                         hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false,
-                        additionalImages: data["additionalImages"] as? [String] ?? []
+                        mediaItems: mediaItems  // Provide the mapped `MediaItem` array here
                     )
                 }
             }
         }
     }
+
+
 }
 
 struct LoginView_Previews: PreviewProvider {

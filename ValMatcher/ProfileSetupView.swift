@@ -113,7 +113,7 @@ struct ProfileSetupView_Previews: PreviewProvider {
             server: "NA",
             answers: [:],
             hasAnsweredQuestions: false,
-            additionalImages: []
+            mediaItems: []  // Replace additionalImages with mediaItems
         )), isSignedIn: .constant(true))
     }
 }

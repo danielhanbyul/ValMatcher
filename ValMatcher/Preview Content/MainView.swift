@@ -22,7 +22,7 @@ struct MainView: View {
                         ContentView(userProfileViewModel: UserProfileViewModel(user: user), isSignedIn: $isSignedIn)
                     } else {
                         QuestionsView(userProfile: Binding(
-                            get: { self.currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, additionalImages: []) },
+                            get: { self.currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, mediaItems: []) },
                             set: { self.currentUser = $0 }
                         ), hasAnsweredQuestions: $hasAnsweredQuestions)
                     }
@@ -51,6 +51,16 @@ struct MainView: View {
                     print("Error fetching user document: \(error.localizedDescription)")
                 } else if let document = document, document.exists {
                     if let data = document.data() {
+                        // Assuming mediaItems in Firestore is stored as an array of URLs (strings)
+                        let mediaItemsData = data["mediaItems"] as? [String] ?? []
+                        let mediaItems = mediaItemsData.map { urlString -> MediaItem in
+                            if urlString.hasSuffix(".mp4") {
+                                return MediaItem(url: urlString, type: .video)
+                            } else {
+                                return MediaItem(url: urlString, type: .image)
+                            }
+                        }
+                        
                         self.currentUser = UserProfile(
                             id: document.documentID,
                             name: data["name"] as? String ?? "",
@@ -60,7 +70,7 @@ struct MainView: View {
                             server: data["server"] as? String ?? "",
                             answers: data["answers"] as? [String: String] ?? [:],
                             hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false,
-                            additionalImages: data["additionalImages"] as? [String] ?? []
+                            mediaItems: mediaItems  // Corrected to use the converted mediaItems
                         )
                         self.hasAnsweredQuestions = self.currentUser?.hasAnsweredQuestions ?? false
                     }
@@ -70,4 +80,5 @@ struct MainView: View {
             self.isSignedIn = false
         }
     }
+
 }

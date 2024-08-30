@@ -17,6 +17,5 @@ struct UserProfile: Identifiable, Codable, Equatable {
     var server: String
     var answers: [String: String]
     var hasAnsweredQuestions: Bool
-    var additionalImages: [String?]
-    var videoURL: String?
+    var mediaItems: [MediaItem] // Combined images and videos into a single array
 }

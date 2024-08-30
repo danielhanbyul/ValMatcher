@@ -51,11 +51,11 @@ class UserProfileViewModel: ObservableObject {
         listener?.remove()
     }
 
-    func updateUserProfile(newAge: String, newRank: String, newServer: String, additionalImages: [String], updatedAnswers: [String: String]) {
+    func updateUserProfile(newAge: String, newRank: String, newServer: String, mediaItems: [MediaItem], updatedAnswers: [String: String]) {
         user.age = newAge
         user.rank = newRank
         user.server = newServer
-        user.additionalImages = additionalImages
+        user.mediaItems = mediaItems  // Store MediaItem objects
         user.answers = updatedAnswers
 
         guard let userId = user.id else { return }
@@ -69,22 +69,22 @@ class UserProfileViewModel: ObservableObject {
     func addMedia(media: MediaItem) {
         guard let userId = user.id else { return }
 
-        if let image = media.image {
-            uploadImage(image: image, path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
-                self?.user.additionalImages.append(url.absoluteString)
+        if media.type == .image {
+            uploadImage(urlString: media.url, path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
+                self?.user.mediaItems.append(MediaItem(url: url.absoluteString, type: .image))
                 self?.saveUserProfile()
             }
-        } else if let videoURL = media.videoURL {
-            uploadVideo(url: videoURL, path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
-                self?.user.additionalImages.append(url.absoluteString)
+        } else if media.type == .video {
+            uploadVideo(urlString: media.url, path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
+                self?.user.mediaItems.append(MediaItem(url: url.absoluteString, type: .video))
                 self?.saveUserProfile()
             }
         }
     }
 
-    func uploadImage(image: UIImage, path: String, completion: @escaping (URL) -> Void) {
+    func uploadImage(urlString: String, path: String, completion: @escaping (URL) -> Void) {
         let storageRef = Storage.storage().reference().child(path)
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else { return }
+        guard let imageData = try? Data(contentsOf: URL(string: urlString)!) else { return }
         let metadata = StorageMetadata()
         metadata.contentType = "image/jpeg"
 
@@ -103,12 +103,13 @@ class UserProfileViewModel: ObservableObject {
         }
     }
 
-    func uploadVideo(url: URL, path: String, completion: @escaping (URL) -> Void) {
+    func uploadVideo(urlString: String, path: String, completion: @escaping (URL) -> Void) {
         let storageRef = Storage.storage().reference().child(path)
+        let videoURL = URL(string: urlString)!
         let metadata = StorageMetadata()
         metadata.contentType = "video/mp4"
 
-        storageRef.putFile(from: url, metadata: metadata) { _, error in
+        storageRef.putFile(from: videoURL, metadata: metadata) { _, error in
             if let error = error {
                 print("Error uploading video: \(error)")
                 return
