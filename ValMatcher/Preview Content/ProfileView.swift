@@ -161,6 +161,7 @@ struct ProfileView: View {
                             switch phase {
                             case .empty:
                                 ProgressView()
+                                    .frame(width: 100, height: 100)
                             case .success(let image):
                                 image.resizable()
                                     .aspectRatio(contentMode: .fill)
@@ -175,13 +176,17 @@ struct ProfileView: View {
                                     .frame(width: 100, height: 100)
                                     .clipShape(RoundedRectangle(cornerRadius: 10))
                                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                    .background(Color.gray.opacity(0.3))
+                                    .shadow(radius: 5)
                             @unknown default:
                                 EmptyView()
                             }
                         }
                     } else if media.type == .video {
-                        VideoPlayer(player: AVPlayer(url: media.url))
+                        VideoPlayerView(url: media.url)
                             .frame(width: 100, height: 100)
+                            .aspectRatio(contentMode: .fill)  // Ensures the video fills the entire frame
+                            .clipped()  // Clips any overflow to fit within the frame
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
                             .shadow(radius: 5)
@@ -192,6 +197,26 @@ struct ProfileView: View {
             .padding(.horizontal)
         }
     }
+
+    // Custom VideoPlayerView to handle auto-play and fill the frame
+    struct VideoPlayerView: View {
+        var url: URL
+        @State private var player: AVPlayer?
+
+        var body: some View {
+            VideoPlayer(player: player)
+                .aspectRatio(contentMode: .fill)  // Ensures video fills the entire frame
+                .clipped()  // Clips any overflow to fit within the frame
+                .onAppear {
+                    player = AVPlayer(url: url)
+                    player?.play()  // Auto-play video
+                }
+                .onDisappear {
+                    player?.pause()  // Pause video when it goes out of view
+                }
+        }
+    }
+
     
     private var editableMediaList: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -224,10 +249,16 @@ struct ProfileView: View {
                     } else if media.type == .video {
                         VideoPlayer(player: AVPlayer(url: media.url))
                             .frame(width: 100, height: 100)
+                            .aspectRatio(contentMode: .fill)  // Ensures the video fills the entire frame
+                            .clipped()  // Clips any overflow to fit within the frame
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
                             .shadow(radius: 5)
+                            .onAppear {
+                                AVPlayer(url: media.url).isMuted = false // Ensure sound is enabled
+                            }
                     }
+
 
                     Spacer()
 
