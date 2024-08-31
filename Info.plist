@@ -2,15 +2,23 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>We need access to your photo library to allow you to upload photos and videos.</string>
-    <key>NSCameraUsageDescription</key>
-    <string>We need access to your camera to capture photos and videos.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>We need access to your microphone for video recording.</string>
-    <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>We need access to save photos and videos to your library.</string>
-
-
+	<key>CFBundleExecutable</key>
+	<string>ValMatcher</string>
+	<key>CFBundleDisplayName</key>
+	<string>ValMatcher</string>
+	<key>CFBundleName</key>
+	<string>ValMatcher</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.example.ValMatcher</string>
+	<key>INFOPLIST_FILE</key>
+	<string>/Users/danielhan/Documents/ValMatcher/Info.plist</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to your photo library to allow you to upload photos and videos.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>We need access to your camera to capture photos and videos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need access to your microphone for video recording.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>We need access to save photos and videos to your library.</string>
 </dict>
 </plist>

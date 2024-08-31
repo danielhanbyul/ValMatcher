@@ -89,6 +89,7 @@
 		A9115AA72C824A7000FBAF00 /* RequestPhotoAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestPhotoAccess.swift; sourceTree = "<group>"; };
 		A91470AD2C28076000380D39 /* FirestoreManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreManager.swift; sourceTree = "<group>"; };
 		A91470AF2C280B3200380D39 /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
+		A924425B2C82EE7A00995C76 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A932AF632C291FD40012A9D0 /* MatchNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchNotification.swift; sourceTree = "<group>"; };
 		A950C2392C49DF21001BA6B5 /* ImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
 		A950C23F2C49EDB8001BA6B5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
@@ -116,7 +117,6 @@
 		A984D4E82C1A2A5600BB75DB /* DM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DM.swift; sourceTree = "<group>"; };
 		A984D4EA2C1A2E6300BB75DB /* DMHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMHomeView.swift; sourceTree = "<group>"; };
 		A9A63DF82C3245EA00F6198E /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
-		A9D5356C2C81CCC700D6B32C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A9FAA11D2C4F5D7700048F32 /* UserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileView.swift; sourceTree = "<group>"; };
 		A9FAA11F2C4F65D300048F32 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -177,7 +177,7 @@
 		A9551CA62C12BAF30002AF0B = {
 			isa = PBXGroup;
 			children = (
-				A9D5356C2C81CCC700D6B32C /* Info.plist */,
+				A924425B2C82EE7A00995C76 /* Info.plist */,
 				A950C23F2C49EDB8001BA6B5 /* GoogleService-Info.plist */,
 				A9551CB12C12BAF30002AF0B /* ValMatcher */,
 				A9551CC22C12BAF50002AF0B /* ValMatcherTests */,
@@ -607,8 +607,8 @@
 				DEVELOPMENT_ASSET_PATHS = "\"ValMatcher/Preview Content\"";
 				DEVELOPMENT_TEAM = ZLKH77N9TP;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "$(SRCROOT)/Info.plist\n";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -637,8 +637,8 @@
 				DEVELOPMENT_ASSET_PATHS = "\"ValMatcher/Preview Content\"";
 				DEVELOPMENT_TEAM = ZLKH77N9TP;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "$(SRCROOT)/Info.plist\n";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
