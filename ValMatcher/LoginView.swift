@@ -121,7 +121,7 @@ struct LoginView: View {
                     // Assuming the `mediaItems` field in Firestore is stored as an array of strings (URLs).
                     let mediaURLs = data["mediaItems"] as? [String] ?? []
                     let mediaItems = mediaURLs.map { url in
-                        return MediaItem(url: url, type: url.contains(".mp4") ? .video : .image)
+                        return MediaItem(type: url.contains(".mp4") ? .video : .image, url: URL(string: url)!)
                     }
                     
                     self.currentUser = UserProfile(
@@ -139,6 +139,7 @@ struct LoginView: View {
             }
         }
     }
+
 
 
 }

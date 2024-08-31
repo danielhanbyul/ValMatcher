@@ -70,17 +70,18 @@ class UserProfileViewModel: ObservableObject {
         guard let userId = user.id else { return }
 
         if media.type == .image {
-            uploadImage(urlString: media.url, path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
-                self?.user.mediaItems.append(MediaItem(url: url.absoluteString, type: .image))
+            uploadImage(urlString: media.url.absoluteString, path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
+                self?.user.mediaItems.append(MediaItem(type: .image, url: url))
                 self?.saveUserProfile()
             }
         } else if media.type == .video {
-            uploadVideo(urlString: media.url, path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
-                self?.user.mediaItems.append(MediaItem(url: url.absoluteString, type: .video))
+            uploadVideo(urlString: media.url.absoluteString, path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
+                self?.user.mediaItems.append(MediaItem(type: .video, url: url))
                 self?.saveUserProfile()
             }
         }
     }
+
 
     func uploadImage(urlString: String, path: String, completion: @escaping (URL) -> Void) {
         let storageRef = Storage.storage().reference().child(path)
@@ -102,6 +103,7 @@ class UserProfileViewModel: ObservableObject {
             }
         }
     }
+
 
     func uploadVideo(urlString: String, path: String, completion: @escaping (URL) -> Void) {
         let storageRef = Storage.storage().reference().child(path)

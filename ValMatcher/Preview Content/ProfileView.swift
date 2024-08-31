@@ -18,6 +18,7 @@ struct ProfileView: View {
     @State private var isEditing = false
     @State private var showingImagePicker = false
     @State private var newMedia: [MediaItem] = []
+    @State private var selectedMediaItem: MediaItem? // New state variable
     @State private var additionalMedia: [MediaItem] = []
     @State private var updatedAnswers: [String: String] = [:]
     @State private var showingSettings = false
@@ -66,8 +67,13 @@ struct ProfileView: View {
         .navigationBarTitle("", displayMode: .inline)
         .navigationBarHidden(true)
         .sheet(isPresented: $showingImagePicker) {
-            ImagePicker(selectedMedia: $newMedia)
-                .onDisappear(perform: saveMedia)
+            ImagePicker(selectedMediaItem: $selectedMediaItem)
+                .onDisappear {
+                    if let selectedItem = selectedMediaItem {
+                        newMedia.append(selectedItem)
+                    }
+                    saveMedia()
+                }
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView(user: $viewModel.user, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
@@ -81,7 +87,6 @@ struct ProfileView: View {
     }
     
     // MARK: - Components
-
     private var backButton: some View {
         Button(action: {
             if isEditing {
@@ -146,14 +151,13 @@ struct ProfileView: View {
         }
     }
 
-    // View to display media (images and videos) in non-edit mode
     private var displayMediaList: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 15) {
                 Spacer()
                 ForEach(additionalMedia) { media in
                     if media.type == .image {
-                        AsyncImage(url: URL(string: media.url)) { phase in
+                        AsyncImage(url: media.url) { phase in
                             switch phase {
                             case .empty:
                                 ProgressView()
@@ -176,7 +180,7 @@ struct ProfileView: View {
                             }
                         }
                     } else if media.type == .video {
-                        VideoPlayer(player: AVPlayer(url: URL(string: media.url)!))
+                        VideoPlayer(player: AVPlayer(url: media.url))
                             .frame(width: 100, height: 100)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
@@ -189,14 +193,13 @@ struct ProfileView: View {
         }
     }
     
-    // Editable list of media
     private var editableMediaList: some View {
         VStack(alignment: .leading, spacing: 15) {
             ForEach(additionalMedia.indices, id: \.self) { index in
                 let media = additionalMedia[index]
                 HStack {
                     if media.type == .image {
-                        AsyncImage(url: URL(string: media.url)) { phase in
+                        AsyncImage(url: media.url) { phase in
                             switch phase {
                             case .empty:
                                 ProgressView()
@@ -219,7 +222,7 @@ struct ProfileView: View {
                             }
                         }
                     } else if media.type == .video {
-                        VideoPlayer(player: AVPlayer(url: URL(string: media.url)!))
+                        VideoPlayer(player: AVPlayer(url: media.url))
                             .frame(width: 100, height: 100)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
@@ -228,7 +231,6 @@ struct ProfileView: View {
 
                     Spacer()
 
-                    // Delete Button for each media item
                     Button(action: {
                         deleteMedia(at: index)
                     }) {
@@ -322,7 +324,6 @@ struct ProfileView: View {
         uploadNewMedia { mediaItems in
             self.additionalMedia.append(contentsOf: mediaItems)
             
-            // Update the profile with the newly added media
             self.viewModel.updateUserProfile(
                 newAge: self.viewModel.user.age,
                 newRank: self.viewModel.user.rank,
@@ -330,7 +331,6 @@ struct ProfileView: View {
                 mediaItems: self.additionalMedia,
                 updatedAnswers: self.updatedAnswers
             )
-
             self.newMedia.removeAll()
             self.isUploading = false
         }
@@ -375,13 +375,13 @@ struct ProfileView: View {
     }
 
     private func deleteMediaFromStorageAndFirestore(mediaItem: MediaItem) {
-        let storageRef = Storage.storage().reference(forURL: mediaItem.url)
+        let storageRef = Storage.storage().reference(forURL: mediaItem.url.absoluteString)
         storageRef.delete { error in
             if let error = error {
                 print("Error deleting media from storage: \(error.localizedDescription)")
             } else {
                 print("Media deleted from storage")
-                removeMediaURLFromFirestore(url: mediaItem.url)
+                removeMediaURLFromFirestore(url: mediaItem.url.absoluteString)
             }
         }
     }
@@ -405,97 +405,129 @@ struct ProfileView: View {
         var uploadedMedia: [MediaItem] = []
         let totalMediaCount = newMedia.count
         var currentMediaIndex = 0
-
+        
         for media in newMedia {
             dispatchGroup.enter()
             if media.type == .image {
-                guard let fileURL = URL(string: media.url), let imageData = try? Data(contentsOf: fileURL) else {
-                    print("Error: Unable to load image from path \(media.url)")
-                    dispatchGroup.leave()
-                    continue
-                }
-
-                guard let image = UIImage(data: imageData) else {
-                    print("Error converting data to image")
-                    dispatchGroup.leave()
-                    continue
-                }
-
-                let fileName = UUID().uuidString + ".jpg"
-                let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
-                let jpegData = image.jpegData(compressionQuality: 0.8)!
-                let metadata = StorageMetadata()
-                metadata.contentType = "image/jpeg"
-                
-                let uploadTask = storageRef.putData(jpegData, metadata: metadata) { _, error in
-                    if let error = error {
-                        print("Error uploading image: \(error.localizedDescription)")
-                        dispatchGroup.leave()
-                        return
-                    }
-                    storageRef.downloadURL { url, error in
-                        if let downloadURL = url {
-                            uploadedMedia.append(MediaItem(url: downloadURL.absoluteString, type: .image))
-                        } else if let error = error {
-                            print("Error getting download URL: \(error.localizedDescription)")
-                        }
-                        dispatchGroup.leave()
+                uploadImage(media: media, currentMediaIndex: currentMediaIndex, totalMediaCount: totalMediaCount, dispatchGroup: dispatchGroup) { mediaItem in
+                    if let mediaItem = mediaItem {
+                        uploadedMedia.append(mediaItem)
                     }
                 }
-                uploadTask.observe(.progress) { snapshot in
-                    self.uploadProgress = Double(snapshot.progress!.completedUnitCount) / Double(snapshot.progress!.totalUnitCount) / Double(totalMediaCount) + Double(currentMediaIndex) / Double(totalMediaCount)
-                    self.uploadMessage = "Uploading image \(currentMediaIndex + 1) of \(totalMediaCount)"
-                }
-                currentMediaIndex += 1
             } else if media.type == .video {
-                // Handle PHAsset video here
-                let asset = PHAsset.fetchAssets(withLocalIdentifiers: [media.url], options: nil).firstObject
-                if let asset = asset {
-                    getVideoURL(from: asset) { videoURL in
-                        guard let localURL = videoURL else {
-                            print("Failed to get video URL from asset.")
-                            dispatchGroup.leave()
-                            return
-                        }
-                        
-                        let fileName = UUID().uuidString + ".mp4"
-                        let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
-                        let metadata = StorageMetadata()
-                        metadata.contentType = "video/mp4"
-                        
-                        let uploadTask = storageRef.putFile(from: localURL, metadata: metadata) { _, error in
-                            if let error = error {
-                                print("Error uploading video: \(error.localizedDescription)")
-                                dispatchGroup.leave()
-                                return
-                            }
-                            storageRef.downloadURL { url, error in
-                                if let downloadURL = url {
-                                    uploadedMedia.append(MediaItem(url: downloadURL.absoluteString, type: .video))
-                                } else if let error = error {
-                                    print("Error getting download URL: \(error.localizedDescription)")
-                                }
-                                dispatchGroup.leave()
-                            }
-                        }
-                        uploadTask.observe(.progress) { snapshot in
-                            self.uploadProgress = Double(snapshot.progress!.completedUnitCount) / Double(snapshot.progress!.totalUnitCount) / Double(totalMediaCount) + Double(currentMediaIndex) / Double(totalMediaCount)
-                            self.uploadMessage = "Uploading video \(currentMediaIndex + 1) of \(totalMediaCount)"
-                        }
-                        currentMediaIndex += 1
+                uploadVideo(media: media, currentMediaIndex: currentMediaIndex, totalMediaCount: totalMediaCount, dispatchGroup: dispatchGroup) { mediaItem in
+                    if let mediaItem = mediaItem {
+                        uploadedMedia.append(mediaItem)
                     }
-                } else {
-                    print("Asset not found for video URL.")
-                    dispatchGroup.leave()
                 }
             }
+            currentMediaIndex += 1
         }
-
+        
         dispatchGroup.notify(queue: .main) {
             saveMediaURLsToFirestore(uploadedMedia)
             completion(uploadedMedia)
         }
     }
+
+    
+    private func uploadImage(media: MediaItem, currentMediaIndex: Int, totalMediaCount: Int, dispatchGroup: DispatchGroup, completion: @escaping (MediaItem?) -> Void) {
+        let fileURL = media.url
+        guard let imageData = try? Data(contentsOf: fileURL) else {
+            print("Error: Unable to load image from path \(fileURL)")
+            dispatchGroup.leave()
+            completion(nil)
+            return
+        }
+        guard let image = UIImage(data: imageData) else {
+            print("Error converting data to image")
+            dispatchGroup.leave()
+            completion(nil)
+            return
+        }
+        let fileName = UUID().uuidString + ".jpg"
+        let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
+        let jpegData = image.jpegData(compressionQuality: 0.8)!
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        
+        let uploadTask = storageRef.putData(jpegData, metadata: metadata) { _, error in
+            if let error = error {
+                print("Error uploading image: \(error.localizedDescription)")
+                dispatchGroup.leave()
+                completion(nil)
+                return
+            }
+            storageRef.downloadURL { url, error in
+                if let downloadURL = url {
+                    let mediaItem = MediaItem(type: .image, url: downloadURL)
+                    completion(mediaItem)
+                } else if let error = error {
+                    print("Error getting download URL: \(error.localizedDescription)")
+                    completion(nil)
+                }
+                dispatchGroup.leave()
+            }
+        }
+        
+        uploadTask.observe(.progress) { snapshot in
+            let fractionCompleted = Double(snapshot.progress!.fractionCompleted)
+            self.uploadProgress = (fractionCompleted + Double(currentMediaIndex)) / Double(totalMediaCount)
+            self.uploadProgress = min(max(self.uploadProgress, 0.0), 1.0) // Clamp the progress between 0 and 1
+            self.uploadMessage = "Uploading image \(currentMediaIndex + 1) of \(totalMediaCount)"
+        }
+    }
+
+    private func uploadVideo(media: MediaItem, currentMediaIndex: Int, totalMediaCount: Int, dispatchGroup: DispatchGroup, completion: @escaping (MediaItem?) -> Void) {
+        let asset = PHAsset.fetchAssets(withLocalIdentifiers: [media.url.absoluteString], options: nil).firstObject
+        if let asset = asset {
+            getVideoURL(from: asset) { videoURL in
+                guard let localURL = videoURL else {
+                    print("Failed to get video URL from asset.")
+                    dispatchGroup.leave()
+                    completion(nil)
+                    return
+                }
+                
+                let fileName = UUID().uuidString + ".mp4"
+                let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
+                let metadata = StorageMetadata()
+                metadata.contentType = "video/mp4"
+                
+                let uploadTask = storageRef.putFile(from: localURL, metadata: metadata) { _, error in
+                    if let error = error {
+                        print("Error uploading video: \(error.localizedDescription)")
+                        dispatchGroup.leave()
+                        completion(nil)
+                        return
+                    }
+                    storageRef.downloadURL { url, error in
+                        if let downloadURL = url {
+                            let mediaItem = MediaItem(type: .video, url: downloadURL)
+                            completion(mediaItem)
+                        } else if let error = error {
+                            print("Error getting download URL: \(error.localizedDescription)")
+                            completion(nil)
+                        }
+                        dispatchGroup.leave()
+                    }
+                }
+                
+                uploadTask.observe(.progress) { snapshot in
+                    let fractionCompleted = Double(snapshot.progress!.fractionCompleted)
+                    self.uploadProgress = (fractionCompleted + Double(currentMediaIndex)) / Double(totalMediaCount)
+                    self.uploadProgress = min(max(self.uploadProgress, 0.0), 1.0) // Clamp the progress between 0 and 1
+                    self.uploadMessage = "Uploading video \(currentMediaIndex + 1) of \(totalMediaCount)"
+                }
+            }
+        } else {
+            print("Asset not found for video URL.")
+            dispatchGroup.leave()
+            completion(nil)
+        }
+    }
+
+    
     
     private func getVideoURL(from asset: PHAsset, completion: @escaping (URL?) -> Void) {
         let options = PHVideoRequestOptions()
@@ -509,7 +541,6 @@ struct ProfileView: View {
             completion(asset.url)
         }
     }
-
 
     private func copyVideoToDocumentsDirectory(url: URL) -> URL? {
         let fileManager = FileManager.default
@@ -529,12 +560,10 @@ struct ProfileView: View {
         }
     }
 
-
-
     private func saveMediaURLsToFirestore(_ mediaItems: [MediaItem]) {
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(viewModel.user.id ?? "")
-        let mediaURLs = mediaItems.map { $0.url }
+        let mediaURLs = mediaItems.map { $0.url.absoluteString }
         
         userRef.updateData([
             "mediaItems": FieldValue.arrayUnion(mediaURLs)

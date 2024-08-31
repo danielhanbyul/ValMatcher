@@ -717,14 +717,14 @@ struct UserCardView: View {
                     ForEach(allMediaItems.indices, id: \.self) { index in
                         let mediaItem = allMediaItems[index]
                         ZStack {
-                            if mediaItem.type == .video, let url = URL(string: mediaItem.url) {
-                                VideoPlayer(player: AVPlayer(url: url))
+                            if mediaItem.type == .video {
+                                VideoPlayer(player: AVPlayer(url: mediaItem.url))
                                     .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
                                     .cornerRadius(20)
                                     .shadow(radius: 10)
                                     .tag(index)
-                            } else if let url = URL(string: mediaItem.url) {
-                                AsyncImage(url: url) { phase in
+                            } else {
+                                AsyncImage(url: mediaItem.url) { phase in
                                     switch phase {
                                     case .empty:
                                         ProgressView()

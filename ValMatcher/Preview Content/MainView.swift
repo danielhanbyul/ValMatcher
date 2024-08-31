@@ -55,9 +55,9 @@ struct MainView: View {
                         let mediaItemsData = data["mediaItems"] as? [String] ?? []
                         let mediaItems = mediaItemsData.map { urlString -> MediaItem in
                             if urlString.hasSuffix(".mp4") {
-                                return MediaItem(url: urlString, type: .video)
+                                return MediaItem(type: .video, url: URL(string: urlString)!)
                             } else {
-                                return MediaItem(url: urlString, type: .image)
+                                return MediaItem(type: .image, url: URL(string: urlString)!)
                             }
                         }
                         
@@ -80,5 +80,6 @@ struct MainView: View {
             self.isSignedIn = false
         }
     }
+
 
 }
