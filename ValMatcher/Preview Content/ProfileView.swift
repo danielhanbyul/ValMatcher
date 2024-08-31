@@ -320,21 +320,35 @@ struct ProfileView: View {
     private func saveMedia() {
         guard !newMedia.isEmpty else { return }
         
-        isUploading = true
-        uploadNewMedia { mediaItems in
-            self.additionalMedia.append(contentsOf: mediaItems)
-            
-            self.viewModel.updateUserProfile(
-                newAge: self.viewModel.user.age,
-                newRank: self.viewModel.user.rank,
-                newServer: self.viewModel.user.server,
-                mediaItems: self.additionalMedia,
-                updatedAnswers: self.updatedAnswers
-            )
-            self.newMedia.removeAll()
-            self.isUploading = false
+        // Check if the user is authenticated
+        if let user = Auth.auth().currentUser {
+            print("User is authenticated with UID: \(user.uid)")
+            // Proceed with the upload
+            isUploading = true
+            Task {
+                do {
+                    let mediaItems = try await uploadNewMedia()
+                    self.additionalMedia.append(contentsOf: mediaItems)
+                    
+                    self.viewModel.updateUserProfile(
+                        newAge: self.viewModel.user.age,
+                        newRank: self.viewModel.user.rank,
+                        newServer: self.viewModel.user.server,
+                        mediaItems: self.additionalMedia,
+                        updatedAnswers: self.updatedAnswers
+                    )
+                    self.newMedia.removeAll()
+                } catch {
+                    print("Failed to upload media: \(error)")
+                }
+                self.isUploading = false
+            }
+        } else {
+            print("No authenticated user found")
+            // Handle the case where there is no authenticated user, possibly by showing an error message or prompting a login
         }
     }
+
     
     private func deleteMedia(at index: Int) {
         let mediaItem = additionalMedia[index]
@@ -400,134 +414,114 @@ struct ProfileView: View {
         }
     }
 
-    private func uploadNewMedia(completion: @escaping ([MediaItem]) -> Void) {
-        let dispatchGroup = DispatchGroup()
+    private func uploadNewMedia() async throws -> [MediaItem] {
         var uploadedMedia: [MediaItem] = []
         let totalMediaCount = newMedia.count
         var currentMediaIndex = 0
         
         for media in newMedia {
-            dispatchGroup.enter()
-            if media.type == .image {
-                uploadImage(media: media, currentMediaIndex: currentMediaIndex, totalMediaCount: totalMediaCount, dispatchGroup: dispatchGroup) { mediaItem in
-                    if let mediaItem = mediaItem {
-                        uploadedMedia.append(mediaItem)
-                    }
-                }
+            if media.type == .image, let image = UIImage(contentsOfFile: media.url.path) {
+                let url = try await uploadImageToFirebase(image: image)
+                uploadedMedia.append(MediaItem(type: .image, url: url))
             } else if media.type == .video {
-                uploadVideo(media: media, currentMediaIndex: currentMediaIndex, totalMediaCount: totalMediaCount, dispatchGroup: dispatchGroup) { mediaItem in
-                    if let mediaItem = mediaItem {
-                        uploadedMedia.append(mediaItem)
-                    }
-                }
+                let url = try await uploadVideoToFirebase(videoURL: media.url)
+                uploadedMedia.append(MediaItem(type: .video, url: url))
             }
             currentMediaIndex += 1
         }
         
-        dispatchGroup.notify(queue: .main) {
-            saveMediaURLsToFirestore(uploadedMedia)
-            completion(uploadedMedia)
-        }
+        return uploadedMedia
     }
-
     
-    private func uploadImage(media: MediaItem, currentMediaIndex: Int, totalMediaCount: Int, dispatchGroup: DispatchGroup, completion: @escaping (MediaItem?) -> Void) {
-        let fileURL = media.url
-        guard let imageData = try? Data(contentsOf: fileURL) else {
-            print("Error: Unable to load image from path \(fileURL)")
-            dispatchGroup.leave()
-            completion(nil)
-            return
+    private func uploadImageToFirebase(image: UIImage) async throws -> URL {
+        let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(UUID().uuidString).jpg")
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw UploadError.compressionFailed
         }
-        guard let image = UIImage(data: imageData) else {
-            print("Error converting data to image")
-            dispatchGroup.leave()
-            completion(nil)
-            return
-        }
-        let fileName = UUID().uuidString + ".jpg"
-        let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
-        let jpegData = image.jpegData(compressionQuality: 0.8)!
-        let metadata = StorageMetadata()
-        metadata.contentType = "image/jpeg"
-        
-        let uploadTask = storageRef.putData(jpegData, metadata: metadata) { _, error in
-            if let error = error {
-                print("Error uploading image: \(error.localizedDescription)")
-                dispatchGroup.leave()
-                completion(nil)
-                return
-            }
-            storageRef.downloadURL { url, error in
-                if let downloadURL = url {
-                    let mediaItem = MediaItem(type: .image, url: downloadURL)
-                    completion(mediaItem)
-                } else if let error = error {
-                    print("Error getting download URL: \(error.localizedDescription)")
-                    completion(nil)
-                }
-                dispatchGroup.leave()
-            }
-        }
-        
-        uploadTask.observe(.progress) { snapshot in
-            let fractionCompleted = Double(snapshot.progress!.fractionCompleted)
-            self.uploadProgress = (fractionCompleted + Double(currentMediaIndex)) / Double(totalMediaCount)
-            self.uploadProgress = min(max(self.uploadProgress, 0.0), 1.0) // Clamp the progress between 0 and 1
-            self.uploadMessage = "Uploading image \(currentMediaIndex + 1) of \(totalMediaCount)"
-        }
-    }
 
-    private func uploadVideo(media: MediaItem, currentMediaIndex: Int, totalMediaCount: Int, dispatchGroup: DispatchGroup, completion: @escaping (MediaItem?) -> Void) {
-        let asset = PHAsset.fetchAssets(withLocalIdentifiers: [media.url.absoluteString], options: nil).firstObject
-        if let asset = asset {
-            getVideoURL(from: asset) { videoURL in
-                guard let localURL = videoURL else {
-                    print("Failed to get video URL from asset.")
-                    dispatchGroup.leave()
-                    completion(nil)
+        return try await withCheckedThrowingContinuation { continuation in
+            let uploadTask = storageRef.putData(imageData, metadata: nil) { metadata, error in
+                if let error = error {
+                    print("Error uploading image: \(error.localizedDescription)")
+                    continuation.resume(throwing: error)
                     return
                 }
-                
-                let fileName = UUID().uuidString + ".mp4"
-                let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(fileName)")
-                let metadata = StorageMetadata()
-                metadata.contentType = "video/mp4"
-                
-                let uploadTask = storageRef.putFile(from: localURL, metadata: metadata) { _, error in
+                print("Image uploaded successfully, fetching download URL...")
+                storageRef.downloadURL { url, error in
                     if let error = error {
-                        print("Error uploading video: \(error.localizedDescription)")
-                        dispatchGroup.leave()
-                        completion(nil)
+                        print("Error fetching download URL: \(error.localizedDescription)")
+                        continuation.resume(throwing: error)
                         return
                     }
-                    storageRef.downloadURL { url, error in
-                        if let downloadURL = url {
-                            let mediaItem = MediaItem(type: .video, url: downloadURL)
-                            completion(mediaItem)
-                        } else if let error = error {
-                            print("Error getting download URL: \(error.localizedDescription)")
-                            completion(nil)
-                        }
-                        dispatchGroup.leave()
+                    
+                    guard let url = url else {
+                        print("Download URL is nil")
+                        continuation.resume(throwing: UploadError.urlNil)
+                        return
                     }
-                }
-                
-                uploadTask.observe(.progress) { snapshot in
-                    let fractionCompleted = Double(snapshot.progress!.fractionCompleted)
-                    self.uploadProgress = (fractionCompleted + Double(currentMediaIndex)) / Double(totalMediaCount)
-                    self.uploadProgress = min(max(self.uploadProgress, 0.0), 1.0) // Clamp the progress between 0 and 1
-                    self.uploadMessage = "Uploading video \(currentMediaIndex + 1) of \(totalMediaCount)"
+                    
+                    print("Download URL fetched successfully: \(url.absoluteString)")
+                    continuation.resume(returning: url)
                 }
             }
-        } else {
-            print("Asset not found for video URL.")
-            dispatchGroup.leave()
-            completion(nil)
+            
+            uploadTask.observe(.progress) { snapshot in
+                let fractionCompleted = Double(snapshot.progress!.fractionCompleted)
+                self.uploadProgress = fractionCompleted
+                self.uploadMessage = "Uploading image \(Int(self.uploadProgress * 100))%"
+            }
         }
     }
 
-    
+    private func uploadVideoToFirebase(videoURL: URL) async throws -> URL {
+        let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(UUID().uuidString).mp4")
+        
+        // Ensure that the video file exists
+        guard FileManager.default.fileExists(atPath: videoURL.path) else {
+            print("File does not exist at path: \(videoURL)")
+            throw UploadError.fileNotFound
+        }
+        
+        // Read the video data
+        let videoData = try Data(contentsOf: videoURL)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let uploadTask = storageRef.putData(videoData, metadata: nil) { metadata, error in
+                if let error = error {
+                    print("Error uploading video: \(error.localizedDescription)")
+                    continuation.resume(throwing: error)
+                    return
+                }
+                print("Video uploaded successfully, fetching download URL...")
+                storageRef.downloadURL { url, error in
+                    if let error = error {
+                        print("Error fetching download URL: \(error.localizedDescription)")
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    guard let url = url else {
+                        print("Download URL is nil")
+                        continuation.resume(throwing: UploadError.urlNil)
+                        return
+                    }
+                    print("Download URL fetched successfully: \(url.absoluteString)")
+                    continuation.resume(returning: url)
+                }
+            }
+            
+            uploadTask.observe(.progress) { snapshot in
+                let fractionCompleted = Double(snapshot.progress!.fractionCompleted)
+                self.uploadProgress = fractionCompleted
+                self.uploadMessage = "Uploading video \(Int(self.uploadProgress * 100))%"
+            }
+        }
+    }
+
+    enum UploadError: Error {
+        case compressionFailed
+        case urlNil
+        case fileNotFound
+    }
     
     private func getVideoURL(from asset: PHAsset, completion: @escaping (URL?) -> Void) {
         let options = PHVideoRequestOptions()
