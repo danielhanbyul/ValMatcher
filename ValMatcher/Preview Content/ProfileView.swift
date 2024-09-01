@@ -18,7 +18,7 @@ struct ProfileView: View {
     @State private var isEditing = false
     @State private var showingImagePicker = false
     @State private var newMedia: [MediaItem] = []
-    @State private var selectedMediaItem: MediaItem? // New state variable
+    @State private var selectedMediaItem: MediaItem?
     @State private var additionalMedia: [MediaItem] = []
     @State private var updatedAnswers: [String: String] = [:]
     @State private var showingSettings = false
@@ -29,7 +29,7 @@ struct ProfileView: View {
     @State private var uploadMessage: String = ""
 
     let maxMediaCount = 4
-    let maxVideoDuration: Double = 60.0 // Maximum video duration in seconds
+    let maxVideoDuration: Double = 60.0
 
     var body: some View {
         VStack {
@@ -82,6 +82,7 @@ struct ProfileView: View {
             LoginView(isSignedIn: $isSignedIn, currentUser: .constant(nil), isShowingLoginView: $isShowingLoginView)
         }
         .onAppear {
+            fetchMediaFromFirestore() // Fetch media from Firestore on view load
             initializeEditValues()
         }
     }
@@ -158,38 +159,24 @@ struct ProfileView: View {
                 ForEach(additionalMedia) { media in
                     if media.type == .image {
                         AsyncImage(url: media.url) { phase in
-                            switch phase {
-                            case .empty:
-                                ProgressView()
-                                    .frame(width: 100, height: 100)
-                            case .success(let image):
+                            if let image = phase.image {
                                 image.resizable()
                                     .aspectRatio(contentMode: .fill)
                                     .frame(width: 100, height: 100)
                                     .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
                                     .shadow(radius: 5)
-                            case .failure:
-                                Image(systemName: "photo")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
+                            } else if phase.error != nil {
+                                Color.red // Display an error color
+                            } else {
+                                ProgressView()
                                     .frame(width: 100, height: 100)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                                    .background(Color.gray.opacity(0.3))
-                                    .shadow(radius: 5)
-                            @unknown default:
-                                EmptyView()
                             }
                         }
                     } else if media.type == .video {
                         VideoPlayerView(url: media.url)
-                            .frame(width: 100, height: 100)
-                            .aspectRatio(contentMode: .fill)  // Ensures the video fills the entire frame
-                            .clipped()  // Clips any overflow to fit within the frame
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                            .shadow(radius: 5)
+                            .frame(width: UIScreen.main.bounds.width * 0.9)  // Adjust width to fit the screen
+                            .aspectRatio(contentMode: .fit)  // Ensures the video maintains its aspect ratio
+                            .clipped()  // Clips any overflow
                     }
                 }
                 Spacer()
@@ -204,19 +191,24 @@ struct ProfileView: View {
         @State private var player: AVPlayer?
 
         var body: some View {
-            VideoPlayer(player: player)
-                .aspectRatio(contentMode: .fill)  // Ensures video fills the entire frame
-                .clipped()  // Clips any overflow to fit within the frame
-                .onAppear {
-                    player = AVPlayer(url: url)
-                    player?.play()  // Auto-play video
-                }
-                .onDisappear {
-                    player?.pause()  // Pause video when it goes out of view
-                }
+            GeometryReader { geometry in
+                VideoPlayer(player: player)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .aspectRatio(contentMode: .fit)  // Ensures the video maintains its aspect ratio and fits within the available space
+                    .clipped()  // Clips any overflow to fit within the frame
+                    .onAppear {
+                        player = AVPlayer(url: url)
+                        player?.play()  // Auto-play video
+                    }
+                    .onDisappear {
+                        player?.pause()  // Pause video when it goes out of view
+                    }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+            .shadow(radius: 5)
         }
     }
-
     
     private var editableMediaList: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -249,16 +241,15 @@ struct ProfileView: View {
                     } else if media.type == .video {
                         VideoPlayer(player: AVPlayer(url: media.url))
                             .frame(width: 100, height: 100)
-                            .aspectRatio(contentMode: .fill)  // Ensures the video fills the entire frame
-                            .clipped()  // Clips any overflow to fit within the frame
+                            .aspectRatio(contentMode: .fill)
+                            .clipped()
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
                             .shadow(radius: 5)
                             .onAppear {
-                                AVPlayer(url: media.url).isMuted = false // Ensure sound is enabled
+                                AVPlayer(url: media.url).isMuted = false
                             }
                     }
-
 
                     Spacer()
 
@@ -351,10 +342,7 @@ struct ProfileView: View {
     private func saveMedia() {
         guard !newMedia.isEmpty else { return }
         
-        // Check if the user is authenticated
         if let user = Auth.auth().currentUser {
-            print("User is authenticated with UID: \(user.uid)")
-            // Proceed with the upload
             isUploading = true
             Task {
                 do {
@@ -369,6 +357,8 @@ struct ProfileView: View {
                         updatedAnswers: self.updatedAnswers
                     )
                     self.newMedia.removeAll()
+                    
+                    saveMediaURLsToFirestore(mediaItems)
                 } catch {
                     print("Failed to upload media: \(error)")
                 }
@@ -376,7 +366,6 @@ struct ProfileView: View {
             }
         } else {
             print("No authenticated user found")
-            // Handle the case where there is no authenticated user, possibly by showing an error message or prompting a login
         }
     }
 
@@ -447,8 +436,6 @@ struct ProfileView: View {
 
     private func uploadNewMedia() async throws -> [MediaItem] {
         var uploadedMedia: [MediaItem] = []
-        let totalMediaCount = newMedia.count
-        var currentMediaIndex = 0
         
         for media in newMedia {
             if media.type == .image, let image = UIImage(contentsOfFile: media.url.path) {
@@ -458,7 +445,6 @@ struct ProfileView: View {
                 let url = try await uploadVideoToFirebase(videoURL: media.url)
                 uploadedMedia.append(MediaItem(type: .video, url: url))
             }
-            currentMediaIndex += 1
         }
         
         return uploadedMedia
@@ -473,25 +459,18 @@ struct ProfileView: View {
         return try await withCheckedThrowingContinuation { continuation in
             let uploadTask = storageRef.putData(imageData, metadata: nil) { metadata, error in
                 if let error = error {
-                    print("Error uploading image: \(error.localizedDescription)")
                     continuation.resume(throwing: error)
                     return
                 }
-                print("Image uploaded successfully, fetching download URL...")
                 storageRef.downloadURL { url, error in
                     if let error = error {
-                        print("Error fetching download URL: \(error.localizedDescription)")
                         continuation.resume(throwing: error)
                         return
                     }
-                    
                     guard let url = url else {
-                        print("Download URL is nil")
                         continuation.resume(throwing: UploadError.urlNil)
                         return
                     }
-                    
-                    print("Download URL fetched successfully: \(url.absoluteString)")
                     continuation.resume(returning: url)
                 }
             }
@@ -507,35 +486,27 @@ struct ProfileView: View {
     private func uploadVideoToFirebase(videoURL: URL) async throws -> URL {
         let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(UUID().uuidString).mp4")
         
-        // Ensure that the video file exists
         guard FileManager.default.fileExists(atPath: videoURL.path) else {
-            print("File does not exist at path: \(videoURL)")
             throw UploadError.fileNotFound
         }
         
-        // Read the video data
         let videoData = try Data(contentsOf: videoURL)
 
         return try await withCheckedThrowingContinuation { continuation in
             let uploadTask = storageRef.putData(videoData, metadata: nil) { metadata, error in
                 if let error = error {
-                    print("Error uploading video: \(error.localizedDescription)")
                     continuation.resume(throwing: error)
                     return
                 }
-                print("Video uploaded successfully, fetching download URL...")
                 storageRef.downloadURL { url, error in
                     if let error = error {
-                        print("Error fetching download URL: \(error.localizedDescription)")
                         continuation.resume(throwing: error)
                         return
                     }
                     guard let url = url else {
-                        print("Download URL is nil")
                         continuation.resume(throwing: UploadError.urlNil)
                         return
                     }
-                    print("Download URL fetched successfully: \(url.absoluteString)")
                     continuation.resume(returning: url)
                 }
             }
@@ -559,7 +530,6 @@ struct ProfileView: View {
         options.isNetworkAccessAllowed = true
         PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
             guard let asset = avAsset as? AVURLAsset else {
-                print("Failed to get AVURLAsset from PHAsset")
                 completion(nil)
                 return
             }
@@ -577,10 +547,8 @@ struct ProfileView: View {
                 try fileManager.removeItem(at: destinationURL)
             }
             try fileManager.copyItem(at: url, to: destinationURL)
-            print("Video copied to: \(destinationURL.path)")
             return destinationURL
         } catch {
-            print("Error copying video to documents directory: \(error)")
             return nil
         }
     }
@@ -588,15 +556,45 @@ struct ProfileView: View {
     private func saveMediaURLsToFirestore(_ mediaItems: [MediaItem]) {
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(viewModel.user.id ?? "")
-        let mediaURLs = mediaItems.map { $0.url.absoluteString }
+        let mediaURLs = mediaItems.map { ["type": $0.type.rawValue, "url": $0.url.absoluteString] }
         
         userRef.updateData([
             "mediaItems": FieldValue.arrayUnion(mediaURLs)
         ]) { error in
             if let error = error {
                 print("Error saving media URLs to Firestore: \(error.localizedDescription)")
-            } else {
-                print("Successfully saved media URLs to Firestore")
+            }
+        }
+    }
+
+    private func fetchMediaFromFirestore() {
+        guard let userID = viewModel.user.id else { return }
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(userID)
+
+        userRef.getDocument { document, error in
+            if let error = error {
+                print("Error fetching media from Firestore: \(error.localizedDescription)")
+                return
+            }
+
+            if let document = document, document.exists {
+                if let mediaItemsData = document.data()?["mediaItems"] as? [[String: String]] {
+                    var fetchedMediaItems: [MediaItem] = []
+                    for itemData in mediaItemsData {
+                        if let type = itemData["type"], let urlString = itemData["url"], let url = URL(string: urlString) {
+                            if let mediaType = MediaType(rawValue: type) {
+                                let mediaItem = MediaItem(type: mediaType, url: url)
+                                // Ensure no duplicate entries
+                                if !fetchedMediaItems.contains(where: { $0.url == mediaItem.url }) {
+                                    fetchedMediaItems.append(mediaItem)
+                                }
+                            }
+                        }
+                    }
+                    self.additionalMedia = fetchedMediaItems
+                    self.viewModel.user.mediaItems = fetchedMediaItems // Update the view model's user profile
+                }
             }
         }
     }

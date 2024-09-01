@@ -701,12 +701,16 @@ struct NotificationsView: View {
 }
 
 
+import SwiftUI
+import AVKit
+
 struct UserCardView: View {
     var user: UserProfile
     var newMedia: [MediaItem] = []
     @State private var currentMediaIndex = 0
 
     private var allMediaItems: [MediaItem] {
+        // Combine the user's existing media items with any new media that have been added
         user.mediaItems + newMedia
     }
 
@@ -718,25 +722,30 @@ struct UserCardView: View {
                         let mediaItem = allMediaItems[index]
                         ZStack {
                             if mediaItem.type == .video {
-                                VideoPlayer(player: AVPlayer(url: mediaItem.url))
-                                    .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                    .cornerRadius(20)
-                                    .shadow(radius: 10)
-                                    .tag(index)
+                                GeometryReader { geometry in
+                                    VideoPlayer(player: AVPlayer(url: mediaItem.url))
+                                        .aspectRatio(contentMode: .fill)  // Ensure video fills the frame
+                                        .frame(width: geometry.size.width, height: geometry.size.height)
+                                        .clipped()  // Clip any overflow to fit within the frame
+                                        .cornerRadius(20)  // Apply rounded corners
+                                        .padding(.trailing, 20) // Add padding to the right for volume control
+                                        .padding(.bottom, 20) // Add padding to the bottom for playback controls
+                                        .tag(index)
+                                }
                             } else {
                                 AsyncImage(url: mediaItem.url) { phase in
                                     switch phase {
                                     case .empty:
                                         ProgressView()
                                             .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                            .cornerRadius(20)
                                     case .success(let image):
                                         image
                                             .resizable()
-                                            .aspectRatio(contentMode: .fill)
+                                            .aspectRatio(contentMode: .fill)  // Ensure image fills the frame
                                             .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                            .clipped()
-                                            .cornerRadius(20)
-                                            .shadow(radius: 10)
+                                            .clipped()  // Clip any overflow to fit within the frame
+                                            .cornerRadius(20)  // Apply rounded corners
                                     case .failure:
                                         Image(systemName: "photo")
                                             .resizable()
@@ -745,7 +754,6 @@ struct UserCardView: View {
                                             .clipped()
                                             .cornerRadius(20)
                                             .background(Color.gray.opacity(0.3))
-                                            .shadow(radius: 10)
                                     @unknown default:
                                         EmptyView()
                                     }
@@ -755,49 +763,8 @@ struct UserCardView: View {
                         }
                     }
                 }
-                .tabViewStyle(PageTabViewStyle())
+                .tabViewStyle(PageTabViewStyle())  // Enable swipe navigation
                 .frame(height: UIScreen.main.bounds.height * 0.5)
-
-                HStack {
-                    Button(action: {
-                        currentMediaIndex = max(currentMediaIndex - 1, 0)
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.title)
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
-                    }
-                    .padding(.leading, 20)
-
-                    Spacer()
-
-                    Button(action: {
-                        currentMediaIndex = min(currentMediaIndex + 1, allMediaItems.count - 1)
-                    }) {
-                        Image(systemName: "chevron.right")
-                            .font(.title)
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
-                    }
-                    .padding(.trailing, 20)
-                }
-
-                VStack {
-                    Spacer()
-                    HStack {
-                        ForEach(0..<allMediaItems.count, id: \.self) { index in
-                            Circle()
-                                .fill(index == currentMediaIndex ? Color.white : Color.gray)
-                                .frame(width: 8, height: 8)
-                                .padding(2)
-                        }
-                    }
-                    .padding(.bottom, 20)
-                }
             }
 
             VStack(alignment: .leading, spacing: 10) {
