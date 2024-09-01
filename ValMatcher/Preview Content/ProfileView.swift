@@ -180,31 +180,6 @@ struct ProfileView: View {
     }
 
 
-    // Custom VideoPlayerView to handle auto-play and fill the frame
-    struct VideoPlayerView: View {
-        var url: URL
-        @State private var player: AVPlayer?
-
-        var body: some View {
-            GeometryReader { geometry in
-                VideoPlayer(player: player)
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .aspectRatio(contentMode: .fit)  // Ensures the video maintains its aspect ratio and fits within the available space
-                    .clipped()  // Clips any overflow to fit within the frame
-                    .onAppear {
-                        player = AVPlayer(url: url)
-                        player?.play()  // Auto-play video
-                    }
-                    .onDisappear {
-                        player?.pause()  // Pause video when it goes out of view
-                    }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-            .shadow(radius: 5)
-        }
-    }
-    
     private var editableMediaList: some View {
         VStack(alignment: .leading, spacing: 15) {
             ForEach(additionalMedia.indices, id: \.self) { index in

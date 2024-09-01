@@ -775,27 +775,27 @@ struct UserCardView: View {
 import SwiftUI
 import AVKit
 
-struct VideoPlayerView: UIViewControllerRepresentable {
+struct VideoPlayerView: View {
     var url: URL
+    @State private var player: AVPlayer?
 
-    func makeUIViewController(context: Context) -> AVPlayerViewController {
-        let player = AVPlayer(url: url)
-        let controller = AVPlayerViewController()
-        controller.player = player
-        controller.showsPlaybackControls = true
-
-        // Pause the player immediately and ensure the video starts at the beginning
-        player.pause()
-        player.seek(to: .zero)
-
-        return controller
-    }
-
-    func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {
-        // Ensure the player remains paused and reset to the beginning if needed
-        if let player = uiViewController.player {
-            player.pause()
-            player.seek(to: .zero)
+    var body: some View {
+        GeometryReader { geometry in
+            VideoPlayer(player: player)
+                .onAppear {
+                    // Initialize the player with the provided URL
+                    player = AVPlayer(url: url)
+                }
+                .onDisappear {
+                    // Pause the player when the view disappears
+                    player?.pause()
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .aspectRatio(contentMode: .fit)
+                .clipped()
         }
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+        .shadow(radius: 5)
     }
 }
