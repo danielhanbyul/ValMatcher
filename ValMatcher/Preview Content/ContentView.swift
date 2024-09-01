@@ -10,6 +10,11 @@ import FirebaseFirestore
 import AVKit
 import FirebaseAnalytics
 import UserNotifications
+import SwiftUI
+import AVKit
+import Kingfisher
+
+
 
 struct ContentView: View {
     @StateObject var userProfileViewModel: UserProfileViewModel
@@ -701,8 +706,10 @@ struct NotificationsView: View {
 }
 
 
+
 import SwiftUI
 import AVKit
+import Kingfisher
 
 struct UserCardView: View {
     var user: UserProfile
@@ -710,7 +717,6 @@ struct UserCardView: View {
     @State private var currentMediaIndex = 0
 
     private var allMediaItems: [MediaItem] {
-        // Combine the user's existing media items with any new media that have been added
         user.mediaItems + newMedia
     }
 
@@ -722,48 +728,23 @@ struct UserCardView: View {
                         let mediaItem = allMediaItems[index]
                         ZStack {
                             if mediaItem.type == .video {
-                                GeometryReader { geometry in
-                                    VideoPlayer(player: AVPlayer(url: mediaItem.url))
-                                        .aspectRatio(contentMode: .fill)  // Ensure video fills the frame
-                                        .frame(width: geometry.size.width, height: geometry.size.height)
-                                        .clipped()  // Clip any overflow to fit within the frame
-                                        .cornerRadius(20)  // Apply rounded corners
-                                        .padding(.trailing, 20) // Add padding to the right for volume control
-                                        .padding(.bottom, 20) // Add padding to the bottom for playback controls
-                                        .tag(index)
-                                }
+                                VideoPlayerView(url: mediaItem.url)
+                                    .cornerRadius(20)
+                                    .padding(.horizontal, 10)
+                                    .tag(index)
                             } else {
-                                AsyncImage(url: mediaItem.url) { phase in
-                                    switch phase {
-                                    case .empty:
-                                        ProgressView()
-                                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                            .cornerRadius(20)
-                                    case .success(let image):
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)  // Ensure image fills the frame
-                                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                            .clipped()  // Clip any overflow to fit within the frame
-                                            .cornerRadius(20)  // Apply rounded corners
-                                    case .failure:
-                                        Image(systemName: "photo")
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
-                                            .clipped()
-                                            .cornerRadius(20)
-                                            .background(Color.gray.opacity(0.3))
-                                    @unknown default:
-                                        EmptyView()
-                                    }
-                                }
-                                .tag(index)
+                                KFImage(mediaItem.url)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: UIScreen.main.bounds.width * 0.9, height: UIScreen.main.bounds.height * 0.5)
+                                    .clipped()
+                                    .cornerRadius(20)
+                                    .tag(index)
                             }
                         }
                     }
                 }
-                .tabViewStyle(PageTabViewStyle())  // Enable swipe navigation
+                .tabViewStyle(PageTabViewStyle())
                 .frame(height: UIScreen.main.bounds.height * 0.5)
             }
 
@@ -788,5 +769,33 @@ struct UserCardView: View {
                 .fill(Color.white.opacity(0.6))
         )
         .padding()
+    }
+}
+
+import SwiftUI
+import AVKit
+
+struct VideoPlayerView: UIViewControllerRepresentable {
+    var url: URL
+
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        let player = AVPlayer(url: url)
+        let controller = AVPlayerViewController()
+        controller.player = player
+        controller.showsPlaybackControls = true
+
+        // Pause the player immediately and ensure the video starts at the beginning
+        player.pause()
+        player.seek(to: .zero)
+
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {
+        // Ensure the player remains paused and reset to the beginning if needed
+        if let player = uiViewController.player {
+            player.pause()
+            player.seek(to: .zero)
+        }
     }
 }

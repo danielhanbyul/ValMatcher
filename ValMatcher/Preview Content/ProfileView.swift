@@ -10,6 +10,8 @@ import Firebase
 import FirebaseStorage
 import AVKit
 import PhotosUI
+import Kingfisher
+
 
 struct ProfileView: View {
     @ObservedObject var viewModel: UserProfileViewModel
@@ -158,20 +160,12 @@ struct ProfileView: View {
                 Spacer()
                 ForEach(additionalMedia) { media in
                     if media.type == .image {
-                        AsyncImage(url: media.url) { phase in
-                            if let image = phase.image {
-                                image.resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 100, height: 100)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    .shadow(radius: 5)
-                            } else if phase.error != nil {
-                                Color.red // Display an error color
-                            } else {
-                                ProgressView()
-                                    .frame(width: 100, height: 100)
-                            }
-                        }
+                        KFImage(media.url)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 100, height: 100)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .shadow(radius: 5)
                     } else if media.type == .video {
                         VideoPlayerView(url: media.url)
                             .frame(width: UIScreen.main.bounds.width * 0.9)  // Adjust width to fit the screen
@@ -184,6 +178,7 @@ struct ProfileView: View {
             .padding(.horizontal)
         }
     }
+
 
     // Custom VideoPlayerView to handle auto-play and fill the frame
     struct VideoPlayerView: View {
@@ -216,28 +211,13 @@ struct ProfileView: View {
                 let media = additionalMedia[index]
                 HStack {
                     if media.type == .image {
-                        AsyncImage(url: media.url) { phase in
-                            switch phase {
-                            case .empty:
-                                ProgressView()
-                            case .success(let image):
-                                image.resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 100, height: 100)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                                    .shadow(radius: 5)
-                            case .failure:
-                                Image(systemName: "photo")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 100, height: 100)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                            @unknown default:
-                                EmptyView()
-                            }
-                        }
+                        KFImage(media.url)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 100, height: 100)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                            .shadow(radius: 5)
                     } else if media.type == .video {
                         VideoPlayer(player: AVPlayer(url: media.url))
                             .frame(width: 100, height: 100)
@@ -270,6 +250,7 @@ struct ProfileView: View {
         }
         .padding(.horizontal)
     }
+
 
     private var addMediaButton: some View {
         Button(action: {

@@ -13,6 +13,7 @@
 		A91470B02C280B3200380D39 /* Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91470AF2C280B3200380D39 /* Chat.swift */; };
 		A924425F2C82F3E100995C76 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A924425E2C82F3E100995C76 /* LaunchScreen.storyboard */; };
 		A932AF642C291FD40012A9D0 /* MatchNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = A932AF632C291FD40012A9D0 /* MatchNotification.swift */; };
+		A94117412C84598800DD70FD /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = A94117402C84598800DD70FD /* Kingfisher */; };
 		A950C23A2C49DF21001BA6B5 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A950C2392C49DF21001BA6B5 /* ImagePicker.swift */; };
 		A950C2402C49EDB8001BA6B5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A950C23F2C49EDB8001BA6B5 /* GoogleService-Info.plist */; };
 		A9551CB32C12BAF30002AF0B /* ValMatcherApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */; };
@@ -136,6 +137,7 @@
 				A9551CE02C12BC4B0002AF0B /* FirebaseAnalyticsOnDeviceConversion in Frameworks */,
 				A9551D062C12BC4B0002AF0B /* FirebaseMLModelDownloader in Frameworks */,
 				A9551CFA2C12BC4B0002AF0B /* FirebaseFirestoreSwift in Frameworks */,
+				A94117412C84598800DD70FD /* Kingfisher in Frameworks */,
 				A9551CE62C12BC4B0002AF0B /* FirebaseAppCheck in Frameworks */,
 				A9551CE42C12BC4B0002AF0B /* FirebaseAnalyticsWithoutAdIdSupport in Frameworks */,
 				A9551CEA2C12BC4B0002AF0B /* FirebaseAuth in Frameworks */,
@@ -176,6 +178,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		A941173F2C84598800DD70FD /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		A9551CA62C12BAF30002AF0B = {
 			isa = PBXGroup;
 			children = (
@@ -185,6 +194,7 @@
 				A9551CC22C12BAF50002AF0B /* ValMatcherTests */,
 				A9551CCC2C12BAF50002AF0B /* ValMatcherUITests */,
 				A9551CB02C12BAF30002AF0B /* Products */,
+				A941173F2C84598800DD70FD /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -302,6 +312,7 @@
 				A9551D0F2C12BC4B0002AF0B /* FirebaseStorage */,
 				A9551D112C12BC4B0002AF0B /* FirebaseStorageCombine-Community */,
 				A9551D132C12BC4B0002AF0B /* FirebaseVertexAI-Preview */,
+				A94117402C84598800DD70FD /* Kingfisher */,
 			);
 			productName = ValMatcher;
 			productReference = A9551CAF2C12BAF30002AF0B /* ValMatcher.app */;
@@ -377,6 +388,7 @@
 			mainGroup = A9551CA62C12BAF30002AF0B;
 			packageReferences = (
 				A9551CDC2C12BC4B0002AF0B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				A941173E2C84568100DD70FD /* XCRemoteSwiftPackageReference "Kingfisher" */,
 			);
 			productRefGroup = A9551CB02C12BAF30002AF0B /* Products */;
 			projectDirPath = "";
@@ -781,6 +793,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		A941173E2C84568100DD70FD /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/onevcat/Kingfisher";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.12.0;
+			};
+		};
 		A9551CDC2C12BC4B0002AF0B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
@@ -792,6 +812,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		A94117402C84598800DD70FD /* Kingfisher */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A941173E2C84568100DD70FD /* XCRemoteSwiftPackageReference "Kingfisher" */;
+			productName = Kingfisher;
+		};
 		A9551CDD2C12BC4B0002AF0B /* FirebaseAnalytics */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = A9551CDC2C12BC4B0002AF0B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
