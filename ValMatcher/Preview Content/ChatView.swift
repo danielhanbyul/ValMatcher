@@ -171,11 +171,14 @@ struct ChatView: View {
             if let error = error {
                 print("Error marking messages as read: \(error.localizedDescription)")
             } else {
-                // Notify DMHomeView to refresh the chat list immediately
-                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
+                // Delay the notification to prevent UI issues
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
+                }
             }
         }
     }
+
 
     private func shouldShowDate(for message: Message) -> Bool {
         guard let index = messages.firstIndex(of: message) else { return false }
