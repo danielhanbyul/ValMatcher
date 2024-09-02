@@ -285,7 +285,8 @@ struct ProfileView: View {
     // MARK: - Functions
 
     private func initializeEditValues() {
-        additionalMedia = viewModel.user.mediaItems
+        // Safely unwrap the optional `mediaItems`
+        additionalMedia = viewModel.user.mediaItems ?? []
         updatedAnswers = viewModel.user.answers
         selectedMediaIndices.removeAll()
     }

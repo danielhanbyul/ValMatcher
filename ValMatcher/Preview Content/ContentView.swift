@@ -10,11 +10,8 @@ import FirebaseFirestore
 import AVKit
 import FirebaseAnalytics
 import UserNotifications
-import SwiftUI
 import AVKit
 import Kingfisher
-
-
 
 struct ContentView: View {
     @StateObject var userProfileViewModel: UserProfileViewModel
@@ -108,13 +105,13 @@ struct ContentView: View {
         }
         .onAppear {
             if isSignedIn {
-                            requestPhotoLibraryAccess()  // Request access after user is logged in
-                            loadInteractedUsers { success in
-                                if success {
-                                    fetchUsers()  // Fetch users after loading interacted users
-                                }
-                            }
-                        }
+                requestPhotoLibraryAccess()  // Request access after user is logged in
+                loadInteractedUsers { success in
+                    if success {
+                        fetchUsers()  // Fetch users after loading interacted users
+                    }
+                }
+            }
         }
         .onChange(of: users) { _ in
             listenForUnreadMessages()
@@ -646,9 +643,14 @@ struct ContentView: View {
     }
 
     private func deleteMedia(at index: Int) {
-        users[currentIndex].mediaItems.remove(at: index)
+        guard currentIndex < users.count else { return }
+        // Unwrap the optional mediaItems array before attempting to remove an item.
+        if let mediaItems = users[currentIndex].mediaItems {
+            users[currentIndex].mediaItems?.remove(at: index)
+        } else {
+            print("No media items to delete.")
+        }
     }
-
 }
 
 struct BadgeView: View {
@@ -705,8 +707,6 @@ struct NotificationsView: View {
     }
 }
 
-
-
 import SwiftUI
 import AVKit
 import Kingfisher
@@ -717,7 +717,9 @@ struct UserCardView: View {
     @State private var currentMediaIndex = 0
 
     private var allMediaItems: [MediaItem] {
-        user.mediaItems + newMedia
+        // Safely unwrap mediaItems before combining with newMedia
+        let mediaItems = user.mediaItems ?? []
+        return mediaItems + newMedia
     }
 
     var body: some View {

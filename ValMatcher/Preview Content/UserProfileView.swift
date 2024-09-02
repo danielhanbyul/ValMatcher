@@ -22,16 +22,18 @@ class UserProfileViewModel: ObservableObject {
     }
 
     func fetchChats() {
-        listener = db.collection("chats").whereField("participants", arrayContains: user.id ?? "").addSnapshotListener { snapshot, error in
-            guard let documents = snapshot?.documents else {
-                print("No documents")
-                return
-            }
+        listener = db.collection("chats")
+            .whereField("participants", arrayContains: user.id ?? "")
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let documents = snapshot?.documents else {
+                    print("No documents")
+                    return
+                }
 
-            self.chats = documents.compactMap { doc -> Chat? in
-                try? doc.data(as: Chat.self)
+                self?.chats = documents.compactMap { doc -> Chat? in
+                    try? doc.data(as: Chat.self)
+                }
             }
-        }
     }
 
     func fetchUnreadMessagesCount(chatId: String, completion: @escaping (Int) -> Void) {
@@ -71,17 +73,30 @@ class UserProfileViewModel: ObservableObject {
 
         if media.type == .image {
             uploadImage(urlString: media.url.absoluteString, path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
-                self?.user.mediaItems.append(MediaItem(type: .image, url: url))
-                self?.saveUserProfile()
+                guard let strongSelf = self else { return }
+                // Safely unwrap mediaItems and then append
+                if var mediaItems = strongSelf.user.mediaItems {
+                    mediaItems.append(MediaItem(type: .image, url: url))
+                    strongSelf.user.mediaItems = mediaItems
+                } else {
+                    strongSelf.user.mediaItems = [MediaItem(type: .image, url: url)]
+                }
+                strongSelf.saveUserProfile()
             }
         } else if media.type == .video {
             uploadVideo(urlString: media.url.absoluteString, path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
-                self?.user.mediaItems.append(MediaItem(type: .video, url: url))
-                self?.saveUserProfile()
+                guard let strongSelf = self else { return }
+                // Safely unwrap mediaItems and then append
+                if var mediaItems = strongSelf.user.mediaItems {
+                    mediaItems.append(MediaItem(type: .video, url: url))
+                    strongSelf.user.mediaItems = mediaItems
+                } else {
+                    strongSelf.user.mediaItems = [MediaItem(type: .video, url: url)]
+                }
+                strongSelf.saveUserProfile()
             }
         }
     }
-
 
     func uploadImage(urlString: String, path: String, completion: @escaping (URL) -> Void) {
         let storageRef = Storage.storage().reference().child(path)
@@ -103,7 +118,6 @@ class UserProfileViewModel: ObservableObject {
             }
         }
     }
-
 
     func uploadVideo(urlString: String, path: String, completion: @escaping (URL) -> Void) {
         let storageRef = Storage.storage().reference().child(path)
@@ -132,55 +146,6 @@ class UserProfileViewModel: ObservableObject {
             try db.collection("users").document(userId).setData(from: user)
         } catch let error {
             print("Error saving user profile: \(error)")
-        }
-    }
-}
-
-
-import SwiftUI
-
-struct ChatListView: View {
-    @ObservedObject var viewModel: UserProfileViewModel
-    
-    var body: some View {
-        VStack(alignment: .leading) {
-            Text("Chats")
-                .font(.custom("AvenirNext-Bold", size: 20))
-                .foregroundColor(.white)
-                .padding(.leading)
-            
-            ForEach(viewModel.chats) { chat in
-                ChatRowView(viewModel: viewModel, chat: chat)
-            }
-        }
-        .padding()
-    }
-}
-
-struct ChatRowView: View {
-    @ObservedObject var viewModel: UserProfileViewModel
-    var chat: Chat
-    @State private var unreadMessagesCount: Int = 0
-    
-    var body: some View {
-        HStack {
-            Text(chat.id ?? "Chat")
-                .foregroundColor(.white)
-                .font(.custom("AvenirNext-Regular", size: 18))
-            Spacer()
-            if unreadMessagesCount > 0 {
-                Circle()
-                    .fill(Color.red)
-                    .frame(width: 12, height: 12)
-            }
-        }
-        .padding()
-        .background(Color.gray.opacity(0.2))
-        .cornerRadius(8)
-        .onAppear {
-            viewModel.fetchUnreadMessagesCount(chatId: chat.id!) { count in
-                self.unreadMessagesCount = count
-            }
         }
     }
 }

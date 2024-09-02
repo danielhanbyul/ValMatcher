@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>ValMatcher</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.example.ValMatcher</string>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
 	<string>ValMatcher</string>
 	<key>INFOPLIST_FILE</key>

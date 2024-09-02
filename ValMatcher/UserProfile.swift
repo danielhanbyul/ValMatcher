@@ -17,5 +17,18 @@ struct UserProfile: Identifiable, Codable, Equatable {
     var server: String
     var answers: [String: String]
     var hasAnsweredQuestions: Bool
-    var mediaItems: [MediaItem] // Combined images and videos into a single array
+    var mediaItems: [MediaItem]?
+
+    // This initializer ensures that all fields are set, even if `mediaItems` is missing.
+    init(id: String? = nil, name: String, rank: String, imageName: String, age: String, server: String, answers: [String: String], hasAnsweredQuestions: Bool, mediaItems: [MediaItem]? = nil) {
+        self.id = id
+        self.name = name
+        self.rank = rank
+        self.imageName = imageName
+        self.age = age
+        self.server = server
+        self.answers = answers
+        self.hasAnsweredQuestions = hasAnsweredQuestions
+        self.mediaItems = mediaItems ?? [] // Initialize with an empty array if `mediaItems` is nil
+    }
 }
