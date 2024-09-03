@@ -117,21 +117,28 @@ struct DMHomeView: View {
                 HStack {
                     if let currentUserID = currentUserID {
                         userImageView(currentUserID: currentUserID, match: match)
-                    }
 
-                    VStack(alignment: .leading) {
-                        Text(getRecipientName(for: match))
-                            .font(.custom("AvenirNext-Bold", size: 18))
-                            .foregroundColor(.white)
-                    }
-                    .padding()
-                    Spacer()
+                        VStack(alignment: .leading) {
+                            Text(getRecipientName(for: match))
+                                .font(.custom("AvenirNext-Bold", size: 18))
+                                .foregroundColor(.white)
+                        }
+                        .padding()
+                        Spacer()
 
-                    if match.hasUnreadMessages == true {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 10, height: 10)
+                        // Unwrap unreadMessages safely
+                        if let unreadMessages = match.unreadMessages,
+                           let unreadCount = unreadMessages[currentUserID], unreadCount > 0 {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 20, height: 20)
+                                Text("\(unreadCount)")
+                                    .foregroundColor(.white)
+                                    .font(.system(size: 12, weight: .bold))
+                            }
                             .padding(.trailing, 10)
+                        }
                     }
                 }
                 .background(Color.black.opacity(0.7))
@@ -142,6 +149,8 @@ struct DMHomeView: View {
             }
         }
     }
+
+
 
     private func getRecipientName(for match: Chat?) -> String {
         guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
@@ -199,68 +208,83 @@ struct DMHomeView: View {
 
         let db = Firestore.firestore()
 
-        db.collection("matches")
-            .whereField("user1", isEqualTo: currentUserID)
-            .order(by: "timestamp", descending: true)
-            .addSnapshotListener { snapshot, error in
+        let queries = [
+            db.collection("matches").whereField("user1", isEqualTo: currentUserID),
+            db.collection("matches").whereField("user2", isEqualTo: currentUserID)
+        ]
+
+        for query in queries {
+            query.order(by: "timestamp", descending: true).addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("Error loading matches for user1: \(error.localizedDescription)")
+                    print("Error loading matches: \(error.localizedDescription)")
                     return
                 }
 
                 guard let documents = snapshot?.documents else {
-                    print("No documents for user1")
+                    print("No documents found")
                     return
                 }
 
-                let newMatches = documents.compactMap { document -> Chat? in
-                    do {
-                        let match = try document.data(as: Chat.self)
-                        return match
-                    } catch {
-                        print("Error decoding match for user1: \(error.localizedDescription)")
-                        return nil
-                    }
-                }
+                var newMatches = [Chat]()
 
-                fetchUserNames(for: newMatches) { updatedMatches in
-                    self.matches = self.mergeAndRemoveDuplicates(existingMatches: self.matches, newMatches: updatedMatches)
-                    self.updateUnreadMessagesCount(from: self.matches)
-                    print("Loaded matches for user1: \(self.matches)")
+                // Iterate through documents and update unread message counts
+                for document in documents {
+                    do {
+                        var match = try document.data(as: Chat.self)
+                        
+                        // Use the updated function with completion handler
+                        self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
+                            newMatches.append(updatedMatch)
+
+                            if newMatches.count == documents.count {
+                                fetchUserNames(for: newMatches) { updatedMatches in
+                                    self.matches = self.mergeAndRemoveDuplicates(existingMatches: self.matches, newMatches: updatedMatches)
+                                    self.updateUnreadMessagesCount(from: self.matches)
+                                    print("Loaded matches: \(self.matches)")
+                                }
+                            }
+                        }
+                    } catch {
+                        print("Error decoding match: \(error.localizedDescription)")
+                    }
                 }
             }
+        }
+    }
 
-        db.collection("matches")
-            .whereField("user2", isEqualTo: currentUserID)
-            .order(by: "timestamp", descending: true)
-            .addSnapshotListener { snapshot, error in
+
+    private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
+        let db = Firestore.firestore()
+
+        guard let matchID = match.id else { return }
+
+        var matchCopy = match
+
+        db.collection("matches").document(matchID).collection("messages")
+            .whereField("senderID", isNotEqualTo: currentUserID)
+            .whereField("isRead", isEqualTo: false)
+            .getDocuments { snapshot, error in
                 if let error = error {
-                    print("Error loading matches for user2: \(error.localizedDescription)")
+                    print("Error fetching unread messages: \(error.localizedDescription)")
                     return
                 }
 
-                guard let documents = snapshot?.documents else {
-                    print("No documents for user2")
-                    return
+                let unreadCount = snapshot?.documents.count ?? 0
+                
+                // Safely unwrap unreadMessages and update it
+                if matchCopy.unreadMessages == nil {
+                    matchCopy.unreadMessages = [:]
                 }
+                matchCopy.unreadMessages?[currentUserID] = unreadCount
+                matchCopy.hasUnreadMessages = unreadCount > 0
 
-                let moreMatches = documents.compactMap { document -> Chat? in
-                    do {
-                        let match = try document.data(as: Chat.self)
-                        return match
-                    } catch {
-                        print("Error decoding match for user2: \(error.localizedDescription)")
-                        return nil
-                    }
-                }
-
-                fetchUserNames(for: moreMatches) { updatedMatches in
-                    self.matches = self.mergeAndRemoveDuplicates(existingMatches: self.matches, newMatches: updatedMatches)
-                    self.updateUnreadMessagesCount(from: self.matches)
-                    print("Loaded matches for user2: \(self.matches)")
-                }
+                // Call the completion handler with the updated match
+                completion(matchCopy)
             }
     }
+
+
+
 
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
         var updatedMatches = matches

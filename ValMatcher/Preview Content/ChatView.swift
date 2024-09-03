@@ -8,15 +8,20 @@ import SwiftUI
 import Firebase
 import FirebaseFirestore
 import FirebaseFirestoreSwift
+import FirebaseAuth
 
 struct ChatView: View {
     var matchID: String
     var recipientName: String
-    var onMessageSentOrReceived: (() -> Void)? = nil
     @State private var messages: [Message] = []
     @State private var newMessage: String = ""
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var scrollToBottom: Bool = true
+    @State private var messagesListener: ListenerRegistration?
+    @State private var selectedImage: UIImage?
+    @State private var isFullScreenImagePresented: IdentifiableImageURL?
+    @State private var showAlert = false
+    @State private var copiedText = ""
 
     var body: some View {
         VStack {
@@ -36,8 +41,7 @@ struct ChatView: View {
                                     if message.isCurrentUser {
                                         Spacer()
                                         VStack(alignment: .trailing) {
-                                            Text(message.content)
-                                                .padding()
+                                            messageContent(for: message)
                                                 .background(Color.blue)
                                                 .cornerRadius(8)
                                                 .foregroundColor(.white)
@@ -49,8 +53,7 @@ struct ChatView: View {
                                         }
                                     } else {
                                         VStack(alignment: .leading) {
-                                            Text(message.content)
-                                                .padding()
+                                            messageContent(for: message)
                                                 .background(Color.gray)
                                                 .cornerRadius(8)
                                                 .foregroundColor(.black)
@@ -100,7 +103,45 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear(perform: setupChatListener)
-        .onDisappear(perform: markMessagesAsRead)
+        .onDisappear(perform: removeMessagesListener)
+    }
+
+    private func messageContent(for message: Message) -> some View {
+        Group {
+            if let imageURL = message.imageURL {
+                AsyncImage(url: URL(string: imageURL)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 150, height: 150)
+                        .cornerRadius(8)
+                        .onTapGesture {
+                            isFullScreenImagePresented = IdentifiableImageURL(url: imageURL)
+                        }
+                } placeholder: {
+                    ProgressView()
+                        .frame(width: 150, height: 150)
+                }
+            } else {
+                Text(message.content)
+                    .padding()
+                    .onTapGesture(count: 2) {
+                        UIPasteboard.general.string = message.content
+                        copiedText = message.content
+                        showAlert = true
+                    }
+                    .contextMenu {
+                        Button(action: {
+                            UIPasteboard.general.string = message.content
+                            copiedText = message.content
+                            showAlert = true
+                        }) {
+                            Text("Copy")
+                            Image(systemName: "doc.on.doc")
+                        }
+                    }
+            }
+        }
     }
 
     func sendMessage() {
@@ -121,7 +162,6 @@ struct ChatView: View {
                 self.newMessage = ""
                 self.scrollToBottom = true
 
-                // Notify DMHomeView to update the chat list immediately
                 NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
             }
         }
@@ -129,7 +169,7 @@ struct ChatView: View {
 
     private func setupChatListener() {
         let db = Firestore.firestore()
-        db.collection("matches").document(matchID).collection("messages")
+        messagesListener = db.collection("matches").document(matchID).collection("messages")
             .order(by: "timestamp", descending: false)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
@@ -146,15 +186,15 @@ struct ChatView: View {
                     try? document.data(as: Message.self)
                 }
 
-                if self.messages.isEmpty {
-                    print("Messages array is empty after fetching")
-                } else {
-                    print("Messages successfully loaded")
+                DispatchQueue.main.async {
+                    scrollToBottom = true
                 }
-
-                // Notify DMHomeView to refresh the chat list for all chats
-                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
             }
+    }
+
+    private func removeMessagesListener() {
+        messagesListener?.remove()
+        messagesListener = nil
     }
 
     private func markMessagesAsRead() {
@@ -171,14 +211,10 @@ struct ChatView: View {
             if let error = error {
                 print("Error marking messages as read: \(error.localizedDescription)")
             } else {
-                // Delay the notification to prevent UI issues
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
-                }
+                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
             }
         }
     }
-
 
     private func shouldShowDate(for message: Message) -> Bool {
         guard let index = messages.firstIndex(of: message) else { return false }
@@ -189,7 +225,6 @@ struct ChatView: View {
     }
 }
 
-// Date formatters for date and time display
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateStyle = .long
@@ -203,3 +238,14 @@ let timeFormatter: DateFormatter = {
     formatter.timeStyle = .short
     return formatter
 }()
+
+struct IdentifiableImageURL: Identifiable {
+    var id: String { url }
+    var url: String
+}
+
+struct ChatView_Previews: PreviewProvider {
+    static var previews: some View {
+        ChatView(matchID: "testMatchID", recipientName: "Test User")
+    }
+}
