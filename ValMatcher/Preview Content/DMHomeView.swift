@@ -94,10 +94,8 @@ struct DMHomeView: View {
     @ViewBuilder
     private func selectedChatView() -> some View {
         if let selectedChat = selectedChat {
-            print("Navigating to ChatView with chat ID: \(selectedChat.id ?? "unknown")")
             ChatView(matchID: selectedChat.id ?? "", recipientName: getRecipientName(for: selectedChat))
                 .onAppear {
-                    print("ChatView appeared for chat ID: \(selectedChat.id ?? "unknown"). Marking messages as read after delay.")
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { // Slightly increased delay
                         markMessagesAsRead(for: selectedChat)
                     }
@@ -105,8 +103,7 @@ struct DMHomeView: View {
                 .onDisappear {
                     // Perform a safe refresh after the chat view is dismissed
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        if selectedChat == nil {
-                            print("ChatView disappeared. Triggering safe refresh.")
+                        if self.selectedChat == nil {
                             setupListeners()
                         }
                     }
@@ -115,6 +112,8 @@ struct DMHomeView: View {
             EmptyView()
         }
     }
+
+
 
 
     
