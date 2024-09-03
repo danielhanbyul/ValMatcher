@@ -96,19 +96,22 @@ struct DMHomeView: View {
         if let chat = selectedChat {
             ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
                 .onAppear {
+                    print("Entered chat with \(chat.id ?? "unknown")")
                     DispatchQueue.global().async {
                         markMessagesAsRead(for: chat)
                     }
                 }
                 .onDisappear {
-                    // Update the matches array to reflect read status
+                    print("Exiting chat with \(chat.id ?? "unknown")")
                     if let index = matches.firstIndex(where: { $0.id == chat.id }) {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { // Delay to ensure the view transition completes
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             matches[index].hasUnreadMessages = false
                             selectedChat = nil
+                            print("Updated unread status for \(chat.id ?? "unknown")")
                         }
                     }
                 }
+
         } else {
             EmptyView()
         }
