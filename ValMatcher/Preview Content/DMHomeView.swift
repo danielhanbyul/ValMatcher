@@ -37,8 +37,6 @@ struct DMHomeView: View {
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
 
-    @Environment(\.presentationMode) var presentationMode // To detect back button press
-
     var body: some View {
         ZStack {
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
@@ -82,7 +80,7 @@ struct DMHomeView: View {
                 destination: selectedChatView(),
                 isActive: Binding(
                     get: { selectedChat != nil },
-                    set: { if !$0 { selectedChat = nil } }
+                    set: { _ in }
                 )
             ) {
                 EmptyView()
@@ -112,10 +110,14 @@ struct DMHomeView: View {
         HStack {
             Button(action: {
                 selectedChat = match
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    if let index = matches.firstIndex(where: { $0.id == match.id }) {
-                        matches[index].hasUnreadMessages = false
-                    }
+                
+                // Reduce unread message count when entering chat
+                if let currentUserID = currentUserID {
+                    reduceUnreadMessageCount(for: match, currentUserID: currentUserID)
+                }
+
+                if let index = matches.firstIndex(where: { $0.id == match.id }) {
+                    matches[index].hasUnreadMessages = false
                 }
             }) {
                 HStack {
@@ -130,7 +132,7 @@ struct DMHomeView: View {
                         .padding()
                         Spacer()
 
-                        // Unwrap unreadMessages safely
+                        // Display unread message count if there are any
                         if let unreadMessages = match.unreadMessages,
                            let unreadCount = unreadMessages[currentUserID], unreadCount > 0 {
                             ZStack {
@@ -152,6 +154,39 @@ struct DMHomeView: View {
                 .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
             }
         }
+    }
+
+    private func reduceUnreadMessageCount(for match: Chat, currentUserID: String) {
+        guard let matchID = match.id else { return }
+        
+        let db = Firestore.firestore()
+        let messagesRef = db.collection("matches").document(matchID).collection("messages")
+        
+        messagesRef.whereField("senderID", isNotEqualTo: currentUserID)
+            .whereField("isRead", isEqualTo: false)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error fetching unread messages: \(error.localizedDescription)")
+                    return
+                }
+                
+                let batch = db.batch()
+                
+                snapshot?.documents.forEach { document in
+                    batch.updateData(["isRead": true], forDocument: document.reference)
+                }
+                
+                batch.commit { error in
+                    if let error = error {
+                        print("Error marking messages as read: \(error.localizedDescription)")
+                    } else {
+                        // Update local match's unread count
+                        if let index = self.matches.firstIndex(where: { $0.id == match.id }) {
+                            self.matches[index].unreadMessages?[currentUserID] = 0
+                        }
+                    }
+                }
+            }
     }
 
     private func getRecipientName(for match: Chat?) -> String {
@@ -190,15 +225,15 @@ struct DMHomeView: View {
     }
 
     private func setupListeners() {
-        loadMatches()
-        listenForUnreadMessages()
-
-        NotificationCenter.default.addObserver(forName: Notification.Name("RefreshChatList"), object: nil, queue: .main) { _ in
-            loadMatches()
+        // Debounce mechanism
+        let delay = DispatchTime.now() + 0.5 // Adjust the delay as needed
+        
+        DispatchQueue.main.asyncAfter(deadline: delay) {
+            self.loadMatches()
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.shouldSortChats = true
+        NotificationCenter.default.addObserver(forName: Notification.Name("RefreshChatList"), object: nil, queue: .main) { _ in
+            self.loadMatches()
         }
     }
 
@@ -254,7 +289,6 @@ struct DMHomeView: View {
         }
     }
 
-
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
         let db = Firestore.firestore()
 
@@ -284,9 +318,6 @@ struct DMHomeView: View {
                 completion(matchCopy)
             }
     }
-
-
-
 
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
         var updatedMatches = matches
