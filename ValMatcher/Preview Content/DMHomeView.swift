@@ -103,10 +103,11 @@ struct DMHomeView: View {
                 .onDisappear {
                     // Update the matches array to reflect read status
                     if let index = matches.firstIndex(where: { $0.id == chat.id }) {
-                        matches[index].hasUnreadMessages = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { // Delay to ensure the view transition completes
+                            matches[index].hasUnreadMessages = false
+                            selectedChat = nil
+                        }
                     }
-                    // Set selectedChat to nil after exiting the chat view
-                    selectedChat = nil
                 }
         } else {
             EmptyView()
