@@ -10,7 +10,6 @@ import FirebaseFirestore
 import AVKit
 import FirebaseAnalytics
 import UserNotifications
-import AVKit
 import Kingfisher
 
 struct ContentView: View {
@@ -105,10 +104,11 @@ struct ContentView: View {
         }
         .onAppear {
             if isSignedIn {
-                requestPhotoLibraryAccess()  // Request access after user is logged in
-                loadInteractedUsers { success in
+                loadInteractedUsers { success in // Load interacted users
                     if success {
-                        fetchUsers()  // Fetch users after loading interacted users
+                        if users.isEmpty {
+                            fetchUsers()  // Fetch users only if they haven't been loaded
+                        }
                     }
                 }
             }
@@ -182,28 +182,31 @@ struct ContentView: View {
     private var userInfoView: some View {
         VStack(alignment: .leading, spacing: 20) {
             ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Image(systemName: "questionmark.circle")
-                            .foregroundColor(.blue)
-                        Text(key)
-                            .font(.custom("AvenirNext-Bold", size: 18))
+                if let answer = users[currentIndex].answers[key] { // Ensure the answer exists
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundColor(.blue)
+                            Text(key)
+                                .font(.custom("AvenirNext-Bold", size: 18))
+                                .foregroundColor(.white)
+                        }
+                        Text(answer) // Only display the existing answer
+                            .font(.custom("AvenirNext-Regular", size: 22))
                             .foregroundColor(.white)
+                            .padding(.top, 2)
                     }
-                    Text(users[currentIndex].answers[key] ?? "")
-                        .font(.custom("AvenirNext-Regular", size: 22))
-                        .foregroundColor(.white)
-                        .padding(.top, 2)
+                    .frame(width: UIScreen.main.bounds.width * 0.85, alignment: .leading)
+                    .padding()
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(10)
+                    .padding(.horizontal)
                 }
-                .frame(width: UIScreen.main.bounds.width * 0.85, alignment: .leading)
-                .padding()
-                .background(Color.black.opacity(0.7))
-                .cornerRadius(10)
-                .padding(.horizontal)
             }
         }
     }
 
+    // Update fetchUsers to filter out interacted users and add missing question data if necessary
     private func fetchUsers() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
@@ -218,23 +221,41 @@ struct ContentView: View {
                 return
             }
 
-            // Filter out users that have been interacted with
+            // Filter out users that have been interacted with and ensure each user has the predefined questions
             self.users = querySnapshot?.documents.compactMap { document in
-                let user = try? document.data(as: UserProfile.self)
+                var user = try? document.data(as: UserProfile.self)
                 if let userID = user?.id, userID != currentUserID && !self.interactedUsers.contains(userID) {
+                    
+                    // Ensure the user has the predefined questions
+                    self.ensureQuestions(for: &user!)
+
                     return user
                 }
                 return nil
             } ?? []
 
-            // Check if there are any users left
-            if self.users.isEmpty {
-                self.currentIndex = 0
-                self.users.removeAll()
-            }
-
             // Log the number of users after filtering
             print("Users after filtering: \(self.users.count)")
+        }
+    }
+
+    // Ensure each user has the predefined questions
+    private func ensureQuestions(for user: inout UserProfile) {
+        if user.answers.isEmpty {
+            user.answers = [:]
+        }
+        
+        // Define the original set of questions
+        let originalQuestions: [String] = [
+            "What's your favorite hobby?",
+            "What's your dream job?",
+            "What's your favorite book?"
+        ]
+        
+        for question in originalQuestions {
+            if user.answers[question] == nil {
+                user.answers[question] = "" // Provide an empty answer if the question is missing
+            }
         }
     }
 
@@ -424,6 +445,7 @@ struct ContentView: View {
         UNUserNotificationCenter.current().add(request)
     }
 
+    // Updated likeAction to ensure the liked user is saved as interacted
     private func likeAction() {
         interactionResult = .liked
 
@@ -568,6 +590,7 @@ struct ContentView: View {
         }
     }
 
+    // Updated passAction to ensure the passed user is saved as interacted
     private func passAction() {
         interactionResult = .passed
 
@@ -599,10 +622,13 @@ struct ContentView: View {
                 self.currentIndex = 0
                 self.users.removeAll()
             }
+
+            // Save the currentIndex to UserDefaults
+            UserDefaults.standard.set(self.currentIndex, forKey: "currentIndex")
         }
     }
 
-    // New function to save all interacted users
+    // New function to save all interacted users to Firestore and UserDefaults
     private func saveInteractedUsers() {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
@@ -617,9 +643,12 @@ struct ContentView: View {
                 print("Interacted users saved successfully.")
             }
         }
+        
+        // Save to UserDefaults
+        UserDefaults.standard.set(Array(interactedUsers), forKey: "interactedUsers_\(currentUserID)")
     }
 
-    // New function to load all interacted users
+    // New function to load all interacted users from Firestore and UserDefaults
     private func loadInteractedUsers(completion: @escaping (Bool) -> Void) {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
@@ -628,12 +657,21 @@ struct ContentView: View {
         }
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(currentUserID)
-
+        
+        // Load from UserDefaults first
+        if let savedInteractedUsers = UserDefaults.standard.array(forKey: "interactedUsers_\(currentUserID)") as? [String] {
+            self.interactedUsers = Set(savedInteractedUsers)
+            completion(true)
+            return
+        }
+        
         userRef.getDocument { document, error in
             if let document = document, document.exists {
                 if let interacted = document.data()?["interactedUsers"] as? [String] {
                     self.interactedUsers = Set(interacted)
                 }
+                // Also save to UserDefaults for future sessions
+                UserDefaults.standard.set(Array(self.interactedUsers), forKey: "interactedUsers_\(currentUserID)")
                 completion(true)
             } else {
                 print("Error loading interacted users: \(error?.localizedDescription ?? "Unknown error")")
