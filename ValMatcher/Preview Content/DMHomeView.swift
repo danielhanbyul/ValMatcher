@@ -98,12 +98,54 @@ struct DMHomeView: View {
                 .onAppear {
                     DispatchQueue.global().async {
                         markMessagesAsRead(for: selectedChat)
+                        reduceUnreadMessagesCount(for: selectedChat) // Reduce unread count to 0
                     }
                 }
         } else {
             EmptyView()
         }
     }
+    
+    
+    private func reduceUnreadMessagesCount(for match: Chat) {
+        guard let matchID = match.id, let currentUserID = currentUserID else { return }
+        
+        let db = Firestore.firestore()
+        
+        db.collection("matches").document(matchID).collection("messages")
+            .whereField("senderID", isNotEqualTo: currentUserID)
+            .whereField("isRead", isEqualTo: false)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error marking messages as read: \(error.localizedDescription)")
+                    return
+                }
+                
+                let batch = db.batch()
+                snapshot?.documents.forEach { document in
+                    let messageRef = document.reference
+                    batch.updateData(["isRead": true], forDocument: messageRef)
+                }
+                
+                batch.commit { error in
+                    if let error = error {
+                        print("Error committing batch: \(error.localizedDescription)")
+                    } else {
+                        DispatchQueue.main.async {
+                            // Find the match in the list and update its unread count
+                            if let index = self.matches.firstIndex(where: { $0.id == matchID }) {
+                                self.matches[index].unreadMessages?[currentUserID] = 0
+                                self.matches[index].hasUnreadMessages = false
+                            }
+                            // Refresh the UI
+                            self.shouldSortChats = true
+                        }
+                    }
+                }
+            }
+    }
+
+
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
@@ -126,7 +168,7 @@ struct DMHomeView: View {
                         .padding()
                         Spacer()
 
-                        // Unwrap unreadMessages safely
+                        // Unwrap unreadMessages safely and check if the count is greater than 0
                         if let unreadMessages = match.unreadMessages,
                            let unreadCount = unreadMessages[currentUserID], unreadCount > 0 {
                             ZStack {
@@ -149,6 +191,7 @@ struct DMHomeView: View {
             }
         }
     }
+
 
 
 
@@ -507,6 +550,7 @@ struct DMHomeView: View {
             }
         }
     }
+
 
     private func notifyUserOfNewMessages(count: Int) {
         guard count > 0 else { return }
