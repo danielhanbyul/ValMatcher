@@ -168,36 +168,39 @@ struct ProfileView: View {
                 Spacer()
                 ForEach(additionalMedia.indices, id: \.self) { index in
                     let media = additionalMedia[index]
-                    
+
                     VStack {
                         if media.type == .image {
                             KFImage(media.url)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
-                                .frame(width: 100, height: 100)
+                                .frame(width: 100, height: 100)  // Fixed square size
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
                                 .shadow(radius: 5)
                         } else if media.type == .video {
                             ZStack {
-                                // Video player stays in its original frame, not fullscreen
-                                VideoPlayerView(url: media.url)
-                                    .frame(width: UIScreen.main.bounds.width * 0.9)
-                                    .aspectRatio(contentMode: .fit)
+                                // Video player thumbnail (fixed square size)
+                                VideoPlayer(player: AVPlayer(url: media.url))
+                                    .frame(width: 100, height: 100)  // Fixed square size
+                                    .cornerRadius(10)
                                     .clipped()
-
-                                // Fullscreen button overlay on top of the video
+                                
+                                // Fullscreen button overlay (tap to enter fullscreen)
                                 Button(action: {
                                     selectedVideoURL = IdentifiableURL(url: media.url)  // Trigger fullscreen on button press
                                 }) {
                                     Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                        .foregroundColor(.white)
-                                        .padding()
-                                        .background(Color.black.opacity(0.7))
-                                        .clipShape(Circle())
+                                        .resizable()
+                                        .frame(width: 24, height: 24)
                                         .padding(8)
+                                        .background(Color.black.opacity(0.7))  // Background to make the button visible
+                                        .clipShape(Circle())
+                                        .foregroundColor(.white)
                                 }
-                                .position(x: UIScreen.main.bounds.width * 0.8, y: 30)  // Button in top-right corner
+                                .position(x: 80, y: 20)  // Adjust position for top-right corner within 100x100 frame
                             }
+                            .cornerRadius(10)
+                            .shadow(radius: 5)
                         }
                     }
                 }
@@ -206,6 +209,7 @@ struct ProfileView: View {
             .padding(.horizontal)
         }
     }
+
 
 
 
@@ -257,7 +261,6 @@ struct ProfileView: View {
         }
         .padding(.horizontal)
     }
-
 
     private var addMediaButton: some View {
         Button(action: {
@@ -317,7 +320,6 @@ struct ProfileView: View {
     // MARK: - Functions
 
     private func initializeEditValues() {
-        // Safely unwrap the optional `mediaItems`
         additionalMedia = viewModel.user.mediaItems ?? []
         updatedAnswers = viewModel.user.answers
         selectedMediaIndices.removeAll()
@@ -594,16 +596,51 @@ struct FullScreenVideoPlayer: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.black.edgesIgnoringSafeArea(.all)  // Fullscreen black background
+
             VideoPlayer(player: AVPlayer(url: url))
-                .aspectRatio(contentMode: .fit)
+                .edgesIgnoringSafeArea(.all)  // Fullscreen video view
                 .onAppear {
                     let player = AVPlayer(url: url)
-                    player.play()
+                    player.play()  // Start video playback automatically
                 }
-                .onTapGesture {
-                    presentationMode.wrappedValue.dismiss()
+
+            // Dismiss button to close fullscreen
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        Image(systemName: "xmark")
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.black.opacity(0.7))
+                            .clipShape(Circle())
+                    }
+                    .padding()
                 }
+                Spacer()
+            }
         }
+    }
+}
+
+
+import UIKit
+
+struct AppUtility {
+    
+    // Lock orientation to a specific one (portrait, landscape, or all)
+    static func lockOrientation(_ orientation: UIInterfaceOrientationMask) {
+        if let delegate = UIApplication.shared.delegate as? AppDelegate {
+            delegate.orientationLock = orientation
+        }
+    }
+
+    // Lock orientation with specific rotation
+    static func lockOrientation(_ orientation: UIInterfaceOrientationMask, andRotateTo rotateOrientation: UIInterfaceOrientation) {
+        self.lockOrientation(orientation)
+        UIDevice.current.setValue(rotateOrientation.rawValue, forKey: "orientation")
     }
 }
