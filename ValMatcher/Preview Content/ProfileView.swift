@@ -12,6 +12,11 @@ import AVKit
 import PhotosUI
 import Kingfisher
 
+// Identifiable wrapper for URL
+struct IdentifiableURL: Identifiable {
+    let id = UUID()  // Generate a unique ID
+    let url: URL
+}
 
 struct ProfileView: View {
     @ObservedObject var viewModel: UserProfileViewModel
@@ -29,6 +34,9 @@ struct ProfileView: View {
     @State private var uploadProgress: Double = 0.0
     @State private var isUploading: Bool = false
     @State private var uploadMessage: String = ""
+    
+    // Updated to use IdentifiableURL for full-screen video
+    @State private var selectedVideoURL: IdentifiableURL?
 
     let maxMediaCount = 4
     let maxVideoDuration: Double = 60.0
@@ -80,8 +88,8 @@ struct ProfileView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView(user: $viewModel.user, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
         }
-        .fullScreenCover(isPresented: $isShowingLoginView) {
-            LoginView(isSignedIn: $isSignedIn, currentUser: .constant(nil), isShowingLoginView: $isShowingLoginView)
+        .fullScreenCover(item: $selectedVideoURL) { item in
+            FullScreenVideoPlayer(url: item.url)  // Fullscreen video playback
         }
         .onAppear {
             fetchMediaFromFirestore() // Fetch media from Firestore on view load
@@ -158,19 +166,39 @@ struct ProfileView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 15) {
                 Spacer()
-                ForEach(additionalMedia) { media in
-                    if media.type == .image {
-                        KFImage(media.url)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 100, height: 100)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .shadow(radius: 5)
-                    } else if media.type == .video {
-                        VideoPlayerView(url: media.url)
-                            .frame(width: UIScreen.main.bounds.width * 0.9)  // Adjust width to fit the screen
-                            .aspectRatio(contentMode: .fit)  // Ensures the video maintains its aspect ratio
-                            .clipped()  // Clips any overflow
+                ForEach(additionalMedia.indices, id: \.self) { index in
+                    let media = additionalMedia[index]
+                    
+                    VStack {
+                        if media.type == .image {
+                            KFImage(media.url)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 100, height: 100)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .shadow(radius: 5)
+                        } else if media.type == .video {
+                            ZStack {
+                                // Video player stays in its original frame, not fullscreen
+                                VideoPlayerView(url: media.url)
+                                    .frame(width: UIScreen.main.bounds.width * 0.9)
+                                    .aspectRatio(contentMode: .fit)
+                                    .clipped()
+
+                                // Fullscreen button overlay on top of the video
+                                Button(action: {
+                                    selectedVideoURL = IdentifiableURL(url: media.url)  // Trigger fullscreen on button press
+                                }) {
+                                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                        .foregroundColor(.white)
+                                        .padding()
+                                        .background(Color.black.opacity(0.7))
+                                        .clipShape(Circle())
+                                        .padding(8)
+                                }
+                                .position(x: UIScreen.main.bounds.width * 0.8, y: 30)  // Button in top-right corner
+                            }
+                        }
                     }
                 }
                 Spacer()
@@ -178,6 +206,7 @@ struct ProfileView: View {
             .padding(.horizontal)
         }
     }
+
 
 
     private var editableMediaList: some View {
@@ -202,7 +231,10 @@ struct ProfileView: View {
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
                             .shadow(radius: 5)
                             .onAppear {
-                                AVPlayer(url: media.url).isMuted = false
+                                let playerItem = AVPlayerItem(url: media.url)
+                                playerItem.preferredForwardBufferDuration = 5  // Preload 5 seconds of video
+                                let player = AVQueuePlayer(playerItem: playerItem)
+                                player.isMuted = false
                             }
                     }
 
@@ -326,7 +358,6 @@ struct ProfileView: View {
         }
     }
 
-    
     private func deleteMedia(at index: Int) {
         let mediaItem = additionalMedia[index]
         additionalMedia.remove(at: index)
@@ -553,6 +584,26 @@ struct ProfileView: View {
                     self.viewModel.user.mediaItems = fetchedMediaItems // Update the view model's user profile
                 }
             }
+        }
+    }
+}
+
+struct FullScreenVideoPlayer: View {
+    let url: URL
+    @Environment(\.presentationMode) var presentationMode
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VideoPlayer(player: AVPlayer(url: url))
+                .aspectRatio(contentMode: .fit)
+                .onAppear {
+                    let player = AVPlayer(url: url)
+                    player.play()
+                }
+                .onTapGesture {
+                    presentationMode.wrappedValue.dismiss()
+                }
         }
     }
 }
