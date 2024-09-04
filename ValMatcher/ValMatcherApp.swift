@@ -9,6 +9,7 @@ import SwiftUI
 import Firebase
 import UserNotifications
 import FirebaseMessaging
+import UIKit
 
 @main
 struct ValMatcherApp: App {
@@ -22,6 +23,9 @@ struct ValMatcherApp: App {
 }
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
+
+    var window: UIWindow?
+    var orientationLock = UIInterfaceOrientationMask.portrait  // Default orientation is portrait
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Configure Firebase
@@ -50,7 +54,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
     // Handle successful registration for remote notifications
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        // Set the APNs token for Firebase Cloud Messaging
         Messaging.messaging().apnsToken = deviceToken
         print("Successfully registered for remote notifications.")
     }
@@ -72,7 +75,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         
         // Handle the notification data and navigate to the appropriate view
         if let messageId = userInfo["messageId"] as? String {
-            // Assuming you have a way to navigate to specific chat/message
             navigateToChat(withMessageId: messageId)
         }
         
@@ -111,5 +113,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Implement data fetching logic
         // For example, you could call a function that updates the unread message count or fetches new data
         completion(.newData)
+    }
+
+    // Orientation locking logic
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        return self.orientationLock
     }
 }
