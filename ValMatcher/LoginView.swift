@@ -106,24 +106,47 @@ struct LoginView: View {
                 print("Error signing in: \(error.localizedDescription)")
                 return
             }
+            
             isSignedIn = true
             if let user = authResult?.user {
-                fetchUserProfile(userID: user.uid)
+                // Clear the current profile before fetching new one
+                currentUser = nil
+                fetchUserProfile(userID: user.uid) // Ensure new profile is fetched
             }
+        }
+    }
+
+    // Sign out from Firebase
+    func signOut() {
+        do {
+            try Auth.auth().signOut()
+            isSignedIn = false
+            currentUser = nil  // Reset the current user
+            email = ""
+            password = ""
+            errorMessage = ""
+        } catch let signOutError as NSError {
+            print("Error signing out: %@", signOutError)
+            self.errorMessage = "Error: \(signOutError.localizedDescription)"
         }
     }
 
     func fetchUserProfile(userID: String) {
         let db = Firestore.firestore()
         db.collection("users").document(userID).getDocument { document, error in
-            if let document = document, document.exists {
-                if let data = document.data() {
-                    // Assuming the `mediaItems` field in Firestore is stored as an array of strings (URLs).
-                    let mediaURLs = data["mediaItems"] as? [String] ?? []
-                    let mediaItems = mediaURLs.map { url in
-                        return MediaItem(type: url.contains(".mp4") ? .video : .image, url: URL(string: url)!)
-                    }
-                    
+            if let error = error {
+                print("Error fetching user profile: \(error.localizedDescription)")
+                self.errorMessage = "Error fetching user profile: \(error.localizedDescription)"
+                return
+            }
+
+            if let document = document, document.exists, let data = document.data() {
+                let mediaURLs = data["mediaItems"] as? [String] ?? []
+                let mediaItems = mediaURLs.map { url in
+                    return MediaItem(type: url.contains(".mp4") ? .video : .image, url: URL(string: url)!)
+                }
+
+                DispatchQueue.main.async {
                     self.currentUser = UserProfile(
                         id: document.documentID,
                         name: data["name"] as? String ?? "",
@@ -133,15 +156,14 @@ struct LoginView: View {
                         server: data["server"] as? String ?? "",
                         answers: data["answers"] as? [String: String] ?? [:],
                         hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false,
-                        mediaItems: mediaItems  // Provide the mapped `MediaItem` array here
+                        mediaItems: mediaItems
                     )
                 }
+            } else {
+                self.errorMessage = "User profile does not exist."
             }
         }
     }
-
-
-
 }
 
 struct LoginView_Previews: PreviewProvider {

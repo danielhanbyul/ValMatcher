@@ -80,7 +80,7 @@ struct DMHomeView: View {
                 destination: selectedChatView(),
                 isActive: Binding(
                     get: { selectedChat != nil },
-                    set: { _ in }
+                    set: { if !$0 { selectedChat = nil } }
                 )
             ) {
                 EmptyView()
@@ -93,17 +93,32 @@ struct DMHomeView: View {
 
     @ViewBuilder
     private func selectedChatView() -> some View {
-        if let selectedChat = selectedChat {
-            ChatView(matchID: selectedChat.id ?? "", recipientName: getRecipientName(for: selectedChat))
+        if let chat = selectedChat {
+            ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
                 .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        markMessagesAsRead(for: selectedChat)
+                    print("Entered chat with \(chat.id ?? "unknown")")
+                    DispatchQueue.global().async {
+                        markMessagesAsRead(for: chat)
                     }
                 }
+                .onDisappear {
+                    print("Exiting chat with \(chat.id ?? "unknown")")
+                    if let index = matches.firstIndex(where: { $0.id == chat.id }) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            matches[index].hasUnreadMessages = false
+                            selectedChat = nil
+                            print("Updated unread status for \(chat.id ?? "unknown")")
+                        }
+                    }
+                }
+
         } else {
             EmptyView()
         }
     }
+
+    
+    
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
@@ -156,6 +171,7 @@ struct DMHomeView: View {
         }
     }
 
+
     private func reduceUnreadMessageCount(for match: Chat, currentUserID: String) {
         guard let matchID = match.id else { return }
         
@@ -188,6 +204,8 @@ struct DMHomeView: View {
                 }
             }
     }
+
+
 
     private func getRecipientName(for match: Chat?) -> String {
         guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
@@ -236,6 +254,7 @@ struct DMHomeView: View {
             self.loadMatches()
         }
     }
+
 
     func loadMatches() {
         guard let currentUserID = currentUserID else {
@@ -289,6 +308,7 @@ struct DMHomeView: View {
         }
     }
 
+
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
         let db = Firestore.firestore()
 
@@ -318,6 +338,9 @@ struct DMHomeView: View {
                 completion(matchCopy)
             }
     }
+
+
+
 
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
         var updatedMatches = matches
@@ -540,6 +563,7 @@ struct DMHomeView: View {
             }
         }
     }
+
 
     private func notifyUserOfNewMessages(count: Int) {
         guard count > 0 else { return }
