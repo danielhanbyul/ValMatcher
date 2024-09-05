@@ -181,17 +181,18 @@ struct ContentView: View {
 
     private var userInfoView: some View {
         VStack(alignment: .leading, spacing: 20) {
-            ForEach(users[currentIndex].answers.keys.sorted(), id: \.self) { key in
-                if let answer = users[currentIndex].answers[key] { // Ensure the answer exists
+            // Show only the profile questions answered by the user
+            ForEach(profileQuestions, id: \.self) { question in
+                if let answer = users[currentIndex].answers[question], !answer.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Image(systemName: "questionmark.circle")
                                 .foregroundColor(.blue)
-                            Text(key)
+                            Text(question)
                                 .font(.custom("AvenirNext-Bold", size: 18))
                                 .foregroundColor(.white)
                         }
-                        Text(answer) // Only display the existing answer
+                        Text(answer)
                             .font(.custom("AvenirNext-Regular", size: 22))
                             .foregroundColor(.white)
                             .padding(.top, 2)
@@ -205,6 +206,7 @@ struct ContentView: View {
             }
         }
     }
+
 
     // Update fetchUsers to filter out interacted users and add missing question data if necessary
     private func fetchUsers() {
@@ -221,41 +223,16 @@ struct ContentView: View {
                 return
             }
 
-            // Filter out users that have been interacted with and ensure each user has the predefined questions
+            // Filter out users that have been interacted with, no longer adding missing question data
             self.users = querySnapshot?.documents.compactMap { document in
                 var user = try? document.data(as: UserProfile.self)
                 if let userID = user?.id, userID != currentUserID && !self.interactedUsers.contains(userID) {
-                    
-                    // Ensure the user has the predefined questions
-                    self.ensureQuestions(for: &user!)
-
                     return user
                 }
                 return nil
             } ?? []
 
-            // Log the number of users after filtering
             print("Users after filtering: \(self.users.count)")
-        }
-    }
-
-    // Ensure each user has the predefined questions
-    private func ensureQuestions(for user: inout UserProfile) {
-        if user.answers.isEmpty {
-            user.answers = [:]
-        }
-        
-        // Define the original set of questions
-        let originalQuestions: [String] = [
-            "What's your favorite hobby?",
-            "What's your dream job?",
-            "What's your favorite book?"
-        ]
-        
-        for question in originalQuestions {
-            if user.answers[question] == nil {
-                user.answers[question] = "" // Provide an empty answer if the question is missing
-            }
         }
     }
 

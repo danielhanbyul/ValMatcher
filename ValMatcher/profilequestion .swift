@@ -9,6 +9,16 @@ import SwiftUI
 import FirebaseFirestore
 import Firebase
 
+// Define the questions globally at the top of the file
+let profileQuestions: [String] = [
+    "Who's your favorite agent to play in Valorant?",
+    "Do you prefer playing as a Duelist, Initiator, Controller, or Sentinel?",
+    "What’s your current rank in Valorant?",
+    "Favorite game mode?",
+    "What servers do you play on?",
+    "What's your favorite weapon skin in Valorant?"
+]
+
 struct QuestionsView: View {
     @State private var currentQuestionIndex = 0
     @State private var answer = ""
