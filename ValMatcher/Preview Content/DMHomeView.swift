@@ -25,6 +25,7 @@ struct MessageListener {
     }
 }
 
+
 struct DMHomeView: View {
     @State private var matches = [Chat]()
     @State private var currentUserID = Auth.auth().currentUser?.uid
@@ -36,6 +37,9 @@ struct DMHomeView: View {
     @State private var selectedChat: Chat? // The chat that the user is trying to open
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
+    @State private var previousSelectedChatID: String? // Keep track of the chat to prevent reset
+
+    
 
     var body: some View {
         ZStack {
@@ -80,12 +84,20 @@ struct DMHomeView: View {
                 destination: selectedChatView(),
                 isActive: Binding(
                     get: { selectedChat != nil },
-                    set: { if !$0 { selectedChat = nil } }
+                    set: { isActive in
+                        if !isActive {
+                            print("NavigationLink is trying to reset selectedChat")
+                            selectedChat = nil
+                        }
+                    }
                 )
             ) {
                 EmptyView()
             }
         )
+
+
+
         .alert(isPresented: $showNotificationBanner) {
             Alert(title: Text("New Message"), message: Text(bannerMessage), dismissButton: .default(Text("OK")))
         }
@@ -96,41 +108,34 @@ struct DMHomeView: View {
         if let chat = selectedChat {
             ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
                 .onAppear {
-                    print("Entered chat with \(chat.id ?? "unknown")")
-                    DispatchQueue.global().async {
-                        markMessagesAsRead(for: chat)
-                    }
+                    print("ChatView appeared with selectedChat: \(selectedChat?.id ?? "nil")")
+                    markMessagesAsRead(for: chat)
                 }
                 .onDisappear {
-                    print("Exiting chat with \(chat.id ?? "unknown")")
-                    if let index = matches.firstIndex(where: { $0.id == chat.id }) {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            matches[index].hasUnreadMessages = false
-                            selectedChat = nil
-                            print("Updated unread status for \(chat.id ?? "unknown")")
-                        }
-                    }
+                    print("ChatView disappeared, selectedChat: \(selectedChat?.id ?? "nil")")
+                    // Do not reset selectedChat here unless navigating back manually
                 }
-
         } else {
             EmptyView()
         }
     }
 
-    
-    
+
+
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
         HStack {
             Button(action: {
+                // Set the selected chat to open it
                 selectedChat = match
                 
-                // Reduce unread message count when entering chat
+                // Mark unread messages as read asynchronously
                 if let currentUserID = currentUserID {
                     reduceUnreadMessageCount(for: match, currentUserID: currentUserID)
                 }
 
+                // Mark as read locally to prevent flickers
                 if let index = matches.firstIndex(where: { $0.id == match.id }) {
                     matches[index].hasUnreadMessages = false
                 }
@@ -147,18 +152,12 @@ struct DMHomeView: View {
                         .padding()
                         Spacer()
 
-                        // Display unread message count if there are any
-                        if let unreadMessages = match.unreadMessages,
-                           let unreadCount = unreadMessages[currentUserID], unreadCount > 0 {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.red)
-                                    .frame(width: 20, height: 20)
-                                Text("\(unreadCount)")
-                                    .foregroundColor(.white)
-                                    .font(.system(size: 12, weight: .bold))
-                            }
-                            .padding(.trailing, 10)
+                        // Show unread message indicator (red dot) if there are unread messages
+                        if match.hasUnreadMessages == true {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 10, height: 10)
+                                .padding(.trailing, 10)
                         }
                     }
                 }
@@ -171,13 +170,12 @@ struct DMHomeView: View {
         }
     }
 
-
     private func reduceUnreadMessageCount(for match: Chat, currentUserID: String) {
         guard let matchID = match.id else { return }
-        
+
         let db = Firestore.firestore()
         let messagesRef = db.collection("matches").document(matchID).collection("messages")
-        
+
         messagesRef.whereField("senderID", isNotEqualTo: currentUserID)
             .whereField("isRead", isEqualTo: false)
             .getDocuments { snapshot, error in
@@ -185,26 +183,30 @@ struct DMHomeView: View {
                     print("Error fetching unread messages: \(error.localizedDescription)")
                     return
                 }
-                
+
+                guard let documents = snapshot?.documents, !documents.isEmpty else {
+                    // No unread messages to update
+                    return
+                }
+
                 let batch = db.batch()
-                
-                snapshot?.documents.forEach { document in
+                documents.forEach { document in
                     batch.updateData(["isRead": true], forDocument: document.reference)
                 }
-                
+
+                // Commit the batch update and trigger state change after it's completed
                 batch.commit { error in
                     if let error = error {
                         print("Error marking messages as read: \(error.localizedDescription)")
                     } else {
-                        // Update local match's unread count
+                        // Use flag to indicate local state has been updated and prevent extra loads
                         if let index = self.matches.firstIndex(where: { $0.id == match.id }) {
-                            self.matches[index].unreadMessages?[currentUserID] = 0
+                            self.matches[index].hasUnreadMessages = false
                         }
                     }
                 }
             }
     }
-
 
 
     private func getRecipientName(for match: Chat?) -> String {
@@ -242,16 +244,16 @@ struct DMHomeView: View {
         }
     }
 
-    private func setupListeners() {
-        // Debounce mechanism
-        let delay = DispatchTime.now() + 0.5 // Adjust the delay as needed
+    func setupListeners() {
+        // This is where you could also track selectedChat changes
+        let currentChatID = selectedChat?.id
+        loadMatches() // Call without a closure
         
-        DispatchQueue.main.asyncAfter(deadline: delay) {
-            self.loadMatches()
-        }
-
-        NotificationCenter.default.addObserver(forName: Notification.Name("RefreshChatList"), object: nil, queue: .main) { _ in
-            self.loadMatches()
+        // Restore selectedChat state if matches are reloaded
+        print("setupListeners called, selectedChat: \(selectedChat?.id ?? "nil")")
+        if let currentChatID = currentChatID {
+            self.selectedChat = matches.first(where: { $0.id == currentChatID })
+            print("Restored selectedChat after listener update: \(selectedChat?.id ?? "nil")")
         }
     }
 
@@ -287,7 +289,7 @@ struct DMHomeView: View {
                 for document in documents {
                     do {
                         var match = try document.data(as: Chat.self)
-                        
+
                         // Use the updated function with completion handler
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
                             newMatches.append(updatedMatch)
@@ -308,7 +310,6 @@ struct DMHomeView: View {
         }
     }
 
-
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
         let db = Firestore.firestore()
 
@@ -326,7 +327,7 @@ struct DMHomeView: View {
                 }
 
                 let unreadCount = snapshot?.documents.count ?? 0
-                
+
                 // Safely unwrap unreadMessages and update it
                 if matchCopy.unreadMessages == nil {
                     matchCopy.unreadMessages = [:]
@@ -338,9 +339,6 @@ struct DMHomeView: View {
                 completion(matchCopy)
             }
     }
-
-
-
 
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
         var updatedMatches = matches
@@ -426,11 +424,6 @@ struct DMHomeView: View {
             self.matches = updatedMatches.sorted {
                 ($0.timestamp?.dateValue() ?? Date.distantPast) > ($1.timestamp?.dateValue() ?? Date.distantPast)
             }
-
-            if self.receivedNewMessage {
-                notifyUserOfNewMessages(count: count)
-                self.receivedNewMessage = false
-            }
         }
     }
 
@@ -468,7 +461,7 @@ struct DMHomeView: View {
         }
 
         let db = Firestore.firestore()
-        
+
         let matchQuery = db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .whereField("user2", isEqualTo: currentUserID)
@@ -532,10 +525,10 @@ struct DMHomeView: View {
         }
     }
 
-    private func markMessagesAsRead(for match: Chat) {
-        guard let matchID = match.id, let currentUserID = currentUserID else { return }
-        let db = Firestore.firestore()
+    private func markMessagesAsRead(for chat: Chat) {
+        guard let matchID = chat.id, let currentUserID = currentUserID else { return }
         
+        let db = Firestore.firestore()
         let messagesQuery = db.collection("matches").document(matchID).collection("messages")
             .whereField("senderID", isNotEqualTo: currentUserID)
             .whereField("isRead", isEqualTo: false)
@@ -556,7 +549,11 @@ struct DMHomeView: View {
                 if let error = error {
                     print("Error committing batch: \(error.localizedDescription)")
                 } else {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    // Update local chat's unread status while still in the chat
+                    DispatchQueue.main.async {
+                        if let index = self.matches.firstIndex(where: { $0.id == chat.id }) {
+                            self.matches[index].hasUnreadMessages = false
+                        }
                         NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
                     }
                 }
@@ -564,14 +561,6 @@ struct DMHomeView: View {
         }
     }
 
-
-    private func notifyUserOfNewMessages(count: Int) {
-        guard count > 0 else { return }
-        if UIApplication.shared.applicationState != .active {
-            let alertMessage = "You have \(count) new message(s)."
-            showNotification(title: "New Message", body: alertMessage)
-        }
-    }
 
     private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
         guard let senderName = latestMessage.data()["senderName"] as? String,
