@@ -12,6 +12,24 @@ import FirebaseAnalytics
 import UserNotifications
 import Kingfisher
 
+struct MessageListener {
+    let listener: ListenerRegistration
+    private(set) var countedMessageIDs: Set<String> = []
+
+    mutating func isAlreadyCounted(messageID: String) -> Bool {
+        return countedMessageIDs.contains(messageID)
+    }
+
+    mutating func markAsCounted(messageID: String) {
+        countedMessageIDs.insert(messageID)
+    }
+
+    func removeListener() {
+        listener.remove()
+    }
+}
+
+
 struct ContentView: View {
     @StateObject var userProfileViewModel: UserProfileViewModel
     @Binding var isSignedIn: Bool
