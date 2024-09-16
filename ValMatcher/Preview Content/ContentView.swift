@@ -720,7 +720,7 @@ struct NotificationsView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(notifications, id: \.self) { notification in
                                 Text(notification)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.black)
                                     .padding()
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(Color(.systemGray5))

@@ -48,6 +48,9 @@ struct ProfileView: View {
                 Spacer()
                 titleText
                 Spacer()
+                if isEditing {
+                    saveButton // Save button only visible during editing
+                }
                 editButton
                 settingsButton
             }
@@ -116,6 +119,17 @@ struct ProfileView: View {
         Text("Profile")
             .foregroundColor(.white)
             .font(.custom("AvenirNext-Bold", size: 20))
+    }
+
+    // Save button during editing
+    private var saveButton: some View {
+        Button(action: {
+            saveProfile()
+        }) {
+            Text("Save")
+                .foregroundColor(.white)
+                .font(.custom("AvenirNext-Bold", size: 18))
+        }
     }
 
     private var editButton: some View {
@@ -209,9 +223,6 @@ struct ProfileView: View {
             .padding(.horizontal)
         }
     }
-
-
-
 
     private var editableMediaList: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -326,10 +337,29 @@ struct ProfileView: View {
     }
 
     private func saveProfile() {
+        // Save media and answers
         saveMedia()
+        saveAnswersToFirestore()  // Add this to save answers to Firestore
         self.isEditing.toggle()
     }
 
+    private func saveAnswersToFirestore() {
+        guard let userID = viewModel.user.id else { return }
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(userID)
+
+        userRef.updateData([
+            "answers": updatedAnswers  // Save updated answers
+        ]) { error in
+            if let error = error {
+                print("Error saving answers: \(error.localizedDescription)")
+            } else {
+                print("Answers successfully updated")
+                viewModel.user.answers = updatedAnswers  // Update local user model
+            }
+        }
+    }
+    
     private func saveMedia() {
         guard !newMedia.isEmpty else { return }
         
