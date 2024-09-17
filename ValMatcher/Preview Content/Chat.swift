@@ -10,18 +10,20 @@ import FirebaseFirestoreSwift
 import FirebaseAuth
 
 struct Chat: Codable, Identifiable, Hashable {
-    @DocumentID var id: String?  // Optional Document ID
-    var hasUnreadMessages: Bool?  // Optional field for unread messages
-    var recipientName: String?    // Optional field for recipient's name
-    var timestamp: Timestamp?     // Optional timestamp
-    var user1: String?            // Optional user ID for user1
-    var user1Image: String?       // Optional image URL for user1
-    var user1Name: String?        // Optional name for user1
-    var user2: String?            // Optional user ID for user2
-    var user2Image: String?       // Optional image URL for user2
-    var user2Name: String?        // Optional name for user2
-    var unreadMessages: [String: Int]?  // Optional map for unread messages
+    @DocumentID var id: String?
+    var hasUnreadMessages: Bool?
+    var recipientName: String?
+    var timestamp: Timestamp?
+    var lastMessageTimestamp: Timestamp?  // Add this to track the latest message timestamp
+    var user1: String?
+    var user1Image: String?
+    var user1Name: String?
+    var user2: String?
+    var user2Image: String?
+    var user2Name: String?
+    var unreadMessages: [String: Int]?
 }
+
 
 extension Chat {
     // Conform to Hashable by implementing the hash function
