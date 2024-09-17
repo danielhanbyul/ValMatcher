@@ -71,8 +71,8 @@ struct DMHomeView: View {
                     get: { selectedChat != nil },
                     set: { isActive in
                         if !isActive {
-                            print("NavigationLink is trying to reset selectedChat")
                             selectedChat = nil
+                            print("NavigationLink is trying to reset selectedChat")
                         }
                     }
                 )
@@ -91,8 +91,8 @@ struct DMHomeView: View {
             ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
                 .onAppear {
                     print("ChatView appeared with selectedChat: \(selectedChat?.id ?? "nil")")
-                    markMessagesAsRead(for: chat) // Call the function here
-                    blendRedDot() // Blend the red dot when the chat opens
+                    markMessagesAsRead(for: chat)
+                    blendRedDot()
                 }
                 .onDisappear {
                     print("ChatView disappeared, selectedChat: \(selectedChat?.id ?? "nil")")
@@ -118,8 +118,6 @@ struct DMHomeView: View {
                     Text(getRecipientName(for: match))
                         .font(.custom("AvenirNext-Bold", size: 18))
                         .foregroundColor(.white)
-
-                    // Time stamp added here
                     Text(lastMessageTimestamp(match: match))
                         .font(.caption)
                         .foregroundColor(.gray)
@@ -129,7 +127,7 @@ struct DMHomeView: View {
 
                 if match.hasUnreadMessages == true {
                     Circle()
-                        .fill(blendColor) // Apply the blend color for the red dot
+                        .fill(blendColor)
                         .frame(width: 10, height: 10)
                         .padding(.trailing, 10)
                         .transition(.opacity)
@@ -152,8 +150,6 @@ struct DMHomeView: View {
             return "No messages"
         }
     }
-    
-    
 
     // This function blends the red dot with the background color over time
     private func blendRedDot() {
