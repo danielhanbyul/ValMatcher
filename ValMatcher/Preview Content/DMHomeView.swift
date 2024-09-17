@@ -145,6 +145,18 @@ struct DMHomeView: View {
             }
         }
     }
+    
+    private func lastMessageTimestamp(match: Chat) -> String {
+            if let timestamp = match.timestamp {
+                let formatter = RelativeDateTimeFormatter()
+                formatter.unitsStyle = .full
+                return formatter.localizedString(for: timestamp.dateValue(), relativeTo: Date())
+            } else {
+                return "No messages"
+            }
+        }
+    
+    
 
     // This function blends the red dot with the background color over time
     private func blendRedDot() {
