@@ -104,57 +104,54 @@ struct DMHomeView: View {
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
-        HStack {
-            Button(action: {
-                selectedChat = match
-
-                if let currentUserID = currentUserID {
-                    reduceUnreadMessageCount(for: match, currentUserID: currentUserID)
-                }
-
-                if let index = matches.firstIndex(where: { $0.id == match.id }) {
-                    matches[index].hasUnreadMessages = false
-                }
-            }) {
-                HStack {
-                    if let currentUserID = currentUserID {
-                        userImageView(currentUserID: currentUserID, match: match)
-
-                        VStack(alignment: .leading) {
-                            Text(getRecipientName(for: match))
-                                .font(.custom("AvenirNext-Bold", size: 18))
-                                .foregroundColor(.white)
-                        }
-                        .padding()
-                        Spacer()
-
-                        if match.hasUnreadMessages == true {
-                            Circle()
-                                .fill(blendColor) // Apply the blend color for the red dot
-                                .frame(width: 10, height: 10)
-                                .padding(.trailing, 10)
-                                .transition(.opacity)
-                        }
-                    }
-                }
-                .background(Color.black.opacity(0.7))
-                .cornerRadius(12)
-                .padding(.horizontal)
-                .padding(.vertical, 5)
-                .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
+        Button(action: {
+            selectedChat = match
+            if let currentUserID = currentUserID {
+                reduceUnreadMessageCount(for: match, currentUserID: currentUserID)
             }
+            if let index = matches.firstIndex(where: { $0.id == match.id }) {
+                matches[index].hasUnreadMessages = false
+            }
+        }) {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text(getRecipientName(for: match))
+                        .font(.custom("AvenirNext-Bold", size: 18))
+                        .foregroundColor(.white)
+
+                    // Time stamp added here
+                    Text(lastMessageTimestamp(match: match))
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .padding()
+                Spacer()
+
+                if match.hasUnreadMessages == true {
+                    Circle()
+                        .fill(blendColor) // Apply the blend color for the red dot
+                        .frame(width: 10, height: 10)
+                        .padding(.trailing, 10)
+                        .transition(.opacity)
+                }
+            }
+            .background(Color.black.opacity(0.7))
+            .cornerRadius(12)
+            .padding(.horizontal)
+            .padding(.vertical, 5)
+            .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
         }
     }
-    
+
     private func lastMessageTimestamp(match: Chat) -> String {
-            if let timestamp = match.timestamp {
-                let formatter = RelativeDateTimeFormatter()
-                formatter.unitsStyle = .full
-                return formatter.localizedString(for: timestamp.dateValue(), relativeTo: Date())
-            } else {
-                return "No messages"
-            }
+        if let timestamp = match.timestamp {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .full
+            return formatter.localizedString(for: timestamp.dateValue(), relativeTo: Date())
+        } else {
+            return "No messages"
         }
+    }
     
     
 
