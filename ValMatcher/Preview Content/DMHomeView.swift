@@ -36,6 +36,12 @@ struct DMHomeView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         ForEach(matches) { match in
                             matchRow(match: match)
+                                .background(isEditing && selectedMatches.contains(match.id ?? "") ? Color.gray.opacity(0.3) : Color.clear)
+                                .onTapGesture {
+                                    if isEditing {
+                                        toggleSelection(for: match.id ?? "")
+                                    }
+                                }
                         }
                     }
                 }
@@ -71,8 +77,8 @@ struct DMHomeView: View {
                     get: { selectedChat != nil },
                     set: { isActive in
                         if !isActive {
-                            selectedChat = nil
                             print("NavigationLink is trying to reset selectedChat")
+                            selectedChat = nil
                         }
                     }
                 )
@@ -85,14 +91,46 @@ struct DMHomeView: View {
         }
     }
 
+    private func toggleSelection(for matchID: String) {
+        if selectedMatches.contains(matchID) {
+            selectedMatches.remove(matchID)
+        } else {
+            selectedMatches.insert(matchID)
+        }
+    }
+
+    // Updated deletion process
+    func deleteSelectedMatches() {
+        let db = Firestore.firestore()
+        let batch = db.batch()
+        
+        for matchID in selectedMatches {
+            if let index = matches.firstIndex(where: { $0.id == matchID }) {
+                matches.remove(at: index)
+            }
+            let matchRef = db.collection("matches").document(matchID)
+            batch.deleteDocument(matchRef)
+        }
+
+        batch.commit { error in
+            if let error = error {
+                print("Error deleting matches: \(error.localizedDescription)")
+            } else {
+                print("Matches deleted successfully")
+                selectedMatches.removeAll()
+                loadMatches()  // Reload to reflect changes
+            }
+        }
+    }
+
     @ViewBuilder
     private func selectedChatView() -> some View {
         if let chat = selectedChat {
             ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
                 .onAppear {
                     print("ChatView appeared with selectedChat: \(selectedChat?.id ?? "nil")")
-                    markMessagesAsRead(for: chat)
-                    blendRedDot()
+                    markMessagesAsRead(for: chat) // Call the function here
+                    blendRedDot() // Blend the red dot when the chat opens
                 }
                 .onDisappear {
                     print("ChatView disappeared, selectedChat: \(selectedChat?.id ?? "nil")")
@@ -104,52 +142,53 @@ struct DMHomeView: View {
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
-        Button(action: {
-            selectedChat = match
-            if let currentUserID = currentUserID {
-                reduceUnreadMessageCount(for: match, currentUserID: currentUserID)
-            }
-            if let index = matches.firstIndex(where: { $0.id == match.id }) {
-                matches[index].hasUnreadMessages = false
-            }
-        }) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(getRecipientName(for: match))
-                        .font(.custom("AvenirNext-Bold", size: 18))
-                        .foregroundColor(.white)
-                    Text(lastMessageTimestamp(match: match))
-                        .font(.caption)
-                        .foregroundColor(.gray)
+        HStack {
+            Button(action: {
+                if isEditing {
+                    toggleSelection(for: match.id ?? "")
+                } else {
+                    selectedChat = match
+                    if let currentUserID = currentUserID {
+                        reduceUnreadMessageCount(for: match, currentUserID: currentUserID)
+                    }
+                    if let index = matches.firstIndex(where: { $0.id == match.id }) {
+                        matches[index].hasUnreadMessages = false
+                    }
                 }
-                .padding()
-                Spacer()
+            }) {
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(getRecipientName(for: match))
+                            .font(.custom("AvenirNext-Bold", size: 18))
+                            .foregroundColor(.white)
+                    }
+                    .padding()
+                    Spacer()
 
-                if match.hasUnreadMessages == true {
-                    Circle()
-                        .fill(blendColor)
-                        .frame(width: 10, height: 10)
-                        .padding(.trailing, 10)
-                        .transition(.opacity)
+                    if match.hasUnreadMessages == true {
+                        Circle()
+                            .fill(blendColor) // Apply the blend color for the red dot
+                            .frame(width: 10, height: 10)
+                            .padding(.trailing, 10)
+                            .transition(.opacity)
+                    }
+
+                    if isEditing {
+                        Image(systemName: selectedMatches.contains(match.id ?? "") ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(.white)
+                            .padding(.trailing, 10)
+                    }
                 }
+                .background(isEditing && selectedMatches.contains(match.id ?? "") ? Color.gray.opacity(0.3) : Color.black.opacity(0.7))
+                .cornerRadius(12)
+                .padding(.horizontal)
+                .padding(.vertical, 5)
+                .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
             }
-            .background(Color.black.opacity(0.7))
-            .cornerRadius(12)
-            .padding(.horizontal)
-            .padding(.vertical, 5)
-            .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
         }
     }
 
-    private func lastMessageTimestamp(match: Chat) -> String {
-        if let timestamp = match.timestamp {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .full
-            return formatter.localizedString(for: timestamp.dateValue(), relativeTo: Date())
-        } else {
-            return "No messages"
-        }
-    }
+
 
     // This function blends the red dot with the background color over time
     private func blendRedDot() {
@@ -477,16 +516,7 @@ struct DMHomeView: View {
         return uniqueChats
     }
 
-    func deleteSelectedMatches() {
-        for matchID in selectedMatches {
-            if let index = matches.firstIndex(where: { $0.id == matchID }) {
-                let match = matches[index]
-                deleteMatch(match)
-                matches.remove(at: index)
-            }
-        }
-        selectedMatches.removeAll()
-    }
+    
 
     func deleteMatch(_ match: Chat) {
         guard let matchID = match.id else {
