@@ -22,6 +22,7 @@ struct Chat: Codable, Identifiable, Hashable {
     var user2Image: String?
     var user2Name: String?
     var unreadMessages: [String: Int]?
+    var lastMessageSenderID: String?
 }
 
 

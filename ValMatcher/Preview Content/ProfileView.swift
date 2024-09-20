@@ -43,20 +43,7 @@ struct ProfileView: View {
 
     var body: some View {
         VStack {
-            HStack {
-                backButton
-                Spacer()
-                titleText
-                Spacer()
-                if isEditing {
-                    saveButton // Save button only visible during editing
-                }
-                editButton
-                settingsButton
-            }
-            .padding()
-            .background(Color.black)
-            .frame(height: 44)
+            headerView
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -64,7 +51,7 @@ struct ProfileView: View {
                     
                     if isEditing {
                         editableMediaList
-                        addMediaButton
+                        addMediaAndSaveButtons
                         deleteSelectedButton
                     } else {
                         displayMediaList
@@ -101,6 +88,23 @@ struct ProfileView: View {
     }
     
     // MARK: - Components
+
+    private var headerView: some View {
+        HStack {
+            backButton
+            Spacer()
+            titleText
+            Spacer()
+            // Remove the saveButton from here
+            editButton
+            settingsButton
+        }
+        .padding()
+        .background(Color.black)
+        .frame(height: 44)
+    }
+
+
     private var backButton: some View {
         Button(action: {
             if isEditing {
@@ -121,7 +125,6 @@ struct ProfileView: View {
             .font(.custom("AvenirNext-Bold", size: 20))
     }
 
-    // Save button during editing
     private var saveButton: some View {
         Button(action: {
             saveProfile()
@@ -129,6 +132,11 @@ struct ProfileView: View {
             Text("Save")
                 .foregroundColor(.white)
                 .font(.custom("AvenirNext-Bold", size: 18))
+                .padding(.vertical, 10)
+                .padding(.horizontal, 20)
+                .background(Color.green)
+                .cornerRadius(8)
+                .shadow(radius: 3)
         }
     }
 
@@ -277,13 +285,28 @@ struct ProfileView: View {
         Button(action: {
             self.showingImagePicker = true
         }) {
-            Text("Add Images/Videos")
+            Label("Add Media", systemImage: "plus.circle.fill")
+                .font(.custom("AvenirNext-Bold", size: 18))
                 .foregroundColor(.white)
-                .padding()
+                .padding(.vertical, 10)
+                .padding(.horizontal, 20)
                 .background(Color.blue)
                 .cornerRadius(8)
+                .shadow(radius: 3)
         }
         .disabled(additionalMedia.count >= maxMediaCount)
+    }
+
+    // New combined view for Add and Save buttons
+    private var addMediaAndSaveButtons: some View {
+        HStack {
+            Spacer()
+            addMediaButton
+            Spacer()
+            saveButton
+            Spacer()
+        }
+        .padding(.vertical, 15)
     }
 
     private var deleteSelectedButton: some View {
