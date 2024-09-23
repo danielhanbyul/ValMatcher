@@ -24,7 +24,7 @@ struct ProfileView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var isEditing = false
     @State private var showingImagePicker = false
-    @State private var newMedia: [MediaItem] = []
+    @State private var newMedia: [MediaItem] = [] // Temporarily store media before upload
     @State private var selectedMediaItem: MediaItem?
     @State private var additionalMedia: [MediaItem] = []
     @State private var updatedAnswers: [String: String] = [:]
@@ -34,24 +34,51 @@ struct ProfileView: View {
     @State private var uploadProgress: Double = 0.0
     @State private var isUploading: Bool = false
     @State private var uploadMessage: String = ""
-    
+    @State private var showConfirmButton: Bool = true // New state to control confirm button visibility
+
     // Updated to use IdentifiableURL for full-screen video
     @State private var selectedVideoURL: IdentifiableURL?
 
-    let maxMediaCount = 4
+    let maxMediaCount = 3 // Limit to 3 media items
     let maxVideoDuration: Double = 60.0
 
     var body: some View {
         VStack {
             headerView
-            
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     UserCardView(user: viewModel.user)
-                    
+
                     if isEditing {
+                        // Show temporarily selected media before upload
+                        if !newMedia.isEmpty {
+                            Text("Selected Media (Tap to remove):")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            
+                            // Show new media to the user before uploading
+                            HStack {
+                                ForEach(newMedia.indices, id: \.self) { index in
+                                    let media = newMedia[index]
+                                    mediaThumbnailView(for: media)
+                                        .onTapGesture {
+                                            newMedia.remove(at: index) // Remove selected media on tap
+                                            showConfirmButton = true // Show the confirm button again if media is removed
+                                        }
+                                }
+                            }
+                        }
+                        
+                        // Media list and buttons
                         editableMediaList
-                        addMediaAndSaveButtons
+                        if newMedia.count < maxMediaCount || showConfirmButton {
+                            addMediaAndConfirmButtons // Show Add and Confirm buttons if media count is less than 3 or confirm is not clicked yet
+                        } else {
+                            Text("You’ve added 3 media items.")
+                                .font(.custom("AvenirNext-Bold", size: 16))
+                                .foregroundColor(.green)
+                        }
                         deleteSelectedButton
                     } else {
                         displayMediaList
@@ -70,9 +97,11 @@ struct ProfileView: View {
             ImagePicker(selectedMediaItem: $selectedMediaItem)
                 .onDisappear {
                     if let selectedItem = selectedMediaItem {
-                        newMedia.append(selectedItem)
+                        // Add selected media to newMedia array (limit to 3)
+                        if newMedia.count < maxMediaCount {
+                            newMedia.append(selectedItem)
+                        }
                     }
-                    saveMedia()
                 }
         }
         .sheet(isPresented: $showingSettings) {
@@ -86,8 +115,73 @@ struct ProfileView: View {
             initializeEditValues()
         }
     }
-    
+
     // MARK: - Components
+
+    // Media thumbnails for preview
+    private func mediaThumbnailView(for media: MediaItem) -> some View {
+        VStack {
+            if media.type == .image {
+                KFImage(media.url)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 100, height: 100)  // Fixed size
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            } else if media.type == .video {
+                VideoPlayer(player: AVPlayer(url: media.url))
+                    .frame(width: 100, height: 100)  // Fixed size
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+
+    private var addMediaButton: some View {
+        Button(action: {
+            self.showingImagePicker = true
+        }) {
+            Label("Select Media", systemImage: "plus.circle.fill")
+                .font(.custom("AvenirNext-Bold", size: 18))
+                .foregroundColor(.white)
+                .padding(.vertical, 10)
+                .padding(.horizontal, 20)
+                .background(Color.blue)
+                .cornerRadius(8)
+                .shadow(radius: 3)
+        }
+        .disabled(newMedia.count >= maxMediaCount) // Disable after selecting 3 media items
+    }
+
+    // Add Confirm button to trigger upload
+    private var confirmUploadButton: some View {
+        Button(action: {
+            saveMedia() // Trigger upload
+            showConfirmButton = false // Hide the confirm button after clicking it
+        }) {
+            Text("Confirm Upload")
+                .foregroundColor(.white)
+                .font(.custom("AvenirNext-Bold", size: 18))
+                .padding(.vertical, 10)
+                .padding(.horizontal, 20)
+                .background(newMedia.isEmpty ? Color.gray : Color.green) // Disabled if no media selected
+                .cornerRadius(8)
+                .shadow(radius: 3)
+        }
+        .disabled(newMedia.isEmpty) // Disable if no media selected
+    }
+
+    // New combined view for Add and Confirm buttons
+    private var addMediaAndConfirmButtons: some View {
+        HStack {
+            Spacer()
+            addMediaButton
+            Spacer()
+            if showConfirmButton { // Only show confirm button if it has not been clicked yet
+                confirmUploadButton
+            }
+            Spacer()
+        }
+        .padding(.vertical, 15)
+    }
 
     private var headerView: some View {
         HStack {
@@ -103,7 +197,6 @@ struct ProfileView: View {
         .background(Color.black)
         .frame(height: 44)
     }
-
 
     private var backButton: some View {
         Button(action: {
@@ -123,21 +216,6 @@ struct ProfileView: View {
         Text("Profile")
             .foregroundColor(.white)
             .font(.custom("AvenirNext-Bold", size: 20))
-    }
-
-    private var saveButton: some View {
-        Button(action: {
-            saveProfile()
-        }) {
-            Text("Save")
-                .foregroundColor(.white)
-                .font(.custom("AvenirNext-Bold", size: 18))
-                .padding(.vertical, 10)
-                .padding(.horizontal, 20)
-                .background(Color.green)
-                .cornerRadius(8)
-                .shadow(radius: 3)
-        }
     }
 
     private var editButton: some View {
@@ -190,7 +268,6 @@ struct ProfileView: View {
                 Spacer()
                 ForEach(additionalMedia.indices, id: \.self) { index in
                     let media = additionalMedia[index]
-
                     VStack {
                         if media.type == .image {
                             KFImage(media.url)
@@ -253,12 +330,6 @@ struct ProfileView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
                             .shadow(radius: 5)
-                            .onAppear {
-                                let playerItem = AVPlayerItem(url: media.url)
-                                playerItem.preferredForwardBufferDuration = 5  // Preload 5 seconds of video
-                                let player = AVQueuePlayer(playerItem: playerItem)
-                                player.isMuted = false
-                            }
                     }
 
                     Spacer()
@@ -279,34 +350,6 @@ struct ProfileView: View {
             }
         }
         .padding(.horizontal)
-    }
-
-    private var addMediaButton: some View {
-        Button(action: {
-            self.showingImagePicker = true
-        }) {
-            Label("Add Media", systemImage: "plus.circle.fill")
-                .font(.custom("AvenirNext-Bold", size: 18))
-                .foregroundColor(.white)
-                .padding(.vertical, 10)
-                .padding(.horizontal, 20)
-                .background(Color.blue)
-                .cornerRadius(8)
-                .shadow(radius: 3)
-        }
-        .disabled(additionalMedia.count >= maxMediaCount)
-    }
-
-    // New combined view for Add and Save buttons
-    private var addMediaAndSaveButtons: some View {
-        HStack {
-            Spacer()
-            addMediaButton
-            Spacer()
-            saveButton
-            Spacer()
-        }
-        .padding(.vertical, 15)
     }
 
     private var deleteSelectedButton: some View {
@@ -676,24 +719,5 @@ struct FullScreenVideoPlayer: View {
                 Spacer()
             }
         }
-    }
-}
-
-
-import UIKit
-
-struct AppUtility {
-    
-    // Lock orientation to a specific one (portrait, landscape, or all)
-    static func lockOrientation(_ orientation: UIInterfaceOrientationMask) {
-        if let delegate = UIApplication.shared.delegate as? AppDelegate {
-            delegate.orientationLock = orientation
-        }
-    }
-
-    // Lock orientation with specific rotation
-    static func lockOrientation(_ orientation: UIInterfaceOrientationMask, andRotateTo rotateOrientation: UIInterfaceOrientation) {
-        self.lockOrientation(orientation)
-        UIDevice.current.setValue(rotateOrientation.rawValue, forKey: "orientation")
     }
 }
