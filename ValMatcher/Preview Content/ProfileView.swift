@@ -34,7 +34,7 @@ struct ProfileView: View {
     @State private var uploadProgress: Double = 0.0
     @State private var isUploading: Bool = false
     @State private var uploadMessage: String = ""
-    @State private var showConfirmButton: Bool = true // New state to control confirm button visibility
+    @State private var showConfirmButton: Bool = true // Controls confirm button visibility
 
     // Updated to use IdentifiableURL for full-screen video
     @State private var selectedVideoURL: IdentifiableURL?
@@ -97,10 +97,11 @@ struct ProfileView: View {
             ImagePicker(selectedMediaItem: $selectedMediaItem)
                 .onDisappear {
                     if let selectedItem = selectedMediaItem {
-                        // Add selected media to newMedia array (limit to 3)
-                        if newMedia.count < maxMediaCount {
+                        // Ensure no duplicates are added to newMedia
+                        if !newMedia.contains(where: { $0.url == selectedItem.url }) {
                             newMedia.append(selectedItem)
                         }
+                        selectedMediaItem = nil // Clear the selectedMediaItem after adding to prevent duplication
                     }
                 }
         }
