@@ -35,6 +35,7 @@ struct ProfileView: View {
     @State private var isUploading: Bool = false
     @State private var uploadMessage: String = ""
     @State private var showConfirmButton: Bool = true // Controls confirm button visibility
+    @State private var confirmedMediaCount: Int = 0 // Track the confirmed media count
 
     // Updated to use IdentifiableURL for full-screen video
     @State private var selectedVideoURL: IdentifiableURL?
@@ -65,6 +66,7 @@ struct ProfileView: View {
                                         .onTapGesture {
                                             newMedia.remove(at: index) // Remove selected media on tap
                                             showConfirmButton = true // Show the confirm button again if media is removed
+                                            confirmedMediaCount = additionalMedia.count + newMedia.count
                                         }
                                 }
                             }
@@ -72,13 +74,16 @@ struct ProfileView: View {
                         
                         // Media list and buttons
                         editableMediaList
-                        if newMedia.count < maxMediaCount || showConfirmButton {
-                            addMediaAndConfirmButtons // Show Add and Confirm buttons if media count is less than 3 or confirm is not clicked yet
+                        
+                        // Show confirm button if less than 3 media items are confirmed
+                        if confirmedMediaCount < maxMediaCount {
+                            addMediaAndConfirmButtons
                         } else {
-                            Text("You’ve added 3 media items.")
+                            Text("All 3 media items uploaded.")
                                 .font(.custom("AvenirNext-Bold", size: 16))
                                 .foregroundColor(.green)
                         }
+                        
                         deleteSelectedButton
                     } else {
                         displayMediaList
@@ -149,14 +154,13 @@ struct ProfileView: View {
                 .cornerRadius(8)
                 .shadow(radius: 3)
         }
-        .disabled(newMedia.count >= maxMediaCount) // Disable after selecting 3 media items
+        .disabled(newMedia.count + confirmedMediaCount >= maxMediaCount) // Disable after selecting 3 media items
     }
 
     // Add Confirm button to trigger upload
     private var confirmUploadButton: some View {
         Button(action: {
             saveMedia() // Trigger upload
-            showConfirmButton = false // Hide the confirm button after clicking it
         }) {
             Text("Confirm Upload")
                 .foregroundColor(.white)
@@ -176,9 +180,7 @@ struct ProfileView: View {
             Spacer()
             addMediaButton
             Spacer()
-            if showConfirmButton { // Only show confirm button if it has not been clicked yet
-                confirmUploadButton
-            }
+            confirmUploadButton
             Spacer()
         }
         .padding(.vertical, 15)
@@ -401,6 +403,7 @@ struct ProfileView: View {
         additionalMedia = viewModel.user.mediaItems ?? []
         updatedAnswers = viewModel.user.answers
         selectedMediaIndices.removeAll()
+        confirmedMediaCount = additionalMedia.count // Track initially confirmed media items
     }
 
     private func saveProfile() {
@@ -446,6 +449,7 @@ struct ProfileView: View {
                     )
                     self.newMedia.removeAll()
                     
+                    confirmedMediaCount = additionalMedia.count // Update confirmed media count
                     saveMediaURLsToFirestore(mediaItems)
                 } catch {
                     print("Failed to upload media: \(error)")
@@ -469,6 +473,7 @@ struct ProfileView: View {
             updatedAnswers: self.updatedAnswers
         )
         
+        confirmedMediaCount = additionalMedia.count + newMedia.count // Recalculate confirmed count
         deleteMediaFromStorageAndFirestore(mediaItem: mediaItem)
     }
 
@@ -490,6 +495,7 @@ struct ProfileView: View {
             updatedAnswers: self.updatedAnswers
         )
         
+        confirmedMediaCount = additionalMedia.count + newMedia.count // Recalculate confirmed count
         for mediaItem in mediaItemsToDelete {
             deleteMediaFromStorageAndFirestore(mediaItem: mediaItem)
         }
