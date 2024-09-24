@@ -155,20 +155,17 @@ struct ChatView: View {
             "isRead": false
         ]
 
-        let messageRef = db.collection("matches").document(matchID).collection("messages")
-        messageRef.addDocument(data: messageData) { error in
+        db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
             } else {
                 self.newMessage = ""
                 self.scrollToBottom = true
-                db.collection("matches").document(matchID).updateData([
-                    "lastMessageTimestamp": FieldValue.serverTimestamp()
-                ])
+
+                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
             }
         }
     }
-
 
     private func setupChatListener() {
         let db = Firestore.firestore()
