@@ -13,7 +13,7 @@ import FirebaseFirestoreSwift
 import UserNotifications
 
 struct DMHomeView: View {
-    @State private var matches = [Chat]()
+    @State var matches: [Chat] = [] // Use @State for reactive updates
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
@@ -25,6 +25,8 @@ struct DMHomeView: View {
     @State private var bannerMessage = ""
     @State private var previousSelectedChatID: String? // Keep track of the chat to prevent reset
     @State private var blendColor = Color.red // The color for the red dot
+    @State private var isLoaded = false // To prevent multiple reloads
+
 
     var body: some View {
         ZStack {
@@ -67,8 +69,16 @@ struct DMHomeView: View {
         .onAppear {
             setupListeners()
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            setupListeners()
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshChatList"))) { notification in
+            if let chatID = notification.object as? String {
+                print("Received notification to refresh chat: \(chatID)")
+                if let index = matches.firstIndex(where: { $0.id == chatID }) {
+                    withAnimation {
+                        matches[index].hasUnreadMessages = false
+                        print("Red dot should disappear for chatID: \(chatID)")
+                    }
+                }
+            }
         }
         .background(
             NavigationLink(
@@ -98,12 +108,14 @@ struct DMHomeView: View {
             selectedMatches.insert(matchID)
         }
     }
+    
+    
 
-    // Updated deletion process
+    // Deletion of selected matches
     func deleteSelectedMatches() {
         let db = Firestore.firestore()
         let batch = db.batch()
-        
+
         for matchID in selectedMatches {
             if let index = matches.firstIndex(where: { $0.id == matchID }) {
                 matches.remove(at: index)
@@ -129,30 +141,39 @@ struct DMHomeView: View {
             ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
                 .onAppear {
                     print("ChatView appeared with selectedChat: \(selectedChat?.id ?? "nil")")
-                    markMessagesAsRead(for: chat) // Call the function here
-                    blendRedDot() // Blend the red dot when the chat opens
+                    
+                    // Check if the selected chat has unread messages and blend the red dot
+                    if let index = matches.firstIndex(where: { $0.id == chat.id }), matches[index].hasUnreadMessages == true {
+                        markMessagesAsRead(for: chat) // Mark the messages as read
+                        blendRedDot(for: index) // Blend the red dot specifically for this chat
+                    }
                 }
                 .onDisappear {
                     print("ChatView disappeared, selectedChat: \(selectedChat?.id ?? "nil")")
+                    NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: chat.id)
                 }
         } else {
             EmptyView()
         }
     }
 
+
+
+
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
         HStack {
             Button(action: {
-                if isEditing {
-                    toggleSelection(for: match.id ?? "")
-                } else {
-                    selectedChat = match
-                    if let currentUserID = currentUserID {
-                        reduceUnreadMessageCount(for: match, currentUserID: currentUserID)
-                    }
+                selectedChat = match
+                
+                // Check if the chat has unread messages and mark it as read
+                if match.hasUnreadMessages ?? false {
                     if let index = matches.firstIndex(where: { $0.id == match.id }) {
-                        matches[index].hasUnreadMessages = false
+                        withAnimation {
+                            // Mark the message as read and blend the red dot
+                            matches[index].hasUnreadMessages = false
+                            blendRedDot(for: index) // Blend red dot specifically for this chat
+                        }
                     }
                 }
             }) {
@@ -165,21 +186,16 @@ struct DMHomeView: View {
                     .padding()
                     Spacer()
 
-                    if match.hasUnreadMessages == true {
+                    // Display the red dot if there are unread messages
+                    if match.hasUnreadMessages ?? false {
                         Circle()
-                            .fill(blendColor) // Apply the blend color for the red dot
+                            .fill(blendColor) // Blend color will be animated
                             .frame(width: 10, height: 10)
                             .padding(.trailing, 10)
-                            .transition(.opacity)
-                    }
-
-                    if isEditing {
-                        Image(systemName: selectedMatches.contains(match.id ?? "") ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(.white)
-                            .padding(.trailing, 10)
+                            .transition(.opacity) // Fades out smoothly
                     }
                 }
-                .background(isEditing && selectedMatches.contains(match.id ?? "") ? Color.gray.opacity(0.3) : Color.black.opacity(0.7))
+                .background(Color.black.opacity(0.7))
                 .cornerRadius(12)
                 .padding(.horizontal)
                 .padding(.vertical, 5)
@@ -189,57 +205,21 @@ struct DMHomeView: View {
     }
 
 
-
-    // This function blends the red dot with the background color over time
-    private func blendRedDot() {
+    private func blendRedDot(for index: Int) {
         withAnimation(.easeInOut(duration: 1.0)) {
-            blendColor = Color.black.opacity(0.7) // Blend with the background color
+            // Set blendColor to black to blend the red dot with the background
+            blendColor = Color.black.opacity(0.7) // Background color of the row
         }
     }
 
-    // This function restores the red dot when a new message arrives
+
+    // Function to restore the red dot
     private func restoreRedDot() {
         withAnimation(.easeInOut(duration: 1.0)) {
             blendColor = Color.red // Restore the red dot color
         }
     }
 
-    private func reduceUnreadMessageCount(for match: Chat, currentUserID: String) {
-        guard let matchID = match.id else { return }
-
-        let db = Firestore.firestore()
-        let messagesRef = db.collection("matches").document(matchID).collection("messages")
-
-        messagesRef.whereField("senderID", isNotEqualTo: currentUserID)
-            .whereField("isRead", isEqualTo: false)
-            .getDocuments { snapshot, error in
-                if let error = error {
-                    print("Error fetching unread messages: \(error.localizedDescription)")
-                    return
-                }
-
-                guard let documents = snapshot?.documents, !documents.isEmpty else {
-                    return
-                }
-
-                let batch = db.batch()
-                documents.forEach { document in
-                    batch.updateData(["isRead": true], forDocument: document.reference)
-                }
-
-                batch.commit { error in
-                    if let error = error {
-                        print("Error marking messages as read: \(error.localizedDescription)")
-                    } else {
-                        if let index = self.matches.firstIndex(where: { $0.id == match.id }) {
-                            self.matches[index].hasUnreadMessages = false
-                        }
-                    }
-                }
-            }
-    }
-
-    // The missing markMessagesAsRead function
     private func markMessagesAsRead(for chat: Chat) {
         guard let matchID = chat.id, let currentUserID = currentUserID else { return }
 
@@ -268,73 +248,38 @@ struct DMHomeView: View {
                         if let index = self.matches.firstIndex(where: { $0.id == chat.id }) {
                             self.matches[index].hasUnreadMessages = false
                         }
-                        NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
+                        NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
                     }
                 }
             }
         }
     }
 
+    // Helper function to get the recipient's name
     private func getRecipientName(for match: Chat?) -> String {
         guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
         return currentUserID == match.user1 ? (match.user2Name ?? "Unknown User") : (match.user1Name ?? "Unknown User")
     }
 
-    @ViewBuilder
-    private func userImageView(currentUserID: String, match: Chat) -> some View {
-        let currentUserImage = (currentUserID == match.user1 ? match.user2Image : match.user1Image) ?? "https://example.com/default-image.jpg"
-        if let url = URL(string: currentUserImage) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .empty:
-                    ProgressView()
-                        .frame(width: 50, height: 50)
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 50, height: 50)
-                        .clipShape(Circle())
-                case .failure:
-                    Image(systemName: "person.circle.fill")
-                        .resizable()
-                        .frame(width: 50, height: 50)
-                @unknown default:
-                    EmptyView()
-                }
-            }
-        } else {
-            Image(systemName: "person.circle.fill")
-                .resizable()
-                .frame(width: 50, height: 50)
-        }
-    }
-
+    // Load the matches and set up listeners
     func setupListeners() {
-        let currentChatID = selectedChat?.id
         loadMatches()
-
-        if let currentChatID = currentChatID {
-            self.selectedChat = matches.first(where: { $0.id == currentChatID })
-            print("Restored selectedChat after listener update: \(selectedChat?.id ?? "nil")")
-        }
     }
 
     func loadMatches() {
-        guard let currentUserID = currentUserID else {
-            print("Error: currentUserID is nil")
+        // Check if matches are already loaded
+        guard !isLoaded, let currentUserID = currentUserID else {
             return
         }
 
         let db = Firestore.firestore()
-
         let queries = [
             db.collection("matches").whereField("user1", isEqualTo: currentUserID),
             db.collection("matches").whereField("user2", isEqualTo: currentUserID)
         ]
 
         for query in queries {
-            query.order(by: "timestamp", descending: true).addSnapshotListener { snapshot, error in
+            query.order(by: "timestamp", descending: true).getDocuments { snapshot, error in
                 if let error = error {
                     print("Error loading matches: \(error.localizedDescription)")
                     return
@@ -346,19 +291,19 @@ struct DMHomeView: View {
                 }
 
                 var newMatches = [Chat]()
-
                 for document in documents {
                     do {
                         var match = try document.data(as: Chat.self)
-
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
                             newMatches.append(updatedMatch)
 
                             if newMatches.count == documents.count {
                                 fetchUserNames(for: newMatches) { updatedMatches in
-                                    self.matches = self.mergeAndRemoveDuplicates(existingMatches: self.matches, newMatches: updatedMatches)
+                                    self.matches = updatedMatches
                                     self.updateUnreadMessagesCount(from: self.matches)
                                     print("Loaded matches: \(self.matches)")
+                                    // Mark as loaded to prevent reloading
+                                    self.isLoaded = true
                                 }
                             }
                         }
@@ -370,6 +315,8 @@ struct DMHomeView: View {
         }
     }
 
+
+    // Helper function to update unread message count
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
         let db = Firestore.firestore()
 
@@ -398,6 +345,7 @@ struct DMHomeView: View {
             }
     }
 
+    // Helper function to fetch user names
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
         var updatedMatches = matches
         let dispatchGroup = DispatchGroup()
@@ -436,6 +384,7 @@ struct DMHomeView: View {
         }
     }
 
+    // Helper function to update the unread messages count
     private func updateUnreadMessagesCount(from matches: [Chat]) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         var count = 0
@@ -478,58 +427,8 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-
             self.matches = updatedMatches.sorted {
                 ($0.timestamp?.dateValue() ?? Date.distantPast) > ($1.timestamp?.dateValue() ?? Date.distantPast)
-            }
-        }
-    }
-
-    private func mergeAndRemoveDuplicates(existingMatches: [Chat], newMatches: [Chat]) -> [Chat] {
-        var combinedMatches = existingMatches
-
-        for newMatch in newMatches {
-            if let index = combinedMatches.firstIndex(where: { $0.id == newMatch.id }) {
-                combinedMatches[index] = newMatch
-            } else {
-                combinedMatches.append(newMatch)
-            }
-        }
-
-        return removeDuplicateChats(from: combinedMatches)
-    }
-
-    private func removeDuplicateChats(from chats: [Chat]) -> [Chat] {
-        var uniqueChats = [Chat]()
-        var seenPairs = Set<Set<String>>()
-
-        for chat in chats {
-            if let user1 = chat.user1, let user2 = chat.user2 {
-                let userPair = Set([user1, user2])
-                if !seenPairs.contains(userPair) {
-                    uniqueChats.append(chat)
-                    seenPairs.insert(userPair)
-                }
-            }
-        }
-
-        return uniqueChats
-    }
-
-    
-
-    func deleteMatch(_ match: Chat) {
-        guard let matchID = match.id else {
-            print("Match ID is missing")
-            return
-        }
-
-        let db = Firestore.firestore()
-        db.collection("matches").document(matchID).delete { error in
-            if let error = error {
-                print("Error deleting match: \(error.localizedDescription)")
-            } else {
-                print("Match deleted successfully")
             }
         }
     }

@@ -103,6 +103,12 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear(perform: setupChatListener)
+        .onDisappear {
+            print("ChatView disappeared, matchID: \(matchID)")
+            // Notify DMHomeView to update the red dot for this specific chat
+            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+        }
+
         .onDisappear(perform: removeMessagesListener)
     }
 
