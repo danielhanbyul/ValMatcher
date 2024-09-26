@@ -45,7 +45,7 @@ struct ProfileView: View {
 
     var body: some View {
         VStack {
-            headerView
+    headerView
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -188,17 +188,33 @@ struct ProfileView: View {
 
     private var headerView: some View {
         HStack {
-            backButton
+            backButton // Always show back button
             Spacer()
-            titleText
+            if !isEditing {
+                titleText // Show profile title only if not editing
+            }
             Spacer()
-            // Remove the saveButton from here
-            editButton
-            settingsButton
+            if isEditing {
+                saveButton // Show save button in edit mode
+            } else {
+                editButton // Show edit button only if not editing
+                settingsButton // Hide settings button when editing
+            }
         }
         .padding()
         .background(Color.black)
         .frame(height: 44)
+    }
+
+    private var saveButton: some View {
+        Button(action: {
+            saveProfile() // Call the save function to save user data
+        }) {
+            Text("Save")
+                .foregroundColor(.white)
+                .font(.custom("AvenirNext-Bold", size: 18))
+        }
+        .padding(.trailing, 10)
     }
 
     private var backButton: some View {
@@ -235,7 +251,8 @@ struct ProfileView: View {
             }
         }
     }
-
+    
+   
     private var settingsButton: some View {
         Button(action: {
             showingSettings.toggle()
@@ -371,6 +388,9 @@ struct ProfileView: View {
             }
         }
     }
+    
+
+   
 
     private var questionAnswersSection: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -575,6 +595,8 @@ struct ProfileView: View {
             }
         }
     }
+
+
 
     private func uploadVideoToFirebase(videoURL: URL) async throws -> URL {
         let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(UUID().uuidString).mp4")
