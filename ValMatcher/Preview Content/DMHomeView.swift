@@ -228,22 +228,16 @@ struct DMHomeView: View {
         guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
         let userID = currentUserID == match.user1 ? match.user2 : match.user1
         
-        if let cachedName = userNamesCache[userID ?? ""] {
+        if let cachedName = getUsernameFromCache(userID: userID ?? "") {
             return cachedName
         }
 
         // If not in cache, fetch the username
         if let userID = userID {
-            Firestore.firestore().collection("users").document(userID).getDocument { document, error in
-                if let document = document, document.exists {
-                    let name = document.data()?["name"] as? String ?? "Unknown User"
-                    self.userNamesCache[userID] = name
-                } else {
-                    self.userNamesCache[userID] = "Unknown User"
-                }
-            }
+            fetchAndCacheUserName(for: userID) { _ in }
         }
-        return "Unknown User"
+        
+        return "Unknown User" // Fallback in case the name isn't fetched yet
     }
 
     func setupListeners() {
@@ -405,20 +399,38 @@ struct DMHomeView: View {
     }
 
     private func fetchAndCacheUserName(for userID: String, completion: @escaping (String) -> Void) {
-        if let cachedName = userNamesCache[userID] {
+        // Check if the username is already cached in UserDefaults
+        if let cachedName = getUsernameFromCache(userID: userID) {
             completion(cachedName)
-        } else {
-            Firestore.firestore().collection("users").document(userID).getDocument { document, error in
-                if let document = document, document.exists {
-                    let name = document.data()?["name"] as? String ?? "Unknown User"
-                    self.userNamesCache[userID] = name
-                    completion(name)
-                } else {
-                    self.userNamesCache[userID] = "Unknown User"
-                    completion("Unknown User")
-                }
+            return
+        }
+        
+        // If not cached, fetch from Firestore and cache it
+        Firestore.firestore().collection("users").document(userID).getDocument { document, error in
+            if let document = document, document.exists {
+                let name = document.data()?["name"] as? String ?? "Unknown User"
+                self.userNamesCache[userID] = name
+                saveUsernameToCache(userID: userID, username: name)  // Save to persistent cache
+                completion(name)
+            } else {
+                self.userNamesCache[userID] = "Unknown User"
+                saveUsernameToCache(userID: userID, username: "Unknown User")  // Cache "Unknown User" to prevent repeated calls
+                completion("Unknown User")
             }
         }
+    }
+
+    // Save username to persistent cache
+    private func saveUsernameToCache(userID: String, username: String) {
+        var cachedUsernames = UserDefaults.standard.dictionary(forKey: "cachedUsernames") as? [String: String] ?? [:]
+        cachedUsernames[userID] = username
+        UserDefaults.standard.setValue(cachedUsernames, forKey: "cachedUsernames")
+    }
+
+    // Retrieve username from persistent cache
+    private func getUsernameFromCache(userID: String) -> String? {
+        let cachedUsernames = UserDefaults.standard.dictionary(forKey: "cachedUsernames") as? [String: String]
+        return cachedUsernames?[userID]
     }
 
     private func updateUnreadMessagesCount(from matches: [Chat]) {
@@ -469,4 +481,3 @@ struct DMHomeView: View {
         }
     }
 }
- 
