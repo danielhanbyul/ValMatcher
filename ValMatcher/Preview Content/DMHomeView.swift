@@ -282,7 +282,8 @@ struct DMHomeView: View {
                 group.notify(queue: .main) {
                     self.fetchUserNames(for: newMatches) { updatedMatches in
                         self.matches = updatedMatches
-                        self.sortChatsByRecency()
+                        // Remove this sorting unless a new message is received
+                        // self.sortChatsByRecency()
                         self.updateUnreadMessagesCount(from: self.matches)
                         self.isLoaded = true
                     }
@@ -317,7 +318,12 @@ struct DMHomeView: View {
                         var match = try document.data(as: Chat.self)
                         group.enter()
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
-                            updatedMatches.append(updatedMatch)
+                            // Update only the specific match that has changed, not all
+                            if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
+                                self.matches[index] = updatedMatch
+                            } else {
+                                self.matches.append(updatedMatch)
+                            }
                             group.leave()
                         }
                     } catch {
@@ -326,13 +332,14 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
-                    self.matches = updatedMatches
-                    self.sortChatsByRecency()
+                    // Sort only when new messages or chat creation occurs
+                    // self.sortChatsByRecency()
                     print("Real-time updated matches: \(self.matches)")
                 }
             }
         }
     }
+
 
     // Sort chats by the latest message timestamp without animation
     private func sortChatsByRecency() {
@@ -367,6 +374,15 @@ struct DMHomeView: View {
                 completion(matchCopy)
             }
     }
+    
+    private func handleNewMessageInChat(_ chatID: String) {
+        if let index = matches.firstIndex(where: { $0.id == chatID }) {
+            // Sort only that specific chat by recency without moving the entire list
+            let chat = matches.remove(at: index)
+            matches.insert(chat, at: 0)
+        }
+    }
+
 
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
         var updatedMatches = matches
