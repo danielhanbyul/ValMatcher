@@ -95,7 +95,7 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .imageScale(.medium)
                             .overlay(
-                                BadgeView(count: notificationCount)
+                                BadgeView(count: notificationCount)  // Badge for notifications
                                     .offset(x: 12, y: -12)
                             )
                     }
@@ -104,8 +104,8 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .imageScale(.medium)
                             .overlay(
-                                BadgeView(count: unreadMessagesCount)
-                                    .offset(x: 12, y: -12)
+                                BadgeView(count: unreadMessagesCount)  // Badge for unread messages
+                                    .offset(x: 12, y: -12)  // Ensure it displays correctly on the icon
                             )
                     }
                     NavigationLink(destination: ProfileView(viewModel: userProfileViewModel, isSignedIn: $isSignedIn)) {
@@ -116,6 +116,7 @@ struct ContentView: View {
                 }
                 .padding(.top, 10)
             }
+
         }
         .alert(isPresented: $showAlert) {
             Alert(title: Text("Notification"), message: Text(alertMessage), dismissButton: .default(Text("OK")) {
@@ -125,14 +126,19 @@ struct ContentView: View {
         .onAppear {
             if isSignedIn {
                 // Reset interacted users and fetch all users
-                self.interactedUsers.removeAll() // Optionally reset interacted users
-                loadInteractedUsers { success in // Load interacted users if necessary
+                self.interactedUsers.removeAll()
+                loadInteractedUsers { success in
                     if success {
-                        fetchAllUsers() // Fetch users after resetting
+                        fetchAllUsers()
                     }
                 }
+                
+                // Fetch unread messages as soon as ContentView loads
+                preloadUnreadMessagesCount()
             }
         }
+
+
 
 
         .onChange(of: users) { _ in
@@ -182,6 +188,68 @@ struct ContentView: View {
                 .padding()
         }
     }
+    
+    private func countUnreadMessages(in db: Firestore, matchID: String, currentUserID: String) {
+        let messageQuery = db.collection("matches").document(matchID).collection("messages")
+            .order(by: "timestamp")
+
+        messageQuery.getDocuments { (querySnapshot, error) in
+            if let error = error {
+                print("Error fetching messages: \(error.localizedDescription)")
+                return
+            }
+
+            querySnapshot?.documents.forEach { document in
+                let senderID = document.data()["senderID"] as? String
+                let isRead = document.data()["isRead"] as? Bool ?? true
+
+                if senderID != currentUserID && !isRead {
+                    self.unreadMessagesCount += 1  // Increment the unread messages count
+                }
+            }
+        }
+    }
+
+    
+    private func preloadUnreadMessagesCount() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("Error: User not authenticated")
+            return
+        }
+
+        let db = Firestore.firestore()
+        let matchesRef = db.collection("matches")
+
+        // Listen for changes in the matches collection where the current user is involved
+        matchesRef.whereField("user1", isEqualTo: currentUserID).addSnapshotListener { snapshot, error in
+            if let error = error {
+                print("Error fetching matches: \(error)")
+                return
+            }
+
+            // Reset unreadMessagesCount before fetching new counts
+            self.unreadMessagesCount = 0
+
+            snapshot?.documents.forEach { document in
+                self.countUnreadMessages(in: db, matchID: document.documentID, currentUserID: currentUserID)
+            }
+        }
+
+        matchesRef.whereField("user2", isEqualTo: currentUserID).addSnapshotListener { snapshot, error in
+            if let error = error {
+                print("Error fetching matches: \(error)")
+                return
+            }
+
+            // Reset unreadMessagesCount before fetching new counts
+            self.unreadMessagesCount = 0
+
+            snapshot?.documents.forEach { document in
+                self.countUnreadMessages(in: db, matchID: document.documentID, currentUserID: currentUserID)
+            }
+        }
+    }
+
 
     private func interactionResultView(_ result: InteractionResult) -> some View {
         Group {
@@ -401,6 +469,7 @@ struct ContentView: View {
         }
     }
 
+
     private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
         let messageQuery = db.collection("matches").document(matchID).collection("messages")
             .order(by: "timestamp")
@@ -449,9 +518,10 @@ struct ContentView: View {
                 let senderID = document.data()?["senderID"] as? String
                 let isRead = document.data()?["isRead"] as? Bool ?? true
 
+                // If the message is not read, increase the unread message count
                 if senderID != currentUserID && !isRead {
                     if var listener = self.messageListeners[matchID], !listener.isAlreadyCounted(messageID: messageID) {
-                        self.unreadMessagesCount += 1
+                        self.unreadMessagesCount += 1  // Increase unread message count
                         listener.markAsCounted(messageID: messageID)
                         self.messageListeners[matchID] = listener
                     }
@@ -459,6 +529,7 @@ struct ContentView: View {
             }
         }
     }
+
 
     private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
         guard UIApplication.shared.applicationState == .active else {
@@ -759,6 +830,7 @@ struct BadgeView: View {
         }
     }
 }
+
 
 struct NotificationsView: View {
     @Binding var notifications: [String]
