@@ -134,6 +134,7 @@ struct ContentView: View {
             }
         }
 
+
         .onChange(of: users) { _ in
             listenForUnreadMessages()
         }
@@ -242,13 +243,12 @@ struct ContentView: View {
         }
     }
     
-    // Modify the listenForNewUsers function to ensure new users are only added once
     private func listenForNewUsers() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
             return
         }
-        
+
         let db = Firestore.firestore()
 
         // Set up a listener for new users being added
@@ -263,7 +263,7 @@ struct ContentView: View {
                     if let newUser = try? change.document.data(as: UserProfile.self) {
                         guard let newUserID = newUser.id, newUserID != currentUserID else { return }
 
-                        // Check if the user has already been interacted with or shown
+                        // Add this check to ensure the user is not interacted with or already shown
                         if !self.interactedUsers.contains(newUserID) && !self.shownUserIDs.contains(newUserID) {
                             self.users.append(newUser)
                             self.shownUserIDs.insert(newUserID)  // Add the new user's ID to the set to prevent future duplicates
@@ -278,7 +278,6 @@ struct ContentView: View {
 
     // This is the single instance of fetchUsers() you should keep
 
-    // Modify the fetchUsers function to filter out duplicates based on the user ID
     private func fetchAllUsers() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
@@ -294,24 +293,23 @@ struct ContentView: View {
                 return
             }
 
-            // Ensure all users are fetched, except the current user
+            // Ensure all users are fetched, except the current user and those already interacted with
             let fetchedUsers = querySnapshot?.documents.compactMap { document in
                 try? document.data(as: UserProfile.self)
             } ?? []
 
-            // Filter out the current user, but leave all other users
+            // Filter out the current user and users that have already been interacted with
             let filteredUsers = fetchedUsers.filter { user in
                 guard let userID = user.id else { return false }
-                return userID != currentUserID
+                return userID != currentUserID && !self.interactedUsers.contains(userID)
             }
 
-            // Append all remaining users to the users array
+            // Update the users array with the filtered users
             self.users = filteredUsers
             print("Fetched users: \(self.users.count)")
         }
     }
 
-    
    
 
     private func fetchIncomingLikes() {
