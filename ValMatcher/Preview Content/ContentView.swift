@@ -95,7 +95,7 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .imageScale(.medium)
                             .overlay(
-                                BadgeView(count: notificationCount)  // Badge for notifications
+                                BadgeView(count: notificationCount)
                                     .offset(x: 12, y: -12)
                             )
                     }
@@ -104,8 +104,8 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .imageScale(.medium)
                             .overlay(
-                                BadgeView(count: unreadMessagesCount)  // Badge for unread messages
-                                    .offset(x: 12, y: -12)  // Ensure it displays correctly on the icon
+                                BadgeView(count: unreadMessagesCount)  // Live update of unread messages count
+                                    .offset(x: 12, y: -12)
                             )
                     }
                     NavigationLink(destination: ProfileView(viewModel: userProfileViewModel, isSignedIn: $isSignedIn)) {
@@ -452,6 +452,9 @@ struct ContentView: View {
                 return
             }
 
+            // Reset unreadMessagesCount before fetching new counts
+            self.unreadMessagesCount = 0
+
             snapshot?.documents.forEach { document in
                 self.listenForNewMessages(in: db, matchID: document.documentID, currentUserID: currentUserID)
             }
@@ -462,6 +465,9 @@ struct ContentView: View {
                 print("Error fetching matches: \(error)")
                 return
             }
+
+            // Reset unreadMessagesCount before fetching new counts
+            self.unreadMessagesCount = 0
 
             snapshot?.documents.forEach { document in
                 self.listenForNewMessages(in: db, matchID: document.documentID, currentUserID: currentUserID)
@@ -485,21 +491,11 @@ struct ContentView: View {
             for change in newMessages {
                 let newMessage = change.document
                 let senderID = newMessage.data()["senderID"] as? String
-                let messageText = newMessage.data()["text"] as? String ?? "You have a new message"
-                let timestamp = newMessage.data()["timestamp"] as? Timestamp
                 let isRead = newMessage.data()["isRead"] as? Bool ?? true
 
-                if let timestamp = timestamp, !isRead, senderID != currentUserID, timestamp.dateValue().timeIntervalSinceNow > -5 {
-                    db.collection("users").document(senderID!).getDocument { document, error in
-                        if let error = error {
-                            print("Error fetching sender's name: \(error)")
-                            return
-                        }
-
-                        let senderName = document?.data()?["name"] as? String ?? "Unknown User"
-                        self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
-                        self.updateUnreadMessagesCount(for: matchID, messageID: change.document.documentID)
-                    }
+                // Only count messages that are unread and not sent by the current user
+                if senderID != currentUserID && !isRead {
+                    self.unreadMessagesCount += 1  // Update unread messages count in real-time
                 }
             }
         }
