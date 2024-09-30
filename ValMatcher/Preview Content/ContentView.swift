@@ -128,7 +128,7 @@ struct ContentView: View {
                 self.interactedUsers.removeAll() // Optionally reset interacted users
                 loadInteractedUsers { success in // Load interacted users if necessary
                     if success {
-                        fetchUsers() // Fetch users after resetting
+                        fetchAllUsers() // Fetch users after resetting
                     }
                 }
             }
@@ -199,6 +199,20 @@ struct ContentView: View {
             }
         }
     }
+    
+    private func handleInteractions() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+
+        // This filters out users who have been interacted with (liked or passed)
+        let nonInteractedUsers = self.users.filter { user in
+            guard let userID = user.id else { return false }
+            return !self.interactedUsers.contains(userID)
+        }
+
+        // Now update the users array to only show non-interacted users
+        self.users = nonInteractedUsers
+    }
+
 
     private var userInfoView: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -265,38 +279,38 @@ struct ContentView: View {
     // This is the single instance of fetchUsers() you should keep
 
     // Modify the fetchUsers function to filter out duplicates based on the user ID
-    private func fetchUsers() {
-            guard let currentUserID = Auth.auth().currentUser?.uid else {
-                print("Error: User not authenticated")
+    private func fetchAllUsers() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("Error: User not authenticated")
+            return
+        }
+
+        let db = Firestore.firestore()
+
+        // Fetch all users from Firestore
+        db.collection("users").getDocuments { (querySnapshot, error) in
+            if let error = error {
+                print("Error fetching users: \(error)")
                 return
             }
 
-            let db = Firestore.firestore()
+            // Ensure all users are fetched, except the current user
+            let fetchedUsers = querySnapshot?.documents.compactMap { document in
+                try? document.data(as: UserProfile.self)
+            } ?? []
 
-            db.collection("users").getDocuments { (querySnapshot, error) in
-                if let error = error {
-                    print("Error fetching users: \(error)")
-                    return
-                }
-
-                // Fetch all users from Firestore
-                let fetchedUsers = querySnapshot?.documents.compactMap { document in
-                    try? document.data(as: UserProfile.self)
-                } ?? []
-
-                // Filter out users who have already been liked, passed, or shown
-                let filteredUsers = fetchedUsers.filter { user in
-                    guard let userID = user.id else { return false }
-                    return !self.interactedUsers.contains(userID) && userID != currentUserID && !self.shownUserIDs.contains(userID)
-                }
-
-                // Add the filtered users to the list and track their IDs to prevent duplication
-                self.users.append(contentsOf: filteredUsers)
-                self.shownUserIDs.formUnion(filteredUsers.compactMap { $0.id })
-
-                print("Users after filtering: \(self.users.count)")
+            // Filter out the current user, but leave all other users
+            let filteredUsers = fetchedUsers.filter { user in
+                guard let userID = user.id else { return false }
+                return userID != currentUserID
             }
+
+            // Append all remaining users to the users array
+            self.users = filteredUsers
+            print("Fetched users: \(self.users.count)")
         }
+    }
+
     
    
 
