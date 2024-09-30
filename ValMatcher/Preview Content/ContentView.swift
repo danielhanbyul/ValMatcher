@@ -47,10 +47,12 @@ struct ContentView: View {
     @State private var acknowledgedNotifications: Set<String> = []
     @State private var unreadMessagesCount = 0
     @State private var messageListeners: [String: MessageListener] = [:]
+     
     
     // Added States
     @State private var interactedUsers: Set<String> = []
-    @State private var lastRefreshDate: Date? = nil
+       @State private var lastRefreshDate: Date? = nil
+       @State private var shownUserIDs: Set<String> = []
 
     enum InteractionResult {
         case liked
@@ -226,7 +228,7 @@ struct ContentView: View {
         }
     }
     
-    // Add a function to listen for new users being added
+    // Modify the listenForNewUsers function to ensure new users are only added once
     private func listenForNewUsers() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
@@ -234,22 +236,23 @@ struct ContentView: View {
         }
         
         let db = Firestore.firestore()
-        
+
         // Set up a listener for new users being added
         db.collection("users").addSnapshotListener { snapshot, error in
             if let error = error {
                 print("Error listening for new users: \(error.localizedDescription)")
                 return
             }
-            
+
             snapshot?.documentChanges.forEach { change in
                 if change.type == .added {
                     if let newUser = try? change.document.data(as: UserProfile.self) {
                         guard let newUserID = newUser.id, newUserID != currentUserID else { return }
-                        
-                        // Check if the user has already been interacted with
-                        if !self.interactedUsers.contains(newUserID) {
+
+                        // Check if the user has already been interacted with or shown
+                        if !self.interactedUsers.contains(newUserID) && !self.shownUserIDs.contains(newUserID) {
                             self.users.append(newUser)
+                            self.shownUserIDs.insert(newUserID)  // Add the new user's ID to the set to prevent future duplicates
                         }
                     }
                 }
@@ -258,44 +261,42 @@ struct ContentView: View {
             print("Users after listening for new additions: \(self.users.count)")
         }
     }
-    
 
     // This is the single instance of fetchUsers() you should keep
 
+    // Modify the fetchUsers function to filter out duplicates based on the user ID
     private func fetchUsers() {
-        guard let currentUserID = Auth.auth().currentUser?.uid else {
-            print("Error: User not authenticated")
-            return
-        }
-
-        let db = Firestore.firestore()
-
-        db.collection("users").getDocuments { (querySnapshot, error) in
-            if let error = error {
-                print("Error fetching users: \(error)")
+            guard let currentUserID = Auth.auth().currentUser?.uid else {
+                print("Error: User not authenticated")
                 return
             }
 
-            // Fetch all users from Firestore
-            let fetchedUsers = querySnapshot?.documents.compactMap { document in
-                try? document.data(as: UserProfile.self)
-            } ?? []
+            let db = Firestore.firestore()
 
-            // Filter out users who have already been liked or passed
-            let filteredUsers = fetchedUsers.filter { user in
-                guard let userID = user.id else { return false }
-                return !self.interactedUsers.contains(userID) && userID != currentUserID
+            db.collection("users").getDocuments { (querySnapshot, error) in
+                if let error = error {
+                    print("Error fetching users: \(error)")
+                    return
+                }
+
+                // Fetch all users from Firestore
+                let fetchedUsers = querySnapshot?.documents.compactMap { document in
+                    try? document.data(as: UserProfile.self)
+                } ?? []
+
+                // Filter out users who have already been liked, passed, or shown
+                let filteredUsers = fetchedUsers.filter { user in
+                    guard let userID = user.id else { return false }
+                    return !self.interactedUsers.contains(userID) && userID != currentUserID && !self.shownUserIDs.contains(userID)
+                }
+
+                // Add the filtered users to the list and track their IDs to prevent duplication
+                self.users.append(contentsOf: filteredUsers)
+                self.shownUserIDs.formUnion(filteredUsers.compactMap { $0.id })
+
+                print("Users after filtering: \(self.users.count)")
             }
-
-            // Append the new filtered users to the existing list of users
-            self.users.append(contentsOf: filteredUsers)
-
-            print("Users after filtering: \(self.users.count)")
         }
-    }
-
-
-
     
    
 
@@ -793,6 +794,7 @@ struct UserCardView: View {
     var user: UserProfile
     var newMedia: [MediaItem] = []
     @State private var currentMediaIndex = 0
+    @State private var shownUserIDs: Set<String> = []
 
     private var allMediaItems: [MediaItem] {
         // Safely unwrap mediaItems before combining with newMedia
