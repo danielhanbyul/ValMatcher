@@ -19,7 +19,7 @@ struct DMHomeView: View {
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
     @State private var receivedNewMessage = false
-    @State private var selectedChatID: String? // Changed from selectedChat: Chat?
+    @State private var selectedChatID: String?
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
     @State private var previousSelectedChatID: String?
@@ -29,8 +29,13 @@ struct DMHomeView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
-                .edgesIgnoringSafeArea(.all)
+            LinearGradient(
+                gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15),
+                                            Color(red: 0.21, green: 0.29, blue: 0.40)]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .edgesIgnoringSafeArea(.all)
 
             VStack(spacing: 0) {
                 ScrollView {
@@ -338,6 +343,8 @@ struct DMHomeView: View {
 
                 group.notify(queue: .main) {
                     print("Real-time updated matches: \(self.matches)")
+                    // Added the updateUnreadMessagesCount call here
+                    self.updateUnreadMessagesCount(from: self.matches)
                 }
             }
         }
