@@ -189,10 +189,12 @@ struct ContentView: View {
             let unreadCount = querySnapshot?.documents.count ?? 0
 
             DispatchQueue.main.async {
-                self.unreadMessagesCount += unreadCount
+                // Set the count directly rather than incrementing
+                self.unreadMessagesCount = unreadCount
             }
         }
     }
+
 
     private var userCardStack: some View {
         VStack(spacing: 0) {
@@ -461,42 +463,48 @@ struct ContentView: View {
     }
 
     func listenForUnreadMessagesInContentView() {
-            guard let currentUserID = Auth.auth().currentUser?.uid else {
-                print("Error: User not authenticated")
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("Error: User not authenticated")
+            return
+        }
+
+        let db = Firestore.firestore()
+        let matchesRef = db.collection("matches")
+
+        // Clear existing listeners and reset unread message count
+        self.unreadMessagesCount = 0
+        messageListeners.forEach { $0.value.removeListener() }
+        messageListeners.removeAll()
+
+        // Listen for unread messages for currentUserID
+        matchesRef.whereField("user1", isEqualTo: currentUserID).addSnapshotListener { snapshot, error in
+            if let error = error {
+                print("Error fetching matches: \(error)")
                 return
             }
 
-            let db = Firestore.firestore()
-            let matchesRef = db.collection("matches")
-
-            // Clear existing listeners and reset unread message count
-            self.unreadMessagesCount = 0
-            messageListeners.forEach { $0.value.removeListener() }
-            messageListeners.removeAll()
-
-            // Listen for unread messages for currentUserID
-            matchesRef.whereField("user1", isEqualTo: currentUserID).addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching matches: \(error)")
-                    return
-                }
-
-                snapshot?.documents.forEach { document in
-                    self.countUnreadMessagesInContentView(in: db, matchID: document.documentID, currentUserID: currentUserID)
-                }
-            }
-
-            matchesRef.whereField("user2", isEqualTo: currentUserID).addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error fetching matches: \(error)")
-                    return
-                }
-
-                snapshot?.documents.forEach { document in
-                    self.countUnreadMessagesInContentView(in: db, matchID: document.documentID, currentUserID: currentUserID)
+            snapshot?.documents.forEach { document in
+                let matchID = document.documentID
+                if self.messageListeners[matchID] == nil {  // Ensure listener doesn't already exist
+                    self.countUnreadMessagesInContentView(in: db, matchID: matchID, currentUserID: currentUserID)
                 }
             }
         }
+
+        matchesRef.whereField("user2", isEqualTo: currentUserID).addSnapshotListener { snapshot, error in
+            if let error = error {
+                print("Error fetching matches: \(error)")
+                return
+            }
+
+            snapshot?.documents.forEach { document in
+                let matchID = document.documentID
+                if self.messageListeners[matchID] == nil {  // Ensure listener doesn't already exist
+                    self.countUnreadMessagesInContentView(in: db, matchID: matchID, currentUserID: currentUserID)
+                }
+            }
+        }
+    }
 
     private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
         guard messageListeners[matchID] == nil else {
