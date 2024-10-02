@@ -100,7 +100,7 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .imageScale(.medium)
                             .overlay(
-                                BadgeView(count: unreadMessagesCount)
+                                BadgeView(count: unreadMessagesCount)  // Automatically updates with the unreadMessagesCount value
                                     .offset(x: 12, y: -12)
                             )
                     }
@@ -127,7 +127,7 @@ struct ContentView: View {
                         fetchAllUsers()
                     }
                 }
-
+                
                 // Fetch unread messages as soon as ContentView loads
                 preloadUnreadMessagesCount()
             }
@@ -234,8 +234,10 @@ struct ContentView: View {
         let db = Firestore.firestore()
         let matchesRef = db.collection("matches")
 
+        // Reset unreadMessagesCount before fetching new counts
         self.unreadMessagesCount = 0
 
+        // Fetch matches where the user is involved
         matchesRef.whereField("user1", isEqualTo: currentUserID).getDocuments { snapshot, error in
             if let error = error {
                 print("Error fetching matches: \(error)")
@@ -273,7 +275,7 @@ struct ContentView: View {
             let unreadCount = querySnapshot?.documents.count ?? 0
 
             DispatchQueue.main.async {
-                self.unreadMessagesCount += unreadCount
+                self.unreadMessagesCount += unreadCount  // Increment the unread messages count
             }
         }
     }
@@ -286,6 +288,7 @@ struct ContentView: View {
 
         let db = Firestore.firestore()
 
+        // Set up a listener for new users being added
         db.collection("users").addSnapshotListener { snapshot, error in
             if let error = error {
                 print("Error listening for new users: \(error.localizedDescription)")
@@ -297,13 +300,16 @@ struct ContentView: View {
                     if let newUser = try? change.document.data(as: UserProfile.self) {
                         guard let newUserID = newUser.id, newUserID != currentUserID else { return }
 
+                        // Add this check to ensure the user is not interacted with or already shown
                         if !self.interactedUsers.contains(newUserID) && !self.shownUserIDs.contains(newUserID) {
                             self.users.append(newUser)
-                            self.shownUserIDs.insert(newUserID)
+                            self.shownUserIDs.insert(newUserID)  // Add the new user's ID to the set to prevent future duplicates
                         }
                     }
                 }
             }
+            
+            print("Users after listening for new additions: \(self.users.count)")
         }
     }
 
@@ -331,6 +337,7 @@ struct ContentView: View {
             }
 
             self.users = filteredUsers
+            print("Fetched users: \(self.users.count)")
         }
     }
 
@@ -700,7 +707,7 @@ struct ContentView: View {
                 print("Interacted users saved successfully.")
             }
         }
-
+        
         UserDefaults.standard.set(Array(interactedUsers), forKey: "interactedUsers_\(currentUserID)")
     }
 
@@ -712,13 +719,13 @@ struct ContentView: View {
         }
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(currentUserID)
-
+        
         if let savedInteractedUsers = UserDefaults.standard.array(forKey: "interactedUsers_\(currentUserID)") as? [String] {
             self.interactedUsers = Set(savedInteractedUsers)
             completion(true)
             return
         }
-
+        
         userRef.getDocument { document, error in
             if let document = document, document.exists {
                 if let interacted = document.data()?["interactedUsers"] as? [String] {
