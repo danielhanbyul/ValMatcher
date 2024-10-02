@@ -406,13 +406,15 @@ struct ContentView: View {
         let db = Firestore.firestore()
         let matchesRef = db.collection("matches")
 
+        // Clear existing listeners to avoid duplicates
+        messageListeners.forEach { $0.value.removeListener() }
+        messageListeners.removeAll()
+
         matchesRef.whereField("user1", isEqualTo: currentUserID).addSnapshotListener { snapshot, error in
             if let error = error {
                 print("Error fetching matches: \(error)")
                 return
             }
-
-            self.unreadMessagesCount = 0
 
             snapshot?.documents.forEach { document in
                 self.listenForNewMessages(in: db, matchID: document.documentID, currentUserID: currentUserID)
@@ -425,15 +427,18 @@ struct ContentView: View {
                 return
             }
 
-            self.unreadMessagesCount = 0
-
             snapshot?.documents.forEach { document in
                 self.listenForNewMessages(in: db, matchID: document.documentID, currentUserID: currentUserID)
             }
         }
     }
 
+
     private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
+        guard messageListeners[matchID] == nil else {
+            return // Listener already exists for this matchID
+        }
+
         let messageQuery = db.collection("matches").document(matchID).collection("messages")
             .order(by: "timestamp")
 
@@ -450,14 +455,20 @@ struct ContentView: View {
                 let senderID = newMessage.data()["senderID"] as? String
                 let isRead = newMessage.data()["isRead"] as? Bool ?? true
 
+                // Only count the message if it was sent by someone else and is unread
                 if senderID != currentUserID && !isRead {
-                    self.unreadMessagesCount += 1
+                    if var listener = self.messageListeners[matchID], !listener.isAlreadyCounted(messageID: newMessage.documentID) {
+                        self.unreadMessagesCount += 1
+                        listener.markAsCounted(messageID: newMessage.documentID)
+                        self.messageListeners[matchID] = listener
+                    }
                 }
             }
         }
 
         self.messageListeners[matchID] = MessageListener(listener: listener)
     }
+
 
     private func updateUnreadMessagesCount(for matchID: String, messageID: String) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
