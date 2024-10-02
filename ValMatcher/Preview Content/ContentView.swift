@@ -100,7 +100,7 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .imageScale(.medium)
                             .overlay(
-                                BadgeView(count: unreadMessagesCount)  // Automatically updates with the unreadMessagesCount value
+                                BadgeView(count: unreadMessagesCount)
                                     .offset(x: 12, y: -12)
                             )
                     }
@@ -127,7 +127,7 @@ struct ContentView: View {
                         fetchAllUsers()
                     }
                 }
-                
+
                 // Fetch unread messages as soon as ContentView loads
                 preloadUnreadMessagesCount()
             }
@@ -200,7 +200,6 @@ struct ContentView: View {
 
     private var userInfoView: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // Show only the profile questions answered by the user
             ForEach(profileQuestions, id: \.self) { question in
                 if let answer = users[currentIndex].answers[question], !answer.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
@@ -226,7 +225,6 @@ struct ContentView: View {
         }
     }
 
-    // Added the preloadUnreadMessagesCount function
     private func preloadUnreadMessagesCount() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
@@ -236,10 +234,8 @@ struct ContentView: View {
         let db = Firestore.firestore()
         let matchesRef = db.collection("matches")
 
-        // Reset unreadMessagesCount before fetching new counts
         self.unreadMessagesCount = 0
 
-        // Fetch matches where the user is involved
         matchesRef.whereField("user1", isEqualTo: currentUserID).getDocuments { snapshot, error in
             if let error = error {
                 print("Error fetching matches: \(error)")
@@ -263,7 +259,6 @@ struct ContentView: View {
         }
     }
 
-    // Added the countUnreadMessages function
     private func countUnreadMessages(in db: Firestore, matchID: String, currentUserID: String) {
         let messageQuery = db.collection("matches").document(matchID).collection("messages")
             .whereField("isRead", isEqualTo: false)
@@ -278,11 +273,11 @@ struct ContentView: View {
             let unreadCount = querySnapshot?.documents.count ?? 0
 
             DispatchQueue.main.async {
-                self.unreadMessagesCount += unreadCount  // Increment the unread messages count
+                self.unreadMessagesCount += unreadCount
             }
         }
     }
-    
+
     private func listenForNewUsers() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
@@ -291,7 +286,6 @@ struct ContentView: View {
 
         let db = Firestore.firestore()
 
-        // Set up a listener for new users being added
         db.collection("users").addSnapshotListener { snapshot, error in
             if let error = error {
                 print("Error listening for new users: \(error.localizedDescription)")
@@ -303,20 +297,15 @@ struct ContentView: View {
                     if let newUser = try? change.document.data(as: UserProfile.self) {
                         guard let newUserID = newUser.id, newUserID != currentUserID else { return }
 
-                        // Add this check to ensure the user is not interacted with or already shown
                         if !self.interactedUsers.contains(newUserID) && !self.shownUserIDs.contains(newUserID) {
                             self.users.append(newUser)
-                            self.shownUserIDs.insert(newUserID)  // Add the new user's ID to the set to prevent future duplicates
+                            self.shownUserIDs.insert(newUserID)
                         }
                     }
                 }
             }
-            
-            print("Users after listening for new additions: \(self.users.count)")
         }
     }
-
-    // This is the single instance of fetchUsers() you should keep
 
     private func fetchAllUsers() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
@@ -326,31 +315,24 @@ struct ContentView: View {
 
         let db = Firestore.firestore()
 
-        // Fetch all users from Firestore
         db.collection("users").getDocuments { (querySnapshot, error) in
             if let error = error {
                 print("Error fetching users: \(error)")
                 return
             }
 
-            // Ensure all users are fetched, except the current user and those already interacted with
             let fetchedUsers = querySnapshot?.documents.compactMap { document in
                 try? document.data(as: UserProfile.self)
             } ?? []
 
-            // Filter out the current user and users that have already been interacted with
             let filteredUsers = fetchedUsers.filter { user in
                 guard let userID = user.id else { return false }
                 return userID != currentUserID && !self.interactedUsers.contains(userID)
             }
 
-            // Update the users array with the filtered users
             self.users = filteredUsers
-            print("Fetched users: \(self.users.count)")
         }
     }
-
-   
 
     private func fetchIncomingLikes() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
@@ -417,14 +399,13 @@ struct ContentView: View {
         let db = Firestore.firestore()
         let matchesRef = db.collection("matches")
 
-        // Listen for changes in the matches collection where the current user is involved
         matchesRef.whereField("user1", isEqualTo: currentUserID).addSnapshotListener { snapshot, error in
             if let error = error {
                 print("Error fetching matches: \(error)")
                 return
             }
 
-            self.unreadMessagesCount = 0  // Reset unread message count before counting
+            self.unreadMessagesCount = 0
 
             snapshot?.documents.forEach { document in
                 self.listenForNewMessages(in: db, matchID: document.documentID, currentUserID: currentUserID)
@@ -437,14 +418,13 @@ struct ContentView: View {
                 return
             }
 
-            self.unreadMessagesCount = 0  // Reset unread message count before counting
+            self.unreadMessagesCount = 0
 
             snapshot?.documents.forEach { document in
                 self.listenForNewMessages(in: db, matchID: document.documentID, currentUserID: currentUserID)
             }
         }
     }
-
 
     private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
         let messageQuery = db.collection("matches").document(matchID).collection("messages")
@@ -463,16 +443,14 @@ struct ContentView: View {
                 let senderID = newMessage.data()["senderID"] as? String
                 let isRead = newMessage.data()["isRead"] as? Bool ?? true
 
-                // Only count messages that are unread and not sent by the current user
                 if senderID != currentUserID && !isRead {
-                    self.unreadMessagesCount += 1  // Increment unread message count
+                    self.unreadMessagesCount += 1
                 }
             }
         }
 
         self.messageListeners[matchID] = MessageListener(listener: listener)
     }
-
 
     private func updateUnreadMessagesCount(for matchID: String, messageID: String) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
@@ -485,10 +463,9 @@ struct ContentView: View {
                 let senderID = document.data()?["senderID"] as? String
                 let isRead = document.data()?["isRead"] as? Bool ?? true
 
-                // If the message is not read, increase the unread message count
                 if senderID != currentUserID && !isRead {
                     if var listener = self.messageListeners[matchID], !listener.isAlreadyCounted(messageID: messageID) {
-                        self.unreadMessagesCount += 1  // Increase unread message count
+                        self.unreadMessagesCount += 1
                         listener.markAsCounted(messageID: messageID)
                         self.messageListeners[matchID] = listener
                     }
@@ -497,12 +474,11 @@ struct ContentView: View {
         }
     }
 
-
     private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
         guard UIApplication.shared.applicationState == .active else {
-            return // Prevent in-app notification if the app is not in the foreground
+            return
         }
-        
+
         guard let senderName = latestMessage.data()["senderName"] as? String,
               let messageText = latestMessage.data()["text"] as? String else { return }
 
@@ -513,10 +489,9 @@ struct ContentView: View {
 
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
         guard UIApplication.shared.applicationState != .active else {
-            return // Prevent system notification if the app is in the foreground
+            return
         }
 
-        // System notification
         let content = UNMutableNotificationContent()
         content.title = "New Message from \(senderName)"
         content.body = messageText
@@ -536,7 +511,6 @@ struct ContentView: View {
         UNUserNotificationCenter.current().add(request)
     }
 
-    // Updated likeAction to ensure the liked user is saved as interacted
     private func likeAction() {
         interactionResult = .liked
 
@@ -584,7 +558,6 @@ struct ContentView: View {
             }
         }
 
-        // Added logic to prevent liked users from reappearing
         interactedUsers.insert(likedUserID)
         saveInteractedUsers()
     }
@@ -597,7 +570,6 @@ struct ContentView: View {
             "timestamp": Timestamp()
         ]
 
-        // Check if a match already exists between these two users
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .whereField("user2", isEqualTo: likedUserID)
@@ -630,7 +602,6 @@ struct ContentView: View {
     private func createDMChat(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
         let db = Firestore.firestore()
 
-        // Check if a chat already exists between the two users
         db.collection("chats")
             .whereField("user1", isEqualTo: currentUserID)
             .whereField("user2", isEqualTo: likedUserID)
@@ -652,7 +623,6 @@ struct ContentView: View {
                         "timestamp": Timestamp()
                     ]
 
-                    // Create chat for both users
                     db.collection("chats").addDocument(data: chatData) { error in
                         if let error = error {
                             print("Error creating chat: \(error.localizedDescription)")
@@ -681,7 +651,6 @@ struct ContentView: View {
         }
     }
 
-    // Updated passAction to ensure the passed user is saved as interacted
     private func passAction() {
         interactionResult = .passed
 
@@ -698,7 +667,6 @@ struct ContentView: View {
 
         moveToNextUser()
 
-        // Added logic to prevent skipped users from reappearing
         interactedUsers.insert(skippedUserID)
         saveInteractedUsers()
     }
@@ -714,12 +682,10 @@ struct ContentView: View {
                 self.users.removeAll()
             }
 
-            // Save the currentIndex to UserDefaults
             UserDefaults.standard.set(self.currentIndex, forKey: "currentIndex")
         }
     }
 
-    // New function to save all interacted users to Firestore and UserDefaults
     private func saveInteractedUsers() {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
@@ -734,12 +700,10 @@ struct ContentView: View {
                 print("Interacted users saved successfully.")
             }
         }
-        
-        // Save to UserDefaults
+
         UserDefaults.standard.set(Array(interactedUsers), forKey: "interactedUsers_\(currentUserID)")
     }
 
-    // New function to load all interacted users from Firestore and UserDefaults
     private func loadInteractedUsers(completion: @escaping (Bool) -> Void) {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
@@ -748,20 +712,18 @@ struct ContentView: View {
         }
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(currentUserID)
-        
-        // Load from UserDefaults first
+
         if let savedInteractedUsers = UserDefaults.standard.array(forKey: "interactedUsers_\(currentUserID)") as? [String] {
             self.interactedUsers = Set(savedInteractedUsers)
             completion(true)
             return
         }
-        
+
         userRef.getDocument { document, error in
             if let document = document, document.exists {
                 if let interacted = document.data()?["interactedUsers"] as? [String] {
                     self.interactedUsers = Set(interacted)
                 }
-                // Also save to UserDefaults for future sessions
                 UserDefaults.standard.set(Array(self.interactedUsers), forKey: "interactedUsers_\(currentUserID)")
                 completion(true)
             } else {
@@ -773,7 +735,6 @@ struct ContentView: View {
 
     private func deleteMedia(at index: Int) {
         guard currentIndex < users.count else { return }
-        // Unwrap the optional mediaItems array before attempting to remove an item.
         if let mediaItems = users[currentIndex].mediaItems {
             users[currentIndex].mediaItems?.remove(at: index)
         } else {
@@ -797,7 +758,6 @@ struct BadgeView: View {
         }
     }
 }
-
 
 struct NotificationsView: View {
     @Binding var notifications: [String]
@@ -827,14 +787,12 @@ struct NotificationsView: View {
                         }
                     }
                     .padding(.top)
-                    
                 }
             }
             .onAppear {
                 notificationCount = 0
             }
             .navigationBarTitle("Notifications", displayMode: .inline)
-            
         }
     }
 }
@@ -850,7 +808,6 @@ struct UserCardView: View {
     @State private var shownUserIDs: Set<String> = []
 
     private var allMediaItems: [MediaItem] {
-        // Safely unwrap mediaItems before combining with newMedia
         let mediaItems = user.mediaItems ?? []
         return mediaItems + newMedia
     }
@@ -918,11 +875,9 @@ struct VideoPlayerView: View {
         GeometryReader { geometry in
             VideoPlayer(player: player)
                 .onAppear {
-                    // Initialize the player with the provided URL
                     player = AVPlayer(url: url)
                 }
                 .onDisappear {
-                    // Pause the player when the view disappears
                     player?.pause()
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
