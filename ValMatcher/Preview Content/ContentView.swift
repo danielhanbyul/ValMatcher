@@ -174,6 +174,25 @@ struct ContentView: View {
             }
         }
     }
+    
+    func countUnreadMessagesInContentView(in db: Firestore, matchID: String, currentUserID: String) {
+        let messageQuery = db.collection("matches").document(matchID).collection("messages")
+            .whereField("isRead", isEqualTo: false)
+            .whereField("senderID", isNotEqualTo: currentUserID)
+
+        messageQuery.addSnapshotListener { (querySnapshot, error) in
+            if let error = error {
+                print("Error fetching messages: \(error.localizedDescription)")
+                return
+            }
+
+            let unreadCount = querySnapshot?.documents.count ?? 0
+
+            DispatchQueue.main.async {
+                self.unreadMessagesCount += unreadCount
+            }
+        }
+    }
 
     private var userCardStack: some View {
         VStack(spacing: 0) {
@@ -299,41 +318,13 @@ struct ContentView: View {
         }
     }
     
-    func countUnreadMessagesInContentView(in db: Firestore, matchID: String, currentUserID: String) {
-        // Ensure we are not duplicating listeners for the same matchID
-        guard messageListeners[matchID] == nil else {
-            return // Listener already exists for this matchID
-        }
-
-        let messageQuery = db.collection("matches").document(matchID).collection("messages")
-            .whereField("isRead", isEqualTo: false)
-            .whereField("senderID", isNotEqualTo: currentUserID) // Only count messages from others
-
-        let listener = messageQuery.addSnapshotListener { (querySnapshot, error) in
-            if let error = error {
-                print("Error fetching messages: \(error.localizedDescription)")
-                return
-            }
-
-            let newUnreadCount = querySnapshot?.documents.count ?? 0
-
-            DispatchQueue.main.async {
-                // Instead of incrementing, directly set the unreadMessagesCount
-                // for this particular matchID to avoid double counting
-                self.unreadMessagesCount = newUnreadCount
-            }
-        }
-
-        // Store the listener so we can remove it later if needed
-        self.messageListeners[matchID] = MessageListener(listener: listener)
-    }
-
-    private func countUnreadMessages(in db: Firestore, matchID: String, currentUserID: String) {
+    func countUnreadMessages(in db: Firestore, matchID: String, currentUserID: String) {
         let messageQuery = db.collection("matches").document(matchID).collection("messages")
             .whereField("isRead", isEqualTo: false)
             .whereField("senderID", isNotEqualTo: currentUserID)
 
-        messageQuery.getDocuments { (querySnapshot, error) in
+        // Use a listener to track new unread messages in real time
+        let listener = messageQuery.addSnapshotListener { (querySnapshot, error) in
             if let error = error {
                 print("Error fetching messages: \(error.localizedDescription)")
                 return
@@ -342,10 +333,15 @@ struct ContentView: View {
             let unreadCount = querySnapshot?.documents.count ?? 0
 
             DispatchQueue.main.async {
-                self.unreadMessagesCount += unreadCount  // Increment the unread messages count
+                // Update the unread message count for this specific match
+                self.unreadMessagesCount += unreadCount
             }
         }
+
+        // Store the listener so we can remove it later if needed
+        self.messageListeners[matchID] = MessageListener(listener: listener)
     }
+
 
     private func listenForNewUsers() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
