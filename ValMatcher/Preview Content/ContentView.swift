@@ -47,10 +47,12 @@ struct ContentView: View {
     @State private var acknowledgedNotifications: Set<String> = []
     @State private var unreadMessagesCount = 0
     @State private var messageListeners: [String: MessageListener] = [:]
+     
     
     // Added States
     @State private var interactedUsers: Set<String> = []
-    @State private var lastRefreshDate: Date? = nil
+       @State private var lastRefreshDate: Date? = nil
+       @State private var shownUserIDs: Set<String> = []
 
     enum InteractionResult {
         case liked
@@ -122,15 +124,17 @@ struct ContentView: View {
         }
         .onAppear {
             if isSignedIn {
-                loadInteractedUsers { success in // Load interacted users
+                // Reset interacted users and fetch all users
+                self.interactedUsers.removeAll() // Optionally reset interacted users
+                loadInteractedUsers { success in // Load interacted users if necessary
                     if success {
-                        if users.isEmpty {
-                            fetchUsers()  // Fetch users only if they haven't been loaded
-                        }
+                        fetchAllUsers() // Fetch users after resetting
                     }
                 }
             }
         }
+
+
         .onChange(of: users) { _ in
             listenForUnreadMessages()
         }
@@ -196,6 +200,20 @@ struct ContentView: View {
             }
         }
     }
+    
+    private func handleInteractions() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+
+        // This filters out users who have been interacted with (liked or passed)
+        let nonInteractedUsers = self.users.filter { user in
+            guard let userID = user.id else { return false }
+            return !self.interactedUsers.contains(userID)
+        }
+
+        // Now update the users array to only show non-interacted users
+        self.users = nonInteractedUsers
+    }
+
 
     private var userInfoView: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -224,10 +242,8 @@ struct ContentView: View {
             }
         }
     }
-
-
-    // Update fetchUsers to filter out interacted users and add missing question data if necessary
-    private func fetchUsers() {
+    
+    private func listenForNewUsers() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("Error: User not authenticated")
             return
@@ -235,24 +251,66 @@ struct ContentView: View {
 
         let db = Firestore.firestore()
 
+        // Set up a listener for new users being added
+        db.collection("users").addSnapshotListener { snapshot, error in
+            if let error = error {
+                print("Error listening for new users: \(error.localizedDescription)")
+                return
+            }
+
+            snapshot?.documentChanges.forEach { change in
+                if change.type == .added {
+                    if let newUser = try? change.document.data(as: UserProfile.self) {
+                        guard let newUserID = newUser.id, newUserID != currentUserID else { return }
+
+                        // Add this check to ensure the user is not interacted with or already shown
+                        if !self.interactedUsers.contains(newUserID) && !self.shownUserIDs.contains(newUserID) {
+                            self.users.append(newUser)
+                            self.shownUserIDs.insert(newUserID)  // Add the new user's ID to the set to prevent future duplicates
+                        }
+                    }
+                }
+            }
+            
+            print("Users after listening for new additions: \(self.users.count)")
+        }
+    }
+
+    // This is the single instance of fetchUsers() you should keep
+
+    private func fetchAllUsers() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("Error: User not authenticated")
+            return
+        }
+
+        let db = Firestore.firestore()
+
+        // Fetch all users from Firestore
         db.collection("users").getDocuments { (querySnapshot, error) in
             if let error = error {
                 print("Error fetching users: \(error)")
                 return
             }
 
-            // Filter out users that have been interacted with, no longer adding missing question data
-            self.users = querySnapshot?.documents.compactMap { document in
-                var user = try? document.data(as: UserProfile.self)
-                if let userID = user?.id, userID != currentUserID && !self.interactedUsers.contains(userID) {
-                    return user
-                }
-                return nil
+            // Ensure all users are fetched, except the current user and those already interacted with
+            let fetchedUsers = querySnapshot?.documents.compactMap { document in
+                try? document.data(as: UserProfile.self)
             } ?? []
 
-            print("Users after filtering: \(self.users.count)")
+            // Filter out the current user and users that have already been interacted with
+            let filteredUsers = fetchedUsers.filter { user in
+                guard let userID = user.id else { return false }
+                return userID != currentUserID && !self.interactedUsers.contains(userID)
+            }
+
+            // Update the users array with the filtered users
+            self.users = filteredUsers
+            print("Fetched users: \(self.users.count)")
         }
     }
+
+   
 
     private func fetchIncomingLikes() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
@@ -748,6 +806,7 @@ struct UserCardView: View {
     var user: UserProfile
     var newMedia: [MediaItem] = []
     @State private var currentMediaIndex = 0
+    @State private var shownUserIDs: Set<String> = []
 
     private var allMediaItems: [MediaItem] {
         // Safely unwrap mediaItems before combining with newMedia
