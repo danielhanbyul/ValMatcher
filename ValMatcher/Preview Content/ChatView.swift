@@ -181,6 +181,8 @@ struct ChatView: View {
     }
 
     private func setupChatListener() {
+        guard messagesListener == nil else { return }  // Prevent setting up multiple listeners
+
         let db = Firestore.firestore()
         messagesListener = db.collection("matches").document(matchID).collection("messages")
             .order(by: "timestamp", descending: false)
