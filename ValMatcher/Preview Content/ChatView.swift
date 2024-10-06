@@ -38,7 +38,7 @@ struct ChatView: View {
                                         .foregroundColor(.gray)
                                         .padding(.top, 10)
                                 }
-
+                                
                                 HStack {
                                     if message.isCurrentUser {
                                         Spacer()
@@ -79,6 +79,7 @@ struct ChatView: View {
                     if scrollToBottom {
                         DispatchQueue.main.async {
                             proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                            scrollToBottom = false // Reset after scrolling
                         }
                     }
                 }
@@ -107,10 +108,9 @@ struct ChatView: View {
         .onAppear(perform: setupChatListener)
         .onDisappear {
             print("ChatView disappeared, matchID: \(matchID)")
-            markMessagesAsRead() // Mark messages as read when leaving ChatView
+            // Notify DMHomeView to update the red dot for this specific chat
             NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
         }
-
         .onDisappear(perform: removeMessagesListener)
     }
 
@@ -198,13 +198,20 @@ struct ChatView: View {
                     return
                 }
 
-                // Only update the messages if there are changes
+                // Append new messages without resetting the array
                 let newMessages = documents.compactMap { document in
                     try? document.data(as: Message.self)
                 }
-                if self.messages != newMessages {
-                    self.messages = newMessages
 
+                // Filter to append only the new messages
+                let filteredMessages = newMessages.filter { newMessage in
+                    !self.messages.contains(where: { $0.id == newMessage.id })
+                }
+
+                if !filteredMessages.isEmpty {
+                    self.messages.append(contentsOf: filteredMessages)
+
+                    // Scroll to the bottom when new messages arrive
                     DispatchQueue.main.async {
                         scrollToBottom = true
                     }
@@ -235,12 +242,12 @@ struct ChatView: View {
             if let error = error {
                 print("Error marking messages as read: \(error.localizedDescription)")
             } else {
-                // Reset the unread message count when all messages are read
                 self.unreadMessagesCount = 0
                 NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
             }
         }
     }
+
 
 
 

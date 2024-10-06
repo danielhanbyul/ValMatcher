@@ -46,6 +46,8 @@ struct ContentView: View {
     @State private var acknowledgedNotifications: Set<String> = []
     @State private var unreadMessagesCount = 0
     @State private var messageListeners: [String: MessageListener] = [:]
+    @State private var messages: [Message] = []
+
     
     // Added States
     @State private var interactedUsers: Set<String> = []
@@ -129,7 +131,7 @@ struct ContentView: View {
                     }
                 }
                 // Set up listener for unread messages
-                listenForUnreadMessagesCount()
+                listenForUnreadMessages()
             }
         }
         .onChange(of: users) { _ in
@@ -400,9 +402,16 @@ struct ContentView: View {
                 let senderID = newMessage.data()["senderID"] as? String
                 let isRead = newMessage.data()["isRead"] as? Bool ?? true
 
-                // Check if the message is unread and not sent by the current user
                 if senderID != currentUserID && !isRead {
                     self.updateUnreadMessagesCount(for: matchID, messageID: newMessage.documentID)
+                }
+
+                // Append the new message instead of reloading the entire message list
+                DispatchQueue.main.async {
+                    // Assuming you have a `messages` array in your `ChatView`
+                    if let newMessageData = try? newMessage.data(as: Message.self) {
+                        self.messages.append(newMessageData)
+                    }
                 }
             }
         }
@@ -412,26 +421,15 @@ struct ContentView: View {
 
 
 
+
     private func updateUnreadMessagesCount(for matchID: String, messageID: String) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
 
-        let db = Firestore.firestore()
-        let messageRef = db.collection("matches").document(matchID).collection("messages").document(messageID)
-
-        messageRef.getDocument { document, error in
-            if let document = document, document.exists {
-                let senderID = document.data()?["senderID"] as? String
-                let isRead = document.data()?["isRead"] as? Bool ?? true
-
-                // Ensure the message is unread and hasn't been counted yet
-                if senderID != currentUserID && !isRead {
-                    if var listener = self.messageListeners[matchID], !listener.isAlreadyCounted(messageID: messageID) {
-                        self.unreadMessagesCount += 1
-                        listener.markAsCounted(messageID: messageID)
-                        self.messageListeners[matchID] = listener
-                    }
-                }
-            }
+        // Ensure the message isn't already counted to avoid double increment
+        if var listener = self.messageListeners[matchID], !listener.isAlreadyCounted(messageID: messageID) {
+            self.unreadMessagesCount += 1
+            listener.markAsCounted(messageID: messageID)
+            self.messageListeners[matchID] = listener
         }
     }
 
@@ -471,27 +469,6 @@ struct ContentView: View {
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
-    }
-
-    // Added function for listening to unread messages count and updating in real-time
-    private func listenForUnreadMessagesCount() {
-        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-
-        let db = Firestore.firestore()
-
-        // Set up listener for real-time updates to unread messages count
-        db.collection("users").document(currentUserID).addSnapshotListener { documentSnapshot, error in
-            if let error = error {
-                print("Error listening for unread messages count: \(error)")
-                return
-            }
-
-            if let document = documentSnapshot, document.exists {
-                if let unreadCount = document.data()?["unreadMessagesCount"] as? Int {
-                    self.unreadMessagesCount = unreadCount
-                }
-            }
-        }
     }
 
     private func likeAction() {
