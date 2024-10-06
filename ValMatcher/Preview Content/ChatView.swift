@@ -22,8 +22,6 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
-    @State private var unreadMessagesCount: Int = 0
-
 
     var body: some View {
         VStack {
@@ -38,7 +36,7 @@ struct ChatView: View {
                                         .foregroundColor(.gray)
                                         .padding(.top, 10)
                                 }
-                                
+
                                 HStack {
                                     if message.isCurrentUser {
                                         Spacer()
@@ -79,7 +77,6 @@ struct ChatView: View {
                     if scrollToBottom {
                         DispatchQueue.main.async {
                             proxy.scrollTo(messages.last?.id, anchor: .bottom)
-                            scrollToBottom = false // Reset after scrolling
                         }
                     }
                 }
@@ -182,8 +179,6 @@ struct ChatView: View {
     }
 
     private func setupChatListener() {
-        guard messagesListener == nil else { return }  // Prevent setting up multiple listeners
-
         let db = Firestore.firestore()
         messagesListener = db.collection("matches").document(matchID).collection("messages")
             .order(by: "timestamp", descending: false)
@@ -198,22 +193,15 @@ struct ChatView: View {
                     return
                 }
 
-                // Append new messages and check if any of them are unread
-                let newMessages = documents.compactMap { document in
+                self.messages = documents.compactMap { document in
                     try? document.data(as: Message.self)
                 }
 
-                // Only process new messages for unread count
-                let unreadMessages = newMessages.filter { !$0.isRead && !$0.isCurrentUser }
-
-                if !unreadMessages.isEmpty {
-                    self.unreadMessagesCount += unreadMessages.count
-                    NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+                DispatchQueue.main.async {
+                    scrollToBottom = true
                 }
             }
     }
-
-
 
     private func removeMessagesListener() {
         messagesListener?.remove()
@@ -225,10 +213,7 @@ struct ChatView: View {
         let db = Firestore.firestore()
         let batch = db.batch()
 
-        let unreadMessages = messages.filter { !$0.isCurrentUser && !$0.isRead }
-        if unreadMessages.isEmpty { return }  // No unread messages, so return early
-
-        unreadMessages.forEach { message in
+        messages.filter { !$0.isCurrentUser && !$0.isRead }.forEach { message in
             let messageRef = db.collection("matches").document(matchID).collection("messages").document(message.id ?? "")
             batch.updateData(["isRead": true], forDocument: messageRef)
         }
@@ -237,14 +222,10 @@ struct ChatView: View {
             if let error = error {
                 print("Error marking messages as read: \(error.localizedDescription)")
             } else {
-                self.unreadMessagesCount = 0
                 NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
             }
         }
     }
-
-
-
 
     private func shouldShowDate(for message: Message) -> Bool {
         guard let index = messages.firstIndex(of: message) else { return false }
