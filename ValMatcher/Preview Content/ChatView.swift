@@ -105,13 +105,18 @@ struct ChatView: View {
         .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
-        .onAppear(perform: setupChatListener)
-        .onDisappear {
-            print("ChatView disappeared, matchID: \(matchID)")
-            // Notify DMHomeView to update the red dot for this specific chat
-            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
-        }
-        .onDisappear(perform: removeMessagesListener)
+        .onAppear {
+                    // Notify that we've entered ChatView
+                    NotificationCenter.default.post(name: Notification.Name("EnteredChatView"), object: nil)
+                    setupChatListener()
+                }
+                .onDisappear {
+                    // Notify that we've exited ChatView
+                    NotificationCenter.default.post(name: Notification.Name("ExitedChatView"), object: nil)
+                    markMessagesAsRead()
+                    removeMessagesListener()
+                    NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+                }
     }
 
     private func messageContent(for message: Message) -> some View {

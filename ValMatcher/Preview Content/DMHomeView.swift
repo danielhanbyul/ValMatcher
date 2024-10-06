@@ -26,12 +26,12 @@ struct DMHomeView: View {
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
     @State private var isInChatView = false // Track if we're currently in ChatView
-
+    
     var body: some View {
         ZStack {
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
-
+            
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
@@ -42,7 +42,7 @@ struct DMHomeView: View {
                     }
                 }
                 .padding(.top, 10)
-
+                
                 if isEditing && !selectedMatches.isEmpty {
                     Button(action: deleteSelectedMatches) {
                         Text("Delete Selected")
@@ -97,7 +97,7 @@ struct DMHomeView: View {
             Alert(title: Text("New Message"), message: Text(bannerMessage), dismissButton: .default(Text("OK")))
         }
     }
-
+    
     private func toggleSelection(for matchID: String) {
         if selectedMatches.contains(matchID) {
             selectedMatches.remove(matchID)
@@ -105,12 +105,12 @@ struct DMHomeView: View {
             selectedMatches.insert(matchID)
         }
     }
-
+    
     // Deletion of selected matches
     func deleteSelectedMatches() {
         let db = Firestore.firestore()
         let batch = db.batch()
-
+        
         for matchID in selectedMatches {
             if let index = matches.firstIndex(where: { $0.id == matchID }) {
                 matches.remove(at: index)
@@ -118,7 +118,7 @@ struct DMHomeView: View {
             let matchRef = db.collection("matches").document(matchID)
             batch.deleteDocument(matchRef)
         }
-
+        
         batch.commit { error in
             if let error = error {
                 print("Error deleting matches: \(error.localizedDescription)")
@@ -128,17 +128,17 @@ struct DMHomeView: View {
             }
         }
     }
-
+    
     @ViewBuilder
     private func selectedChatView() -> some View {
         if let selectedChatID = selectedChatID,
-            let chat = matches.first(where: { $0.id == selectedChatID }) {
+           let chat = matches.first(where: { $0.id == selectedChatID }) {
             ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
         } else {
             EmptyView()
         }
     }
-
+    
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
         HStack {
@@ -152,7 +152,7 @@ struct DMHomeView: View {
                 }
                 .padding(.leading)
             }
-
+            
             VStack(alignment: .leading) {
                 Text(getRecipientName(for: match))
                     .font(.custom("AvenirNext-Bold", size: 18))
@@ -160,7 +160,7 @@ struct DMHomeView: View {
             }
             .padding()
             Spacer()
-
+            
             if match.hasUnreadMessages ?? false {
                 Circle()
                     .fill(blendColor)
@@ -187,58 +187,58 @@ struct DMHomeView: View {
             }
         }
     }
-
+    
     private func blendRedDot(for index: Int) {
         blendColor = Color.black.opacity(0.7)
     }
-
+    
     private func restoreRedDot() {
         blendColor = Color.red
     }
-
+    
     // Function to get recipient's name using cache for faster access
     private func getRecipientName(for match: Chat?) -> String {
         guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
         let userID = currentUserID == match.user1 ? match.user2 : match.user1
-
+        
         if let cachedName = getUsernameFromCache(userID: userID ?? "") {
             return cachedName
         }
-
+        
         // If not in cache, fetch the username
         if let userID = userID {
             fetchAndCacheUserName(for: userID) { _ in }
         }
-
+        
         return "Unknown User" // Fallback in case the name isn't fetched yet
     }
-
+    
     func setupListeners() {
         loadMatches()
         setupRealTimeListener()
     }
-
+    
     func loadMatches() {
         guard let currentUserID = currentUserID else { return }
-
+        
         let db = Firestore.firestore()
         let queries = [
             db.collection("matches").whereField("user1", isEqualTo: currentUserID),
             db.collection("matches").whereField("user2", isEqualTo: currentUserID)
         ]
-
+        
         for query in queries {
             query.getDocuments { snapshot, error in
                 if let error = error {
                     print("Error loading matches: \(error.localizedDescription)")
                     return
                 }
-
+                
                 guard let documents = snapshot?.documents else { return }
-
+                
                 var newMatches = [Chat]()
                 let group = DispatchGroup()
-
+                
                 for document in documents {
                     do {
                         var match = try document.data(as: Chat.self)
@@ -251,7 +251,7 @@ struct DMHomeView: View {
                         print("Error decoding match: \(error.localizedDescription)")
                     }
                 }
-
+                
                 group.notify(queue: .main) {
                     self.fetchUserNames(for: newMatches) { updatedMatches in
                         // Sort the matches by lastMessageTimestamp before updating the UI
@@ -265,28 +265,28 @@ struct DMHomeView: View {
             }
         }
     }
-
+    
     func setupRealTimeListener() {
         guard let currentUserID = currentUserID else { return }
         let db = Firestore.firestore()
-
+        
         let queries = [
             db.collection("matches").whereField("user1", isEqualTo: currentUserID),
             db.collection("matches").whereField("user2", isEqualTo: currentUserID)
         ]
-
+        
         for query in queries {
             query.addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("Error in real-time listener: \(error.localizedDescription)")
                     return
                 }
-
+                
                 guard let documents = snapshot?.documents else { return }
-
+                
                 var updatedMatches = [Chat]()
                 let group = DispatchGroup()
-
+                
                 for document in documents {
                     do {
                         var match = try document.data(as: Chat.self)
@@ -303,7 +303,7 @@ struct DMHomeView: View {
                         print("Error decoding match: \(error.localizedDescription)")
                     }
                 }
-
+                
                 group.notify(queue: .main) {
                     // Sort the updated matches by lastMessageTimestamp after real-time update
                     self.matches = self.matches.sorted {
@@ -313,13 +313,13 @@ struct DMHomeView: View {
             }
         }
     }
-
+    
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
         let db = Firestore.firestore()
         guard let matchID = match.id else { return }
-
+        
         var matchCopy = match
-
+        
         db.collection("matches").document(matchID).collection("messages")
             .whereField("senderID", isNotEqualTo: currentUserID)
             .whereField("isRead", isEqualTo: false)
@@ -328,7 +328,7 @@ struct DMHomeView: View {
                     print("Error fetching unread messages: \(error.localizedDescription)")
                     return
                 }
-
+                
                 let unreadCount = snapshot?.documents.count ?? 0
                 if matchCopy.unreadMessages == nil {
                     matchCopy.unreadMessages = [:]
@@ -338,11 +338,11 @@ struct DMHomeView: View {
                 completion(matchCopy)
             }
     }
-
+    
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
         var updatedMatches = matches
         let dispatchGroup = DispatchGroup()
-
+        
         for i in 0..<updatedMatches.count {
             if let currentUserID = currentUserID {
                 dispatchGroup.enter()
@@ -363,18 +363,18 @@ struct DMHomeView: View {
                 }
             }
         }
-
+        
         dispatchGroup.notify(queue: .main) {
             completion(updatedMatches)
         }
     }
-
+    
     private func fetchAndCacheUserName(for userID: String, completion: @escaping (String) -> Void) {
         if let cachedName = getUsernameFromCache(userID: userID) {
             completion(cachedName)
             return
         }
-
+        
         Firestore.firestore().collection("users").document(userID).getDocument { document, error in
             if let document = document, document.exists {
                 let name = document.data()?["name"] as? String ?? "Unknown User"
@@ -388,61 +388,53 @@ struct DMHomeView: View {
             }
         }
     }
-
+    
     private func saveUsernameToCache(userID: String, username: String) {
         var cachedUsernames = UserDefaults.standard.dictionary(forKey: "cachedUsernames") as? [String: String] ?? [:]
         cachedUsernames[userID] = username
         UserDefaults.standard.setValue(cachedUsernames, forKey: "cachedUsernames")
     }
-
+    
     private func getUsernameFromCache(userID: String) -> String? {
         let cachedUsernames = UserDefaults.standard.dictionary(forKey: "cachedUsernames") as? [String: String]
         return cachedUsernames?[userID]
     }
-
+    
     private func updateUnreadMessagesCount(from matches: [Chat]) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         var count = 0
         let group = DispatchGroup()
-
+        
         var updatedMatches = matches
-
+        
         for (index, match) in updatedMatches.enumerated() {
             guard let matchID = match.id else { continue }
             group.enter()
             Firestore.firestore().collection("matches").document(matchID).collection("messages")
-                .order(by: "timestamp", descending: true)
+                .whereField("senderID", isNotEqualTo: currentUserID)
+                .whereField("isRead", isEqualTo: false)
                 .getDocuments { messageSnapshot, error in
                     if let error = error {
                         print("Error fetching messages: \(error)")
                         group.leave()
                         return
                     }
-
-                    let unreadCount = messageSnapshot?.documents.filter { document in
-                        let senderID = document.data()["senderID"] as? String ?? ""
-                        let isRead = document.data()["isRead"] as? Bool ?? true
-                        return senderID != currentUserID && !isRead
-                    }.count ?? 0
-
-                    if unreadCount > 0 {
-                        updatedMatches[index].hasUnreadMessages = true
-                    } else {
-                        updatedMatches[index].hasUnreadMessages = false
-                    }
-
-                    if let latestMessage = messageSnapshot?.documents.first {
+                    
+                    let unreadCount = messageSnapshot?.documents.count ?? 0
+                    
+                    updatedMatches[index].hasUnreadMessages = unreadCount > 0
+                    
+                    if let latestMessage = messageSnapshot?.documents.last {
                         updatedMatches[index].lastMessageTimestamp = latestMessage.data()["timestamp"] as? Timestamp
                     }
-
+                    
                     count += unreadCount
                     group.leave()
                 }
         }
-
+        
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-            // Sort by lastMessageTimestamp once all updates are fetched
             self.matches = updatedMatches.sorted {
                 ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
             }
