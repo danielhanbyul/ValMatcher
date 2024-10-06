@@ -105,18 +105,13 @@ struct ChatView: View {
         .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
-        .onAppear {
-                    // Notify that we've entered ChatView
-                    NotificationCenter.default.post(name: Notification.Name("EnteredChatView"), object: nil)
-                    setupChatListener()
-                }
-                .onDisappear {
-                    // Notify that we've exited ChatView
-                    NotificationCenter.default.post(name: Notification.Name("ExitedChatView"), object: nil)
-                    markMessagesAsRead()
-                    removeMessagesListener()
-                    NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
-                }
+        .onAppear(perform: setupChatListener)
+        .onDisappear {
+            print("ChatView disappeared, matchID: \(matchID)")
+            // Notify DMHomeView to update the red dot for this specific chat
+            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+        }
+        .onDisappear(perform: removeMessagesListener)
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -203,26 +198,21 @@ struct ChatView: View {
                     return
                 }
 
-                // Append new messages without resetting the array
+                // Append new messages and check if any of them are unread
                 let newMessages = documents.compactMap { document in
                     try? document.data(as: Message.self)
                 }
 
-                // Filter to append only the new messages
-                let filteredMessages = newMessages.filter { newMessage in
-                    !self.messages.contains(where: { $0.id == newMessage.id })
-                }
+                // Only process new messages for unread count
+                let unreadMessages = newMessages.filter { !$0.isRead && !$0.isCurrentUser }
 
-                if !filteredMessages.isEmpty {
-                    self.messages.append(contentsOf: filteredMessages)
-
-                    // Scroll to the bottom when new messages arrive
-                    DispatchQueue.main.async {
-                        scrollToBottom = true
-                    }
+                if !unreadMessages.isEmpty {
+                    self.unreadMessagesCount += unreadMessages.count
+                    NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
                 }
             }
     }
+
 
 
     private func removeMessagesListener() {
