@@ -108,6 +108,7 @@ struct ChatView: View {
             // Notify DMHomeView to update the red dot for this specific chat
             NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
         }
+
         .onDisappear(perform: removeMessagesListener)
     }
 
@@ -149,31 +150,25 @@ struct ChatView: View {
         }
     }
 
-    private func sendMessage() {
-        guard let currentUserID = Auth.auth().currentUser?.uid, !newMessage.isEmpty else { return }
+    func sendMessage() {
+        guard !newMessage.isEmpty, let currentUserID = currentUserID else { return }
 
         let db = Firestore.firestore()
         let messageData: [String: Any] = [
             "senderID": currentUserID,
             "content": newMessage,
-            "timestamp": Timestamp(),
+            "timestamp": FieldValue.serverTimestamp(),
             "isRead": false
         ]
 
-        // Add the message to Firestore
         db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
-                return
-            }
+            } else {
+                self.newMessage = ""
+                self.scrollToBottom = true
 
-            // Update the chat timestamp to the most recent
-            db.collection("matches").document(matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
-                if let error = error {
-                    print("Error updating chat timestamp: \(error.localizedDescription)")
-                } else {
-                    self.newMessage = "" // Clear the input field after sending
-                }
+                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
             }
         }
     }
@@ -222,7 +217,7 @@ struct ChatView: View {
             if let error = error {
                 print("Error marking messages as read: \(error.localizedDescription)")
             } else {
-                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
             }
         }
     }
@@ -253,4 +248,10 @@ let timeFormatter: DateFormatter = {
 struct IdentifiableImageURL: Identifiable {
     var id: String { url }
     var url: String
+}
+
+struct ChatView_Previews: PreviewProvider {
+    static var previews: some View {
+        ChatView(matchID: "testMatchID", recipientName: "Test User")
+    }
 }
