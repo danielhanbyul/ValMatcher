@@ -73,13 +73,14 @@ struct ChatView: View {
                         }
                     }
                 }
-                .onChange(of: messages) { _ in
-                    if scrollToBottom {
+                .onChange(of: messages) { newMessages in
+                    if scrollToBottom && !newMessages.isEmpty {
                         DispatchQueue.main.async {
-                            proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                            proxy.scrollTo(newMessages.last?.id, anchor: .bottom)
                         }
                     }
                 }
+
             }
 
             HStack {
@@ -193,15 +194,20 @@ struct ChatView: View {
                     return
                 }
 
-                self.messages = documents.compactMap { document in
+                let newMessages = documents.compactMap { document in
                     try? document.data(as: Message.self)
                 }
-
-                DispatchQueue.main.async {
-                    scrollToBottom = true
+                
+                // Avoid unnecessary updates
+                if newMessages != self.messages {
+                    self.messages = newMessages
+                    DispatchQueue.main.async {
+                        scrollToBottom = true
+                    }
                 }
             }
     }
+
 
     private func removeMessagesListener() {
         messagesListener?.remove()
