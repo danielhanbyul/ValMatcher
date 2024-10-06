@@ -400,16 +400,16 @@ struct ContentView: View {
                 let senderID = newMessage.data()["senderID"] as? String
                 let isRead = newMessage.data()["isRead"] as? Bool ?? true
 
-                // If the message is unread and sent by another user, update the notification immediately
+                // Check if the message is unread and not sent by the current user
                 if senderID != currentUserID && !isRead {
                     self.updateUnreadMessagesCount(for: matchID, messageID: newMessage.documentID)
-                    self.unreadMessagesCount += 1 // Update the count immediately
                 }
             }
         }
 
         self.messageListeners[matchID] = MessageListener(listener: listener)
     }
+
 
 
     private func updateUnreadMessagesCount(for matchID: String, messageID: String) {
@@ -423,6 +423,7 @@ struct ContentView: View {
                 let senderID = document.data()?["senderID"] as? String
                 let isRead = document.data()?["isRead"] as? Bool ?? true
 
+                // Ensure the message is unread and hasn't been counted yet
                 if senderID != currentUserID && !isRead {
                     if var listener = self.messageListeners[matchID], !listener.isAlreadyCounted(messageID: messageID) {
                         self.unreadMessagesCount += 1
@@ -433,6 +434,7 @@ struct ContentView: View {
             }
         }
     }
+
 
     private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
         guard UIApplication.shared.applicationState == .active else {

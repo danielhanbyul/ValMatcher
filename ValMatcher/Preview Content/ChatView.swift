@@ -22,6 +22,8 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
+    @State private var unreadMessagesCount: Int = 0
+
 
     var body: some View {
         VStack {
@@ -193,15 +195,20 @@ struct ChatView: View {
                     return
                 }
 
-                self.messages = documents.compactMap { document in
+                // Only update the messages if there are changes
+                let newMessages = documents.compactMap { document in
                     try? document.data(as: Message.self)
                 }
+                if self.messages != newMessages {
+                    self.messages = newMessages
 
-                DispatchQueue.main.async {
-                    scrollToBottom = true
+                    DispatchQueue.main.async {
+                        scrollToBottom = true
+                    }
                 }
             }
     }
+
 
     private func removeMessagesListener() {
         messagesListener?.remove()
@@ -213,7 +220,10 @@ struct ChatView: View {
         let db = Firestore.firestore()
         let batch = db.batch()
 
-        messages.filter { !$0.isCurrentUser && !$0.isRead }.forEach { message in
+        let unreadMessages = messages.filter { !$0.isCurrentUser && !$0.isRead }
+        if unreadMessages.isEmpty { return }  // No unread messages, so return early
+
+        unreadMessages.forEach { message in
             let messageRef = db.collection("matches").document(matchID).collection("messages").document(message.id ?? "")
             batch.updateData(["isRead": true], forDocument: messageRef)
         }
@@ -222,10 +232,14 @@ struct ChatView: View {
             if let error = error {
                 print("Error marking messages as read: \(error.localizedDescription)")
             } else {
+                // Reset the unread message count when all messages are read
+                self.unreadMessagesCount = 0
                 NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
             }
         }
     }
+
+
 
     private func shouldShowDate(for message: Message) -> Bool {
         guard let index = messages.firstIndex(of: message) else { return false }
