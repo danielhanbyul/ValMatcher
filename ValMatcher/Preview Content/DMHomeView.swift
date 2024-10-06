@@ -13,16 +13,14 @@ import FirebaseFirestoreSwift
 import UserNotifications
 
 struct DMHomeView: View {
+    @Binding var totalUnreadMessages: Int
     @State var matches: [Chat] = []
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var isEditing = false
     @State private var selectedMatches = Set<String>()
-    @Binding var totalUnreadMessages: Int
-    @State private var receivedNewMessage = false
     @State private var selectedChatID: String?
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
-    @State private var previousSelectedChatID: String?
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
@@ -98,7 +96,6 @@ struct DMHomeView: View {
         }
     }
 
-    // Deletion of selected matches
     func deleteSelectedMatches() {
         let db = Firestore.firestore()
         let batch = db.batch()
@@ -124,7 +121,7 @@ struct DMHomeView: View {
     @ViewBuilder
     private func selectedChatView() -> some View {
         if let selectedChatID = selectedChatID,
-            let chat = matches.first(where: { $0.id == selectedChatID }) {
+           let chat = matches.first(where: { $0.id == selectedChatID }) {
             ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
                 .onAppear {
                     if let index = matches.firstIndex(where: { $0.id == chat.id }), matches[index].hasUnreadMessages == true {
@@ -231,7 +228,6 @@ struct DMHomeView: View {
         }
     }
 
-    // Function to get recipient's name using cache for faster access
     private func getRecipientName(for match: Chat?) -> String {
         guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
         let userID = currentUserID == match.user1 ? match.user2 : match.user1
@@ -240,12 +236,11 @@ struct DMHomeView: View {
             return cachedName
         }
 
-        // If not in cache, fetch the username
         if let userID = userID {
             fetchAndCacheUserName(for: userID) { _ in }
         }
 
-        return "Unknown User" // Fallback in case the name isn't fetched yet
+        return "Unknown User"
     }
 
     func setupListeners() {
@@ -289,7 +284,6 @@ struct DMHomeView: View {
 
                 group.notify(queue: .main) {
                     self.fetchUserNames(for: newMatches) { updatedMatches in
-                        // Sort the matches by lastMessageTimestamp before updating the UI
                         self.matches = updatedMatches.sorted {
                             ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                         }
@@ -328,7 +322,9 @@ struct DMHomeView: View {
                         group.enter()
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
                             if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
-                                self.matches[index] = updatedMatch
+                                if self.selectedChatID != updatedMatch.id {
+                                    self.matches[index] = updatedMatch
+                                }
                             } else {
                                 self.matches.append(updatedMatch)
                             }
@@ -340,7 +336,6 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
-                    // Sort the updated matches by lastMessageTimestamp after real-time update
                     self.matches = self.matches.sorted {
                         ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                     }
@@ -437,39 +432,26 @@ struct DMHomeView: View {
 
     private func updateUnreadMessagesCount(from matches: [Chat]) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+
         var count = 0
         let group = DispatchGroup()
 
-        var updatedMatches = matches
+        totalUnreadMessages = 0
 
-        for (index, match) in updatedMatches.enumerated() {
+        for match in matches {
             guard let matchID = match.id else { continue }
             group.enter()
             Firestore.firestore().collection("matches").document(matchID).collection("messages")
-                .order(by: "timestamp", descending: true)
+                .whereField("senderID", isNotEqualTo: currentUserID)
+                .whereField("isRead", isEqualTo: false)
                 .getDocuments { messageSnapshot, error in
                     if let error = error {
-                        print("Error fetching messages: \(error)")
+                        print("Error fetching unread messages: \(error)")
                         group.leave()
                         return
                     }
 
-                    let unreadCount = messageSnapshot?.documents.filter { document in
-                        let senderID = document.data()["senderID"] as? String ?? ""
-                        let isRead = document.data()["isRead"] as? Bool ?? true
-                        return senderID != currentUserID && !isRead
-                    }.count ?? 0
-
-                    if unreadCount > 0 {
-                        updatedMatches[index].hasUnreadMessages = true
-                    } else {
-                        updatedMatches[index].hasUnreadMessages = false
-                    }
-
-                    if let latestMessage = messageSnapshot?.documents.first {
-                        updatedMatches[index].lastMessageTimestamp = latestMessage.data()["timestamp"] as? Timestamp
-                    }
-
+                    let unreadCount = messageSnapshot?.documents.count ?? 0
                     count += unreadCount
                     group.leave()
                 }
@@ -477,10 +459,6 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-            // Sort by lastMessageTimestamp once all updates are fetched
-            self.matches = updatedMatches.sorted {
-                ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
-            }
         }
     }
 }

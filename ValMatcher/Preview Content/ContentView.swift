@@ -48,92 +48,96 @@ struct ContentView: View {
     @State private var messageListeners: [String: MessageListener] = [:]
     
     // Added States
-    @State private var interactedUsers: Set<String> = []
-    @State private var lastRefreshDate: Date? = nil
-    @State private var shownUserIDs: Set<String> = []
-    
-    enum InteractionResult {
-        case liked
-        case passed
-    }
+        @State private var interactedUsers: Set<String> = []
+        @State private var lastRefreshDate: Date? = nil
+        @State private var shownUserIDs: Set<String> = []
+        
+        enum InteractionResult {
+            case liked
+            case passed
+        }
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .edgesIgnoringSafeArea(.all)
+        NavigationView {  // Make sure your toolbar is inside a NavigationView
+            ZStack {
+                LinearGradient(
+                    gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .edgesIgnoringSafeArea(.all)
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    if currentIndex < users.count {
-                        userCardStack
-                            .padding(.top, 40)
-                    } else {
-                        noMoreUsersView
+                ScrollView {
+                    VStack(spacing: 0) {
+                        if currentIndex < users.count {
+                            userCardStack
+                                .padding(.top, 40)
+                        } else {
+                            noMoreUsersView
+                        }
                     }
                 }
             }
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .navigationBarLeading) {
-                Text("ValMatcher")
-                    .font(.title2)
-                    .bold()
-                    .foregroundColor(.white)
-                    .padding(.top, 10)
-            }
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                HStack(spacing: 15) {
-                    NavigationLink(destination: NotificationsView(notifications: $notifications, notificationCount: $notificationCount)) {
-                        Image(systemName: "bell.fill")
-                            .foregroundColor(.white)
-                            .imageScale(.medium)
-                            .overlay(
-                                BadgeView(count: notificationCount)
-                                    .offset(x: 12, y: -12)
-                            )
-                    }
-                    NavigationLink(destination: DMHomeView(totalUnreadMessages: $unreadMessagesCount)) {
-                        Image(systemName: "message.fill")
-                            .foregroundColor(.white)
-                            .imageScale(.medium)
-                            .overlay(
-                                BadgeView(count: unreadMessagesCount)
-                                    .offset(x: 12, y: -12)
-                            )
-                    }
-                    NavigationLink(destination: ProfileView(viewModel: userProfileViewModel, isSignedIn: $isSignedIn)) {
-                        Image(systemName: "person.crop.circle.fill")
-                            .foregroundColor(.white)
-                            .imageScale(.medium)
+            .navigationBarTitleDisplayMode(.inline) // Ensure toolbar is attached to a NavigationView
+            .toolbar {
+                // Leading toolbar item for the title
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Text("ValMatcher")
+                        .font(.title2)
+                        .bold()
+                        .foregroundColor(.white)
+                        .padding(.top, 10)
+                }
+
+                // Trailing toolbar items for notifications and messages
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    HStack {
+                        NavigationLink(destination: NotificationsView(notifications: $notifications, notificationCount: $notificationCount)) {
+                            Image(systemName: "bell.fill")
+                                .foregroundColor(.white)
+                                .imageScale(.medium)
+                                .overlay(
+                                    BadgeView(count: notificationCount)
+                                        .offset(x: 12, y: -12)
+                                )
+                        }
+                        NavigationLink(destination: DMHomeView(totalUnreadMessages: $unreadMessagesCount)) {
+                            Image(systemName: "message.fill")
+                                .foregroundColor(.white)
+                                .imageScale(.medium)
+                                .overlay(
+                                    BadgeView(count: unreadMessagesCount)
+                                        .offset(x: 12, y: -12)
+                                )
+                        }
+                        NavigationLink(destination: ProfileView(viewModel: userProfileViewModel, isSignedIn: $isSignedIn)) {
+                            Image(systemName: "person.crop.circle.fill")
+                                .foregroundColor(.white)
+                                .imageScale(.medium)
+                        }
                     }
                 }
-                .padding(.top, 10)
             }
-        }
-        .alert(isPresented: $showAlert) {
-            Alert(title: Text("Notification"), message: Text(alertMessage), dismissButton: .default(Text("OK")) {
-                acknowledgedNotifications.insert(alertMessage)
-            })
-        }
-        .onAppear {
-            if isSignedIn {
-                self.interactedUsers.removeAll()
-                loadInteractedUsers { success in
-                    if success {
-                        fetchAllUsers()
+            .alert(isPresented: $showAlert) {
+                Alert(title: Text("Notification"), message: Text(alertMessage), dismissButton: .default(Text("OK")) {
+                    acknowledgedNotifications.insert(alertMessage)
+                })
+            }
+            .onAppear {
+                if isSignedIn {
+                    self.interactedUsers.removeAll()
+                    loadInteractedUsers { success in
+                        if success {
+                            fetchAllUsers()
+                        }
                     }
+                    // Set up listener for unread messages
+                    listenForUnreadMessagesCount()
                 }
-                // Set up listener for unread messages
-                listenForUnreadMessagesCount()
             }
-        }
-        .onChange(of: users) { _ in
-            listenForUnreadMessages()
+            .onChange(of: users) { _ in
+                listenForUnreadMessages()
+            }
         }
     }
 
