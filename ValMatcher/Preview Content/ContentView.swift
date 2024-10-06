@@ -382,6 +382,7 @@ struct ContentView: View {
         }
     }
 
+
     private func listenForNewMessages(in db: Firestore, matchID: String, currentUserID: String) {
         let messageQuery = db.collection("matches").document(matchID).collection("messages")
             .order(by: "timestamp")
@@ -397,27 +398,19 @@ struct ContentView: View {
             for change in newMessages {
                 let newMessage = change.document
                 let senderID = newMessage.data()["senderID"] as? String
-                let messageText = newMessage.data()["text"] as? String ?? "You have a new message"
-                let timestamp = newMessage.data()["timestamp"] as? Timestamp
                 let isRead = newMessage.data()["isRead"] as? Bool ?? true
 
-                if let timestamp = timestamp, !isRead, senderID != currentUserID, timestamp.dateValue().timeIntervalSinceNow > -5 {
-                    db.collection("users").document(senderID!).getDocument { document, error in
-                        if let error = error {
-                            print("Error fetching sender's name: \(error)")
-                            return
-                        }
-
-                        let senderName = document?.data()?["name"] as? String ?? "Unknown User"
-                        self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
-                        self.updateUnreadMessagesCount(for: matchID, messageID: change.document.documentID)
-                    }
+                // If the message is unread and sent by another user, update the notification immediately
+                if senderID != currentUserID && !isRead {
+                    self.updateUnreadMessagesCount(for: matchID, messageID: newMessage.documentID)
+                    self.unreadMessagesCount += 1 // Update the count immediately
                 }
             }
         }
 
         self.messageListeners[matchID] = MessageListener(listener: listener)
     }
+
 
     private func updateUnreadMessagesCount(for matchID: String, messageID: String) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
@@ -877,4 +870,3 @@ struct VideoPlayerView: View {
         .shadow(radius: 5)
     }
 }
-
