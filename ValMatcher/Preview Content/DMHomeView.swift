@@ -26,6 +26,7 @@ struct DMHomeView: View {
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
+    @State private var inChatView = false // Track whether in ChatView
 
     var body: some View {
         ZStack {
@@ -62,6 +63,7 @@ struct DMHomeView: View {
         })
         .onAppear {
             setupListeners()
+            inChatView = false // Ensure inChatView is reset when DMHomeView appears
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshChatList"))) { notification in
             if let chatID = notification.object as? String {
@@ -127,12 +129,15 @@ struct DMHomeView: View {
             let chat = matches.first(where: { $0.id == selectedChatID }) {
             ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
                 .onAppear {
+                    inChatView = true // Now in ChatView, prevent updates in DMHomeView
                     if let index = matches.firstIndex(where: { $0.id == chat.id }), matches[index].hasUnreadMessages == true {
                         markMessagesAsRead(for: chat)
                         blendRedDot(for: index)
                     }
                 }
                 .onDisappear {
+                    inChatView = false // Leaving ChatView, allow updates
+                    updateUnreadMessagesCount(from: matches) // Update when leaving ChatView
                     NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: chat.id)
                 }
         } else {
@@ -225,8 +230,6 @@ struct DMHomeView: View {
                     if let index = self.matches.firstIndex(where: { $0.id == chat.id }) {
                         self.matches[index].hasUnreadMessages = false
                     }
-                    // NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
-
                 }
             }
         }
@@ -290,7 +293,6 @@ struct DMHomeView: View {
 
                 group.notify(queue: .main) {
                     self.fetchUserNames(for: newMatches) { updatedMatches in
-                        // Sort the matches by lastMessageTimestamp before updating the UI
                         self.matches = updatedMatches.sorted {
                             ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                         }
@@ -341,7 +343,6 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
-                    // Sort the updated matches by lastMessageTimestamp after real-time update
                     self.matches = self.matches.sorted {
                         ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                     }
@@ -438,6 +439,9 @@ struct DMHomeView: View {
 
     private func updateUnreadMessagesCount(from matches: [Chat]) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+        
+        if inChatView { return } // Prevent updates when inside ChatView
+        
         var count = 0
         let group = DispatchGroup()
 
@@ -478,7 +482,6 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-            // Sort by lastMessageTimestamp once all updates are fetched
             self.matches = updatedMatches.sorted {
                 ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
             }
