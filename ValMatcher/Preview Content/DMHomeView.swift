@@ -10,7 +10,6 @@ import Firebase
 import FirebaseFirestore
 import FirebaseAuth
 import FirebaseFirestoreSwift
-import UserNotifications
 
 struct DMHomeView: View {
     @State var matches: [Chat] = []
@@ -26,7 +25,7 @@ struct DMHomeView: View {
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
-    @State private var inChatView = false // Track whether in ChatView
+    @State private var isInChatView = false // Track if we're currently in ChatView
 
     var body: some View {
         ZStack {
@@ -63,12 +62,15 @@ struct DMHomeView: View {
         })
         .onAppear {
             setupListeners()
-            inChatView = false // Ensure inChatView is reset when DMHomeView appears
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshChatList"))) { notification in
             if let chatID = notification.object as? String {
                 if let index = matches.firstIndex(where: { $0.id == chatID }) {
                     matches[index].hasUnreadMessages = false
+                }
+                // Only update unread messages when not in ChatView
+                if !isInChatView {
+                    updateUnreadMessagesCount(from: matches)
                 }
             }
         }
@@ -80,6 +82,10 @@ struct DMHomeView: View {
                     set: { isActive in
                         if !isActive {
                             selectedChatID = nil
+                            isInChatView = false // Set flag to false when leaving ChatView
+                            updateUnreadMessagesCount(from: matches) // Update when navigating back from ChatView
+                        } else {
+                            isInChatView = true // Set flag to true when in ChatView
                         }
                     }
                 )
@@ -128,18 +134,6 @@ struct DMHomeView: View {
         if let selectedChatID = selectedChatID,
             let chat = matches.first(where: { $0.id == selectedChatID }) {
             ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
-                .onAppear {
-                    inChatView = true // Now in ChatView, prevent updates in DMHomeView
-                    if let index = matches.firstIndex(where: { $0.id == chat.id }), matches[index].hasUnreadMessages == true {
-                        markMessagesAsRead(for: chat)
-                        blendRedDot(for: index)
-                    }
-                }
-                .onDisappear {
-                    inChatView = false // Leaving ChatView, allow updates
-                    updateUnreadMessagesCount(from: matches) // Update when leaving ChatView
-                    NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: chat.id)
-                }
         } else {
             EmptyView()
         }
@@ -184,7 +178,6 @@ struct DMHomeView: View {
                 toggleSelection(for: match.id ?? "")
             } else {
                 selectedChatID = match.id
-
                 if match.hasUnreadMessages ?? false {
                     if let index = matches.firstIndex(where: { $0.id == match.id }) {
                         matches[index].hasUnreadMessages = false
@@ -201,38 +194,6 @@ struct DMHomeView: View {
 
     private func restoreRedDot() {
         blendColor = Color.red
-    }
-
-    private func markMessagesAsRead(for chat: Chat) {
-        guard let matchID = chat.id, let currentUserID = currentUserID else { return }
-
-        let db = Firestore.firestore()
-        let messagesQuery = db.collection("matches").document(matchID).collection("messages")
-            .whereField("senderID", isNotEqualTo: currentUserID)
-            .whereField("isRead", isEqualTo: false)
-
-        messagesQuery.getDocuments { snapshot, error in
-            if let error = error {
-                print("Error marking messages as read: \(error.localizedDescription)")
-                return
-            }
-
-            let batch = db.batch()
-            snapshot?.documents.forEach { document in
-                let messageRef = document.reference
-                batch.updateData(["isRead": true], forDocument: messageRef)
-            }
-
-            batch.commit { error in
-                if let error = error {
-                    print("Error committing batch: \(error.localizedDescription)")
-                } else {
-                    if let index = self.matches.firstIndex(where: { $0.id == chat.id }) {
-                        self.matches[index].hasUnreadMessages = false
-                    }
-                }
-            }
-        }
     }
 
     // Function to get recipient's name using cache for faster access
@@ -293,6 +254,7 @@ struct DMHomeView: View {
 
                 group.notify(queue: .main) {
                     self.fetchUserNames(for: newMatches) { updatedMatches in
+                        // Sort the matches by lastMessageTimestamp before updating the UI
                         self.matches = updatedMatches.sorted {
                             ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                         }
@@ -343,6 +305,7 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
+                    // Sort the updated matches by lastMessageTimestamp after real-time update
                     self.matches = self.matches.sorted {
                         ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                     }
@@ -439,9 +402,6 @@ struct DMHomeView: View {
 
     private func updateUnreadMessagesCount(from matches: [Chat]) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-        
-        if inChatView { return } // Prevent updates when inside ChatView
-        
         var count = 0
         let group = DispatchGroup()
 
@@ -482,6 +442,7 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
+            // Sort by lastMessageTimestamp once all updates are fetched
             self.matches = updatedMatches.sorted {
                 ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
             }
