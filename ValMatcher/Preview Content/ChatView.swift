@@ -22,6 +22,7 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
+    @State private var lastMessageID: String?
 
     var body: some View {
         VStack {
@@ -73,14 +74,15 @@ struct ChatView: View {
                         }
                     }
                 }
-                .onChange(of: messages) { newMessages in
-                    if scrollToBottom && !newMessages.isEmpty {
+                .onChange(of: messages) { _ in
+                    if scrollToBottom {
                         DispatchQueue.main.async {
-                            proxy.scrollTo(newMessages.last?.id, anchor: .bottom)
+                            if let lastMessageID = messages.last?.id {
+                                proxy.scrollTo(lastMessageID, anchor: .bottom)
+                            }
                         }
                     }
                 }
-
             }
 
             HStack {
@@ -100,15 +102,11 @@ struct ChatView: View {
             }
             .padding()
         }
-        .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
+        .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15),
+                                                              Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear(perform: setupChatListener)
-        .onDisappear {
-            print("ChatView disappeared, matchID: \(matchID)")
-            // Notify DMHomeView to update the red dot for this specific chat
-            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
-        }
         .onDisappear(perform: removeMessagesListener)
     }
 
@@ -194,11 +192,11 @@ struct ChatView: View {
                     return
                 }
 
-                let newMessages = documents.compactMap { document in
+                var newMessages = documents.compactMap { document in
                     try? document.data(as: Message.self)
                 }
-                
-                // Avoid unnecessary updates
+
+                // Check if messages are actually updated to prevent unnecessary view refresh
                 if newMessages != self.messages {
                     self.messages = newMessages
                     DispatchQueue.main.async {
@@ -208,29 +206,9 @@ struct ChatView: View {
             }
     }
 
-
     private func removeMessagesListener() {
         messagesListener?.remove()
         messagesListener = nil
-    }
-
-    private func markMessagesAsRead() {
-        guard let currentUserID = currentUserID else { return }
-        let db = Firestore.firestore()
-        let batch = db.batch()
-
-        messages.filter { !$0.isCurrentUser && !$0.isRead }.forEach { message in
-            let messageRef = db.collection("matches").document(matchID).collection("messages").document(message.id ?? "")
-            batch.updateData(["isRead": true], forDocument: messageRef)
-        }
-
-        batch.commit { error in
-            if let error = error {
-                print("Error marking messages as read: \(error.localizedDescription)")
-            } else {
-                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
-            }
-        }
     }
 
     private func shouldShowDate(for message: Message) -> Bool {

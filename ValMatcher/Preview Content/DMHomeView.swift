@@ -22,22 +22,24 @@ struct DMHomeView: View {
     @State private var selectedChatID: String?
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
-    @State private var previousSelectedChatID: String?
-    @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
 
     var body: some View {
         ZStack {
-            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
-                .edgesIgnoringSafeArea(.all)
+            LinearGradient(
+                gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15),
+                                            Color(red: 0.21, green: 0.29, blue: 0.40)]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .edgesIgnoringSafeArea(.all)
 
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         ForEach(matches) { match in
                             matchRow(match: match)
-                                .background(isEditing && selectedMatches.contains(match.id ?? "") ? Color.gray.opacity(0.3) : Color.clear)
                         }
                     }
                 }
@@ -70,21 +72,6 @@ struct DMHomeView: View {
                 }
             }
         }
-        .background(
-            NavigationLink(
-                destination: selectedChatView(),
-                isActive: Binding(
-                    get: { selectedChatID != nil },
-                    set: { isActive in
-                        if !isActive {
-                            selectedChatID = nil
-                        }
-                    }
-                )
-            ) {
-                EmptyView()
-            }
-        )
         .alert(isPresented: $showNotificationBanner) {
             Alert(title: Text("New Message"), message: Text(bannerMessage), dismissButton: .default(Text("OK")))
         }
@@ -122,80 +109,63 @@ struct DMHomeView: View {
     }
 
     @ViewBuilder
-    private func selectedChatView() -> some View {
-        if let selectedChatID = selectedChatID,
-            let chat = matches.first(where: { $0.id == selectedChatID }) {
-            ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
-                .onAppear {
-                    if let index = matches.firstIndex(where: { $0.id == chat.id }), matches[index].hasUnreadMessages == true {
-                        markMessagesAsRead(for: chat)
-                        blendRedDot(for: index)
-                    }
-                }
-                .onDisappear {
-                    NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: chat.id)
-                }
-        } else {
-            EmptyView()
-        }
-    }
-
-    @ViewBuilder
     private func matchRow(match: Chat) -> some View {
-        HStack {
-            if isEditing {
-                // Show selection indicator
-                Button(action: {
-                    toggleSelection(for: match.id ?? "")
-                }) {
-                    Image(systemName: selectedMatches.contains(match.id ?? "") ? "checkmark.circle.fill" : "circle")
+        NavigationLink(
+            destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))
+                .onAppear {
+                    if let index = matches.firstIndex(where: { $0.id == match.id }), matches[index].hasUnreadMessages == true {
+                        markMessagesAsRead(for: match)
+                    }
+                },
+            tag: match.id ?? "",
+            selection: $selectedChatID
+        ) {
+            HStack {
+                if isEditing {
+                    // Show selection indicator
+                    Button(action: {
+                        toggleSelection(for: match.id ?? "")
+                    }) {
+                        Image(systemName: selectedMatches.contains(match.id ?? "") ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(.white)
+                    }
+                    .padding(.leading)
+                }
+
+                VStack(alignment: .leading) {
+                    Text(getRecipientName(for: match))
+                        .font(.custom("AvenirNext-Bold", size: 18))
                         .foregroundColor(.white)
                 }
-                .padding(.leading)
-            }
-
-            VStack(alignment: .leading) {
-                Text(getRecipientName(for: match))
-                    .font(.custom("AvenirNext-Bold", size: 18))
-                    .foregroundColor(.white)
-            }
-            .padding()
-            Spacer()
-
-            if match.hasUnreadMessages ?? false {
-                Circle()
-                    .fill(blendColor)
-                    .frame(width: 10, height: 10)
-                    .padding(.trailing, 10)
-            }
-        }
-        .background(isEditing && selectedMatches.contains(match.id ?? "") ? Color.gray.opacity(0.3) : Color.black.opacity(0.7))
-        .cornerRadius(12)
-        .padding(.horizontal)
-        .padding(.vertical, 5)
-        .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
-        .onTapGesture {
-            if isEditing {
-                toggleSelection(for: match.id ?? "")
-            } else {
-                selectedChatID = match.id
+                .padding()
+                Spacer()
 
                 if match.hasUnreadMessages ?? false {
-                    if let index = matches.firstIndex(where: { $0.id == match.id }) {
-                        matches[index].hasUnreadMessages = false
-                        blendRedDot(for: index)
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 10, height: 10)
+                        .padding(.trailing, 10)
+                }
+            }
+            .background(isEditing && selectedMatches.contains(match.id ?? "") ? Color.gray.opacity(0.3) : Color.black.opacity(0.7))
+            .cornerRadius(12)
+            .padding(.horizontal)
+            .padding(.vertical, 5)
+            .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
+            .onTapGesture {
+                if isEditing {
+                    toggleSelection(for: match.id ?? "")
+                } else {
+                    selectedChatID = match.id
+
+                    if match.hasUnreadMessages ?? false {
+                        if let index = matches.firstIndex(where: { $0.id == match.id }) {
+                            matches[index].hasUnreadMessages = false
+                        }
                     }
                 }
             }
         }
-    }
-
-    private func blendRedDot(for index: Int) {
-        blendColor = Color.black.opacity(0.7)
-    }
-
-    private func restoreRedDot() {
-        blendColor = Color.red
     }
 
     private func markMessagesAsRead(for chat: Chat) {
