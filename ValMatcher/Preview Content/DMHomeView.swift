@@ -19,7 +19,7 @@ struct DMHomeView: View {
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
     @State private var receivedNewMessage = false
-    @State private var selectedChatID: String? // Changed from selectedChat: Chat?
+    @State private var selectedChatID: String?
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
     @State private var previousSelectedChatID: String?
@@ -235,7 +235,7 @@ struct DMHomeView: View {
     private func getRecipientName(for match: Chat?) -> String {
         guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
         let userID = currentUserID == match.user1 ? match.user2 : match.user1
-        
+
         if let cachedName = getUsernameFromCache(userID: userID ?? "") {
             return cachedName
         }
@@ -244,7 +244,7 @@ struct DMHomeView: View {
         if let userID = userID {
             fetchAndCacheUserName(for: userID) { _ in }
         }
-        
+
         return "Unknown User" // Fallback in case the name isn't fetched yet
     }
 
@@ -289,7 +289,10 @@ struct DMHomeView: View {
 
                 group.notify(queue: .main) {
                     self.fetchUserNames(for: newMatches) { updatedMatches in
-                        self.matches = updatedMatches
+                        // Sort the matches by lastMessageTimestamp before updating the UI
+                        self.matches = updatedMatches.sorted {
+                            ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
+                        }
                         self.updateUnreadMessagesCount(from: self.matches)
                         self.isLoaded = true
                     }
@@ -337,7 +340,10 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
-                    print("Real-time updated matches: \(self.matches)")
+                    // Sort the updated matches by lastMessageTimestamp after real-time update
+                    self.matches = self.matches.sorted {
+                        ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
+                    }
                 }
             }
         }
@@ -403,7 +409,7 @@ struct DMHomeView: View {
             completion(cachedName)
             return
         }
-        
+
         Firestore.firestore().collection("users").document(userID).getDocument { document, error in
             if let document = document, document.exists {
                 let name = document.data()?["name"] as? String ?? "Unknown User"
@@ -461,7 +467,7 @@ struct DMHomeView: View {
                     }
 
                     if let latestMessage = messageSnapshot?.documents.first {
-                        updatedMatches[index].timestamp = latestMessage.data()["timestamp"] as? Timestamp
+                        updatedMatches[index].lastMessageTimestamp = latestMessage.data()["timestamp"] as? Timestamp
                     }
 
                     count += unreadCount
@@ -471,8 +477,9 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
+            // Sort by lastMessageTimestamp once all updates are fetched
             self.matches = updatedMatches.sorted {
-                ($0.timestamp?.dateValue() ?? Date.distantPast) > ($1.timestamp?.dateValue() ?? Date.distantPast)
+                ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
             }
         }
     }
