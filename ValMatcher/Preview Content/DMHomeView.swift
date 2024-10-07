@@ -462,4 +462,3 @@ struct DMHomeView: View {
         }
     }
 }
-

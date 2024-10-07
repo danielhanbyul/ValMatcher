@@ -22,6 +22,7 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
+    @State private var isInChatView: Bool = false // New state to track if user is in ChatView
 
     var body: some View {
         VStack {
@@ -103,18 +104,17 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear {
-            setupChatListener()
-            
-            // Notify other views to pause unread message count updates when entering chat
-            NotificationCenter.default.post(name: Notification.Name("PauseUnreadMessageUpdates"), object: nil)
+            isInChatView = true // Ensure that the user stays in the chat view
+            setupChatListener() // Set up the listener without causing navigation
         }
         .onDisappear {
-            // Notify DMHomeView to update the red dot for this specific chat
-            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
-            
-            // Notify other views to resume unread message count updates when leaving chat
-            NotificationCenter.default.post(name: Notification.Name("ResumeUnreadMessageUpdates"), object: matchID)
+            isInChatView = false // This just marks that the user is no longer in the chat
+            // Do not trigger navigation changes or Notifications here
+            print("ChatView disappeared, matchID: \(matchID)")
+            // Commenting out the navigation if unnecessary:
+            // NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
         }
+
         .onDisappear(perform: removeMessagesListener)
     }
 
@@ -167,14 +167,12 @@ struct ChatView: View {
             "isRead": false
         ]
 
-        // Add the message to Firestore
         db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
                 return
             }
 
-            // Update the chat timestamp to the most recent
             db.collection("matches").document(matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
@@ -200,15 +198,16 @@ struct ChatView: View {
                     return
                 }
 
-                self.messages = documents.compactMap { document in
-                    try? document.data(as: Message.self)
-                }
-
+                // Make sure it only updates the messages and not navigation-related code
                 DispatchQueue.main.async {
-                    scrollToBottom = true
+                    self.messages = documents.compactMap { document in
+                        try? document.data(as: Message.self)
+                    }
+                    scrollToBottom = true // Ensure it only scrolls and does not refresh the view unnecessarily
                 }
             }
     }
+
 
     private func removeMessagesListener() {
         messagesListener?.remove()
@@ -252,7 +251,8 @@ let dateOnlyFormatter: DateFormatter = {
 
 let timeFormatter: DateFormatter = {
     let formatter = DateFormatter()
-    dateOnlyFormatter.timeStyle = .short
+    formatter.dateStyle = .none
+    formatter.timeStyle = .short
     return formatter
 }()
 
