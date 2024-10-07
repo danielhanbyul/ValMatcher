@@ -22,6 +22,7 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
+    @State private var isInChatView: Bool = false // New state to track if user is in ChatView
 
     var body: some View {
         VStack {
@@ -102,10 +103,13 @@ struct ChatView: View {
         .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
-        .onAppear(perform: setupChatListener)
+        .onAppear {
+            isInChatView = true // Mark the user as being in ChatView
+            setupChatListener()
+        }
         .onDisappear {
+            isInChatView = false // Mark the user as leaving ChatView
             print("ChatView disappeared, matchID: \(matchID)")
-            // Notify DMHomeView to update the red dot for this specific chat
             NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
         }
         .onDisappear(perform: removeMessagesListener)
@@ -160,14 +164,12 @@ struct ChatView: View {
             "isRead": false
         ]
 
-        // Add the message to Firestore
         db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
                 return
             }
 
-            // Update the chat timestamp to the most recent
             db.collection("matches").document(matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
@@ -179,28 +181,31 @@ struct ChatView: View {
     }
 
     private func setupChatListener() {
-        let db = Firestore.firestore()
-        messagesListener = db.collection("matches").document(matchID).collection("messages")
-            .order(by: "timestamp", descending: false)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error loading messages: \(error.localizedDescription)")
-                    return
-                }
+        // Only set up the listener if the user is not already in ChatView
+        if !isInChatView {
+            let db = Firestore.firestore()
+            messagesListener = db.collection("matches").document(matchID).collection("messages")
+                .order(by: "timestamp", descending: false)
+                .addSnapshotListener { snapshot, error in
+                    if let error = error {
+                        print("Error loading messages: \(error.localizedDescription)")
+                        return
+                    }
 
-                guard let documents = snapshot?.documents else {
-                    print("No messages found")
-                    return
-                }
+                    guard let documents = snapshot?.documents else {
+                        print("No messages found")
+                        return
+                    }
 
-                self.messages = documents.compactMap { document in
-                    try? document.data(as: Message.self)
-                }
+                    self.messages = documents.compactMap { document in
+                        try? document.data(as: Message.self)
+                    }
 
-                DispatchQueue.main.async {
-                    scrollToBottom = true
+                    DispatchQueue.main.async {
+                        scrollToBottom = true
+                    }
                 }
-            }
+        }
     }
 
     private func removeMessagesListener() {

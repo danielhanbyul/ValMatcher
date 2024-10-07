@@ -117,6 +117,7 @@ struct ContentView: View {
                 .padding(.top, 10)
             }
         }
+
         .alert(isPresented: $showAlert) {
             Alert(title: Text("Notification"), message: Text(alertMessage), dismissButton: .default(Text("OK")) {
                 acknowledgedNotifications.insert(alertMessage)

@@ -26,6 +26,9 @@ struct DMHomeView: View {
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
 
+    // New state to track if the user is in ChatView
+    @State private var isInChatView = false
+
     var body: some View {
         ZStack {
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
@@ -74,47 +77,19 @@ struct DMHomeView: View {
         }
     }
 
-    private func toggleSelection(for matchID: String) {
-        if selectedMatches.contains(matchID) {
-            selectedMatches.remove(matchID)
-        } else {
-            selectedMatches.insert(matchID)
-        }
-    }
-
-    // Deletion of selected matches
-    func deleteSelectedMatches() {
-        let db = Firestore.firestore()
-        let batch = db.batch()
-
-        for matchID in selectedMatches {
-            if let index = matches.firstIndex(where: { $0.id == matchID }) {
-                matches.remove(at: index)
-            }
-            let matchRef = db.collection("matches").document(matchID)
-            batch.deleteDocument(matchRef)
-        }
-
-        batch.commit { error in
-            if let error = error {
-                print("Error deleting matches: \(error.localizedDescription)")
-            } else {
-                selectedMatches.removeAll()
-                loadMatches()
-            }
-        }
-    }
-
+    // Added tracking when user enters and leaves the ChatView
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
         NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))
             .onAppear {
+                isInChatView = true // User enters ChatView
                 if let index = matches.firstIndex(where: { $0.id == match.id }), matches[index].hasUnreadMessages == true {
                     markMessagesAsRead(for: match)
                     blendRedDot(for: index)
                 }
             }
             .onDisappear {
+                isInChatView = false // User leaves ChatView
                 NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: match.id)
             }
         ) {
@@ -158,14 +133,38 @@ struct DMHomeView: View {
         })
     }
 
-    private func blendRedDot(for index: Int) {
-        blendColor = Color.black.opacity(0.7)
+    // Deletion of selected matches
+    func deleteSelectedMatches() {
+        let db = Firestore.firestore()
+        let batch = db.batch()
+
+        for matchID in selectedMatches {
+            if let index = matches.firstIndex(where: { $0.id == matchID }) {
+                matches.remove(at: index)
+            }
+            let matchRef = db.collection("matches").document(matchID)
+            batch.deleteDocument(matchRef)
+        }
+
+        batch.commit { error in
+            if let error = error {
+                print("Error deleting matches: \(error.localizedDescription)")
+            } else {
+                selectedMatches.removeAll()
+                loadMatches()
+            }
+        }
     }
 
-    private func restoreRedDot() {
-        blendColor = Color.red
+    private func toggleSelection(for matchID: String) {
+        if selectedMatches.contains(matchID) {
+            selectedMatches.remove(matchID)
+        } else {
+            selectedMatches.insert(matchID)
+        }
     }
 
+    // Function to mark messages as read when user opens a chat
     private func markMessagesAsRead(for chat: Chat) {
         guard let matchID = chat.id, let currentUserID = currentUserID else { return }
 
@@ -216,6 +215,14 @@ struct DMHomeView: View {
         return "Unknown User" // Fallback in case the name isn't fetched yet
     }
 
+    private func blendRedDot(for index: Int) {
+        blendColor = Color.black.opacity(0.7)
+    }
+
+    private func restoreRedDot() {
+        blendColor = Color.red
+    }
+
     func setupListeners() {
         loadMatches()
         setupRealTimeListener()
@@ -239,6 +246,7 @@ struct DMHomeView: View {
 
                 guard let documents = snapshot?.documents else { return }
 
+                var newMatches = [Chat]()
                 let group = DispatchGroup()
 
                 for document in documents {
@@ -246,12 +254,7 @@ struct DMHomeView: View {
                         var match = try document.data(as: Chat.self)
                         group.enter()
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
-                            if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
-                                // Update existing match object
-                                self.updateMatch(at: index, with: updatedMatch)
-                            } else {
-                                self.matches.append(updatedMatch)
-                            }
+                            newMatches.append(updatedMatch)
                             group.leave()
                         }
                     } catch {
@@ -260,9 +263,9 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
-                    self.fetchUserNames(for: self.matches) { updatedMatches in
-                        // Sort the matches in place
-                        self.matches.sort {
+                    self.fetchUserNames(for: newMatches) { updatedMatches in
+                        // Sort the matches by lastMessageTimestamp before updating the UI
+                        self.matches = updatedMatches.sorted {
                             ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                         }
                         self.updateUnreadMessagesCount(from: self.matches)
@@ -291,6 +294,7 @@ struct DMHomeView: View {
 
                 guard let documents = snapshot?.documents else { return }
 
+                var updatedMatches = [Chat]()
                 let group = DispatchGroup()
 
                 for document in documents {
@@ -299,8 +303,7 @@ struct DMHomeView: View {
                         group.enter()
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
                             if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
-                                // Update existing match object
-                                self.updateMatch(at: index, with: updatedMatch)
+                                self.matches[index] = updatedMatch
                             } else {
                                 self.matches.append(updatedMatch)
                             }
@@ -312,23 +315,11 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
-                    // Sort the matches in place
-                    self.matches.sort {
-                        ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
-                    }
+                    // Sort only when new messages or chat creation occurs
+                    print("Real-time updated matches: \(self.matches)")
                 }
             }
         }
-    }
-
-    private func updateMatch(at index: Int, with updatedMatch: Chat) {
-        // Update the properties of the existing match object
-        matches[index].hasUnreadMessages = updatedMatch.hasUnreadMessages
-        matches[index].unreadMessages = updatedMatch.unreadMessages
-        matches[index].lastMessageTimestamp = updatedMatch.lastMessageTimestamp
-        matches[index].user1Name = updatedMatch.user1Name
-        matches[index].user2Name = updatedMatch.user2Name
-        // Add any other properties that need to be updated
     }
 
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
@@ -459,8 +450,7 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-            // Sort the matches in place
-            self.matches.sort {
+            self.matches = updatedMatches.sorted {
                 ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
             }
         }
