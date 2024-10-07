@@ -405,6 +405,9 @@ struct ContentView: View {
         let messageQuery = db.collection("matches").document(matchID).collection("messages")
             .order(by: "timestamp")
 
+        // Ensure that we do not double-count the same message
+        var countedMessageIDs = Set<String>()
+
         let listener = messageQuery.addSnapshotListener { messageSnapshot, error in
             if let error = error {
                 print("Error fetching messages: \(error)")
@@ -415,21 +418,16 @@ struct ContentView: View {
 
             for change in newMessages {
                 let newMessage = change.document
+                let messageID = newMessage.documentID
                 let senderID = newMessage.data()["senderID"] as? String
-                let messageText = newMessage.data()["text"] as? String ?? "You have a new message"
-                let timestamp = newMessage.data()["timestamp"] as? Timestamp
                 let isRead = newMessage.data()["isRead"] as? Bool ?? true
 
-                if let timestamp = timestamp, !isRead, senderID != currentUserID, timestamp.dateValue().timeIntervalSinceNow > -5 {
-                    db.collection("users").document(senderID!).getDocument { document, error in
-                        if let error = error {
-                            print("Error fetching sender's name: \(error)")
-                            return
-                        }
-
-                        let senderName = document?.data()?["name"] as? String ?? "Unknown User"
-                        self.notifyUserOfNewMessages(senderName: senderName, messageText: messageText)
-                        self.updateUnreadMessagesCount(for: matchID, messageID: change.document.documentID)
+                // Ensure the message is from another user and is not yet marked as read
+                if senderID != currentUserID && !isRead {
+                    // Only increment the unread count if the message hasn't been counted before
+                    if !countedMessageIDs.contains(messageID) {
+                        countedMessageIDs.insert(messageID)
+                        unreadMessagesCount += 1
                     }
                 }
             }
@@ -437,6 +435,7 @@ struct ContentView: View {
 
         self.messageListeners[matchID] = MessageListener(listener: listener)
     }
+
 
     private func updateUnreadMessagesCount(for matchID: String, messageID: String) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }

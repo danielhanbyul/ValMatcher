@@ -26,6 +26,8 @@ struct DMHomeView: View {
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
+    @State private var isInChatView = false
+
 
     var body: some View {
         ZStack {
@@ -440,9 +442,7 @@ struct DMHomeView: View {
         var count = 0
         let group = DispatchGroup()
 
-        var updatedMatches = matches
-
-        for (index, match) in updatedMatches.enumerated() {
+        for (index, match) in matches.enumerated() {
             guard let matchID = match.id else { continue }
             group.enter()
             Firestore.firestore().collection("matches").document(matchID).collection("messages")
@@ -460,14 +460,11 @@ struct DMHomeView: View {
                         return senderID != currentUserID && !isRead
                     }.count ?? 0
 
+                    // Update the matches array with self.
                     if unreadCount > 0 {
-                        updatedMatches[index].hasUnreadMessages = true
+                        self.matches[index].hasUnreadMessages = true
                     } else {
-                        updatedMatches[index].hasUnreadMessages = false
-                    }
-
-                    if let latestMessage = messageSnapshot?.documents.first {
-                        updatedMatches[index].lastMessageTimestamp = latestMessage.data()["timestamp"] as? Timestamp
+                        self.matches[index].hasUnreadMessages = false
                     }
 
                     count += unreadCount
@@ -476,11 +473,10 @@ struct DMHomeView: View {
         }
 
         group.notify(queue: .main) {
-            self.totalUnreadMessages = count
-            // Sort by lastMessageTimestamp once all updates are fetched
-            self.matches = updatedMatches.sorted {
-                ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
+            if !self.isInChatView {  // Use self to access state
+                self.totalUnreadMessages = count // Update the total unread messages count
             }
         }
     }
+
 }
