@@ -7,13 +7,12 @@
 import SwiftUI
 import Firebase
 import FirebaseFirestore
+import FirebaseFirestoreSwift
 import FirebaseAuth
 
 struct ChatView: View {
     var matchID: String
     var recipientName: String
-    @Binding var isInChatView: Bool  // Pass the state from ContentView
-
     @State private var messages: [Message] = []
     @State private var newMessage: String = ""
     @State private var currentUserID = Auth.auth().currentUser?.uid
@@ -104,13 +103,12 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear(perform: setupChatListener)
-        .onAppear {
-            isInChatView = true  // Mark as in ChatView when it appears
-        }
         .onDisappear {
-            isInChatView = false  // Mark as out of ChatView when it disappears
-            removeMessagesListener()  // Ensure the listener is removed when leaving ChatView
+            print("ChatView disappeared, matchID: \(matchID)")
+            // Notify DMHomeView to update the red dot for this specific chat
+            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
         }
+        .onDisappear(perform: removeMessagesListener)
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -223,6 +221,8 @@ struct ChatView: View {
         batch.commit { error in
             if let error = error {
                 print("Error marking messages as read: \(error.localizedDescription)")
+            } else {
+                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
             }
         }
     }

@@ -4,8 +4,6 @@
 //
 //  Created by Daniel Han on 6/12/24.
 //
-
-
 import SwiftUI
 import Firebase
 import FirebaseFirestore
@@ -110,7 +108,7 @@ struct DMHomeView: View {
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
-        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match), isInChatView: .constant(true)) // Include isInChatView here
+        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))
             .onAppear {
                 if let index = matches.firstIndex(where: { $0.id == match.id }), matches[index].hasUnreadMessages == true {
                     markMessagesAsRead(for: match)
@@ -160,7 +158,6 @@ struct DMHomeView: View {
             }
         })
     }
-
 
     // Removed selectedChatView() function since it's no longer used
     /*
