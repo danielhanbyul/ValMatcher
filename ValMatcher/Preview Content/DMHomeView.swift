@@ -19,15 +19,13 @@ struct DMHomeView: View {
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
     @State private var receivedNewMessage = false
+    // Removed selectedChatID
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
     @State private var previousSelectedChatID: String?
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
-
-    // New state to track if the user is in ChatView
-    @State private var isInChatView = false
 
     var body: some View {
         ZStack {
@@ -72,24 +70,53 @@ struct DMHomeView: View {
                 }
             }
         }
+        // Removed the background NavigationLink
         .alert(isPresented: $showNotificationBanner) {
             Alert(title: Text("New Message"), message: Text(bannerMessage), dismissButton: .default(Text("OK")))
         }
     }
 
-    // Added tracking when user enters and leaves the ChatView
+    private func toggleSelection(for matchID: String) {
+        if selectedMatches.contains(matchID) {
+            selectedMatches.remove(matchID)
+        } else {
+            selectedMatches.insert(matchID)
+        }
+    }
+
+    // Deletion of selected matches
+    func deleteSelectedMatches() {
+        let db = Firestore.firestore()
+        let batch = db.batch()
+
+        for matchID in selectedMatches {
+            if let index = matches.firstIndex(where: { $0.id == matchID }) {
+                matches.remove(at: index)
+            }
+            let matchRef = db.collection("matches").document(matchID)
+            batch.deleteDocument(matchRef)
+        }
+
+        batch.commit { error in
+            if let error = error {
+                print("Error deleting matches: \(error.localizedDescription)")
+            } else {
+                selectedMatches.removeAll()
+                loadMatches()
+            }
+        }
+    }
+
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
         NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))
             .onAppear {
-                isInChatView = true // User enters ChatView
                 if let index = matches.firstIndex(where: { $0.id == match.id }), matches[index].hasUnreadMessages == true {
                     markMessagesAsRead(for: match)
                     blendRedDot(for: index)
                 }
             }
             .onDisappear {
-                isInChatView = false // User leaves ChatView
                 NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: match.id)
             }
         ) {
@@ -133,38 +160,22 @@ struct DMHomeView: View {
         })
     }
 
-    // Deletion of selected matches
-    func deleteSelectedMatches() {
-        let db = Firestore.firestore()
-        let batch = db.batch()
+    // Removed selectedChatView() function since it's no longer used
+    /*
+    @ViewBuilder
+    private func selectedChatView() -> some View {
+        // Removed since we are navigating directly in matchRow
+    }
+    */
 
-        for matchID in selectedMatches {
-            if let index = matches.firstIndex(where: { $0.id == matchID }) {
-                matches.remove(at: index)
-            }
-            let matchRef = db.collection("matches").document(matchID)
-            batch.deleteDocument(matchRef)
-        }
-
-        batch.commit { error in
-            if let error = error {
-                print("Error deleting matches: \(error.localizedDescription)")
-            } else {
-                selectedMatches.removeAll()
-                loadMatches()
-            }
-        }
+    private func blendRedDot(for index: Int) {
+        blendColor = Color.black.opacity(0.7)
     }
 
-    private func toggleSelection(for matchID: String) {
-        if selectedMatches.contains(matchID) {
-            selectedMatches.remove(matchID)
-        } else {
-            selectedMatches.insert(matchID)
-        }
+    private func restoreRedDot() {
+        blendColor = Color.red
     }
 
-    // Function to mark messages as read when user opens a chat
     private func markMessagesAsRead(for chat: Chat) {
         guard let matchID = chat.id, let currentUserID = currentUserID else { return }
 
@@ -213,14 +224,6 @@ struct DMHomeView: View {
         }
 
         return "Unknown User" // Fallback in case the name isn't fetched yet
-    }
-
-    private func blendRedDot(for index: Int) {
-        blendColor = Color.black.opacity(0.7)
-    }
-
-    private func restoreRedDot() {
-        blendColor = Color.red
     }
 
     func setupListeners() {
@@ -315,8 +318,10 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
-                    // Sort only when new messages or chat creation occurs
-                    print("Real-time updated matches: \(self.matches)")
+                    // Sort the updated matches by lastMessageTimestamp after real-time update
+                    self.matches = self.matches.sorted {
+                        ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
+                    }
                 }
             }
         }
@@ -450,9 +455,11 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
+            // Sort by lastMessageTimestamp once all updates are fetched
             self.matches = updatedMatches.sorted {
                 ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
             }
         }
     }
 }
+

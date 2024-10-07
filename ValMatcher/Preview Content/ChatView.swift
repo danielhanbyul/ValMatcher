@@ -22,7 +22,6 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
-    @State private var isInChatView: Bool = false // New state to track if user is in ChatView
 
     var body: some View {
         VStack {
@@ -104,13 +103,17 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear {
-            isInChatView = true // Mark the user as being in ChatView
             setupChatListener()
+            
+            // Notify other views to pause unread message count updates when entering chat
+            NotificationCenter.default.post(name: Notification.Name("PauseUnreadMessageUpdates"), object: nil)
         }
         .onDisappear {
-            isInChatView = false // Mark the user as leaving ChatView
-            print("ChatView disappeared, matchID: \(matchID)")
+            // Notify DMHomeView to update the red dot for this specific chat
             NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+            
+            // Notify other views to resume unread message count updates when leaving chat
+            NotificationCenter.default.post(name: Notification.Name("ResumeUnreadMessageUpdates"), object: matchID)
         }
         .onDisappear(perform: removeMessagesListener)
     }
@@ -164,12 +167,14 @@ struct ChatView: View {
             "isRead": false
         ]
 
+        // Add the message to Firestore
         db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
                 return
             }
 
+            // Update the chat timestamp to the most recent
             db.collection("matches").document(matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
@@ -181,31 +186,28 @@ struct ChatView: View {
     }
 
     private func setupChatListener() {
-        // Only set up the listener if the user is not already in ChatView
-        if !isInChatView {
-            let db = Firestore.firestore()
-            messagesListener = db.collection("matches").document(matchID).collection("messages")
-                .order(by: "timestamp", descending: false)
-                .addSnapshotListener { snapshot, error in
-                    if let error = error {
-                        print("Error loading messages: \(error.localizedDescription)")
-                        return
-                    }
-
-                    guard let documents = snapshot?.documents else {
-                        print("No messages found")
-                        return
-                    }
-
-                    self.messages = documents.compactMap { document in
-                        try? document.data(as: Message.self)
-                    }
-
-                    DispatchQueue.main.async {
-                        scrollToBottom = true
-                    }
+        let db = Firestore.firestore()
+        messagesListener = db.collection("matches").document(matchID).collection("messages")
+            .order(by: "timestamp", descending: false)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error loading messages: \(error.localizedDescription)")
+                    return
                 }
-        }
+
+                guard let documents = snapshot?.documents else {
+                    print("No messages found")
+                    return
+                }
+
+                self.messages = documents.compactMap { document in
+                    try? document.data(as: Message.self)
+                }
+
+                DispatchQueue.main.async {
+                    scrollToBottom = true
+                }
+            }
     }
 
     private func removeMessagesListener() {
@@ -250,8 +252,7 @@ let dateOnlyFormatter: DateFormatter = {
 
 let timeFormatter: DateFormatter = {
     let formatter = DateFormatter()
-    formatter.dateStyle = .none
-    formatter.timeStyle = .short
+    dateOnlyFormatter.timeStyle = .short
     return formatter
 }()
 
