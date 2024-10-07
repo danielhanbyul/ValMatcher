@@ -22,6 +22,7 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
+    @State private var isInChatView: Bool = false  // Track if user is in ChatView
 
     var body: some View {
         VStack {
@@ -102,11 +103,20 @@ struct ChatView: View {
         .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
-        .onAppear(perform: setupChatListener)
+        .onAppear {
+            isInChatView = true
+            setupChatListener()
+            
+            // Notify other views to pause unread message count updates when entering chat
+            NotificationCenter.default.post(name: Notification.Name("PauseUnreadMessageUpdates"), object: nil)
+        }
         .onDisappear {
-            print("ChatView disappeared, matchID: \(matchID)")
+            isInChatView = false
             // Notify DMHomeView to update the red dot for this specific chat
             NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+            
+            // Notify other views to resume unread message count updates when leaving chat
+            NotificationCenter.default.post(name: Notification.Name("ResumeUnreadMessageUpdates"), object: matchID)
         }
         .onDisappear(perform: removeMessagesListener)
     }
@@ -197,8 +207,11 @@ struct ChatView: View {
                     try? document.data(as: Message.self)
                 }
 
-                DispatchQueue.main.async {
-                    scrollToBottom = true
+                // If user is in ChatView, we update messages but do not trigger any notifications
+                if !isInChatView {
+                    DispatchQueue.main.async {
+                        scrollToBottom = true
+                    }
                 }
             }
     }
