@@ -19,15 +19,13 @@ struct DMHomeView: View {
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
     @State private var receivedNewMessage = false
-    @State private var selectedChatID: String?
+    @State private var selectedChat: Chat?
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
     @State private var previousSelectedChatID: String?
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
-    @State private var isInChatView = false
-
 
     var body: some View {
         ZStack {
@@ -40,6 +38,11 @@ struct DMHomeView: View {
                         ForEach(matches) { match in
                             matchRow(match: match)
                                 .background(isEditing && selectedMatches.contains(match.id ?? "") ? Color.gray.opacity(0.3) : Color.clear)
+                                .onTapGesture {
+                                    if isEditing {
+                                        toggleSelection(for: match.id ?? "")
+                                    }
+                                }
                         }
                     }
                 }
@@ -76,10 +79,10 @@ struct DMHomeView: View {
             NavigationLink(
                 destination: selectedChatView(),
                 isActive: Binding(
-                    get: { selectedChatID != nil },
+                    get: { selectedChat != nil },
                     set: { isActive in
                         if !isActive {
-                            selectedChatID = nil
+                            selectedChat = nil
                         }
                     }
                 )
@@ -125,18 +128,15 @@ struct DMHomeView: View {
 
     @ViewBuilder
     private func selectedChatView() -> some View {
-        if let selectedChatID = selectedChatID,
-           let chat = matches.first(where: { $0.id == selectedChatID }) {
+        if let chat = selectedChat {
             ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
                 .onAppear {
-                    isInChatView = true // Mark as inside ChatView
                     if let index = matches.firstIndex(where: { $0.id == chat.id }), matches[index].hasUnreadMessages == true {
                         markMessagesAsRead(for: chat)
                         blendRedDot(for: index)
                     }
                 }
                 .onDisappear {
-                    isInChatView = false // Reset when leaving ChatView
                     NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: chat.id)
                 }
         } else {
@@ -147,53 +147,39 @@ struct DMHomeView: View {
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
         HStack {
-            if isEditing {
-                // Show selection indicator
-                Button(action: {
-                    toggleSelection(for: match.id ?? "")
-                }) {
-                    Image(systemName: selectedMatches.contains(match.id ?? "") ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(.white)
-                }
-                .padding(.leading)
-            }
+            Button(action: {
+                selectedChat = match
 
-            VStack(alignment: .leading) {
-                Text(getRecipientName(for: match))
-                    .font(.custom("AvenirNext-Bold", size: 18))
-                    .foregroundColor(.white)
-            }
-            .padding()
-            Spacer()
-
-            if match.hasUnreadMessages ?? false {
-                Circle()
-                    .fill(blendColor)
-                    .frame(width: 10, height: 10)
-                    .padding(.trailing, 10)
-            }
-        }
-        .background(isEditing && selectedMatches.contains(match.id ?? "") ? Color.gray.opacity(0.3) : Color.black.opacity(0.7))
-        .cornerRadius(12)
-        .padding(.horizontal)
-        .padding(.vertical, 5)
-        .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
-        .onTapGesture {
-            if isEditing {
-                toggleSelection(for: match.id ?? "")
-            } else {
-                selectedChatID = match.id
-                isInChatView = true // Ensure updates are paused
-                
                 if match.hasUnreadMessages ?? false {
                     if let index = matches.firstIndex(where: { $0.id == match.id }) {
                         matches[index].hasUnreadMessages = false
                         blendRedDot(for: index)
                     }
                 }
+            }) {
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(getRecipientName(for: match))
+                            .font(.custom("AvenirNext-Bold", size: 18))
+                            .foregroundColor(.white)
+                    }
+                    .padding()
+                    Spacer()
+
+                    if match.hasUnreadMessages ?? false {
+                        Circle()
+                            .fill(blendColor)
+                            .frame(width: 10, height: 10)
+                            .padding(.trailing, 10)
+                    }
+                }
+                .background(Color.black.opacity(0.7))
+                .cornerRadius(12)
+                .padding(.horizontal)
+                .padding(.vertical, 5)
+                .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
             }
         }
-
     }
 
     private func blendRedDot(for index: Int) {
@@ -241,17 +227,23 @@ struct DMHomeView: View {
     private func getRecipientName(for match: Chat?) -> String {
         guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
         let userID = currentUserID == match.user1 ? match.user2 : match.user1
-
-        if let cachedName = getUsernameFromCache(userID: userID ?? "") {
+        
+        if let cachedName = userNamesCache[userID ?? ""] {
             return cachedName
         }
 
         // If not in cache, fetch the username
         if let userID = userID {
-            fetchAndCacheUserName(for: userID) { _ in }
+            Firestore.firestore().collection("users").document(userID).getDocument { document, error in
+                if let document = document, document.exists {
+                    let name = document.data()?["name"] as? String ?? "Unknown User"
+                    self.userNamesCache[userID] = name
+                } else {
+                    self.userNamesCache[userID] = "Unknown User"
+                }
+            }
         }
-
-        return "Unknown User" // Fallback in case the name isn't fetched yet
+        return "Unknown User"
     }
 
     func setupListeners() {
@@ -295,10 +287,8 @@ struct DMHomeView: View {
 
                 group.notify(queue: .main) {
                     self.fetchUserNames(for: newMatches) { updatedMatches in
-                        // Sort the matches by lastMessageTimestamp before updating the UI
-                        self.matches = updatedMatches.sorted {
-                            ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
-                        }
+                        self.matches = updatedMatches
+                        self.sortChatsByRecency()
                         self.updateUnreadMessagesCount(from: self.matches)
                         self.isLoaded = true
                     }
@@ -325,38 +315,39 @@ struct DMHomeView: View {
 
                 guard let documents = snapshot?.documents else { return }
 
-                if !isInChatView { // Only update if not in ChatView
-                    var updatedMatches = [Chat]()
-                    let group = DispatchGroup()
+                var updatedMatches = [Chat]()
+                let group = DispatchGroup()
 
-                    for document in documents {
-                        do {
-                            var match = try document.data(as: Chat.self)
-                            group.enter()
-                            self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
-                                if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
-                                    self.matches[index] = updatedMatch
-                                } else {
-                                    self.matches.append(updatedMatch)
-                                }
-                                group.leave()
-                            }
-                        } catch {
-                            print("Error decoding match: \(error.localizedDescription)")
+                for document in documents {
+                    do {
+                        var match = try document.data(as: Chat.self)
+                        group.enter()
+                        self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
+                            updatedMatches.append(updatedMatch)
+                            group.leave()
                         }
+                    } catch {
+                        print("Error decoding match: \(error.localizedDescription)")
                     }
+                }
 
-                    group.notify(queue: .main) {
-                        // Sort the updated matches by lastMessageTimestamp after real-time update
-                        self.matches = self.matches.sorted {
-                            ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
-                        }
-                    }
+                group.notify(queue: .main) {
+                    self.matches = updatedMatches
+                    self.sortChatsByRecency()
+                    print("Real-time updated matches: \(self.matches)")
                 }
             }
         }
     }
 
+    // Sort chats by the latest message timestamp without animation
+    private func sortChatsByRecency() {
+        matches.sort { (chat1, chat2) -> Bool in
+            let chat1Date = chat1.timestamp?.dateValue() ?? Date.distantPast
+            let chat2Date = chat2.timestamp?.dateValue() ?? Date.distantPast
+            return chat1Date > chat2Date
+        }
+    }
 
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
         let db = Firestore.firestore()
@@ -414,34 +405,20 @@ struct DMHomeView: View {
     }
 
     private func fetchAndCacheUserName(for userID: String, completion: @escaping (String) -> Void) {
-        if let cachedName = getUsernameFromCache(userID: userID) {
+        if let cachedName = userNamesCache[userID] {
             completion(cachedName)
-            return
-        }
-
-        Firestore.firestore().collection("users").document(userID).getDocument { document, error in
-            if let document = document, document.exists {
-                let name = document.data()?["name"] as? String ?? "Unknown User"
-                self.userNamesCache[userID] = name
-                saveUsernameToCache(userID: userID, username: name)
-                completion(name)
-            } else {
-                self.userNamesCache[userID] = "Unknown User"
-                saveUsernameToCache(userID: userID, username: "Unknown User")
-                completion("Unknown User")
+        } else {
+            Firestore.firestore().collection("users").document(userID).getDocument { document, error in
+                if let document = document, document.exists {
+                    let name = document.data()?["name"] as? String ?? "Unknown User"
+                    self.userNamesCache[userID] = name
+                    completion(name)
+                } else {
+                    self.userNamesCache[userID] = "Unknown User"
+                    completion("Unknown User")
+                }
             }
         }
-    }
-
-    private func saveUsernameToCache(userID: String, username: String) {
-        var cachedUsernames = UserDefaults.standard.dictionary(forKey: "cachedUsernames") as? [String: String] ?? [:]
-        cachedUsernames[userID] = username
-        UserDefaults.standard.setValue(cachedUsernames, forKey: "cachedUsernames")
-    }
-
-    private func getUsernameFromCache(userID: String) -> String? {
-        let cachedUsernames = UserDefaults.standard.dictionary(forKey: "cachedUsernames") as? [String: String]
-        return cachedUsernames?[userID]
     }
 
     private func updateUnreadMessagesCount(from matches: [Chat]) {
@@ -476,7 +453,7 @@ struct DMHomeView: View {
                     }
 
                     if let latestMessage = messageSnapshot?.documents.first {
-                        updatedMatches[index].lastMessageTimestamp = latestMessage.data()["timestamp"] as? Timestamp
+                        updatedMatches[index].timestamp = latestMessage.data()["timestamp"] as? Timestamp
                     }
 
                     count += unreadCount
@@ -486,10 +463,10 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-            // Sort by lastMessageTimestamp once all updates are fetched
             self.matches = updatedMatches.sorted {
-                ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
+                ($0.timestamp?.dateValue() ?? Date.distantPast) > ($1.timestamp?.dateValue() ?? Date.distantPast)
             }
         }
     }
 }
+ 

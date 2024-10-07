@@ -22,8 +22,6 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
-    @State private var lastMessageID: String?
-    @State private var isInChatView = false // Added to track if the user is in ChatView
 
     var body: some View {
         VStack {
@@ -78,15 +76,12 @@ struct ChatView: View {
                 .onChange(of: messages) { _ in
                     if scrollToBottom {
                         DispatchQueue.main.async {
-                            if let lastMessageID = messages.last?.id {
-                                proxy.scrollTo(lastMessageID, anchor: .bottom)
-                            }
+                            proxy.scrollTo(messages.last?.id, anchor: .bottom)
                         }
                     }
                 }
             }
 
-            // Input field and send button
             HStack {
                 TextField("Enter message", text: $newMessage)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -104,21 +99,19 @@ struct ChatView: View {
             }
             .padding()
         }
-        .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15),
-                                                              Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
+        .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
-        .onAppear {
-            self.isInChatView = true // Mark as inside ChatView
-            setupChatListener()
-        }
+        .onAppear(perform: setupChatListener)
         .onDisappear {
-            self.isInChatView = false // Mark as outside ChatView
-            removeMessagesListener()
+            print("ChatView disappeared, matchID: \(matchID)")
+            // Notify DMHomeView to update the red dot for this specific chat
+            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
         }
+
+        .onDisappear(perform: removeMessagesListener)
     }
 
-    // View for message content (Text or Image)
     private func messageContent(for message: Message) -> some View {
         Group {
             if let imageURL = message.imageURL {
@@ -157,77 +150,78 @@ struct ChatView: View {
         }
     }
 
-    // Send a message
-    private func sendMessage() {
-        guard let currentUserID = currentUserID, !newMessage.isEmpty else { return }
+    func sendMessage() {
+        guard !newMessage.isEmpty, let currentUserID = currentUserID else { return }
 
         let db = Firestore.firestore()
         let messageData: [String: Any] = [
             "senderID": currentUserID,
             "content": newMessage,
-            "timestamp": Timestamp(),
+            "timestamp": FieldValue.serverTimestamp(),
             "isRead": false
         ]
 
-        // Add the message to Firestore
         db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
-                return
-            }
+            } else {
+                self.newMessage = ""
+                self.scrollToBottom = true
 
-            // Update the chat timestamp to the most recent
-            db.collection("matches").document(matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
-                if let error = error {
-                    print("Error updating chat timestamp: \(error.localizedDescription)")
-                } else {
-                    self.newMessage = "" // Clear the input field after sending
-                }
+                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
             }
         }
     }
 
-    // Setup listener for incoming messages
     private func setupChatListener() {
         let db = Firestore.firestore()
-        
-        // Use the listener only when the user is not in the ChatView
-        if !isInChatView {
-            messagesListener = db.collection("matches").document(matchID).collection("messages")
-                .order(by: "timestamp", descending: false)
-                .addSnapshotListener { snapshot, error in
-                    if let error = error {
-                        print("Error loading messages: \(error.localizedDescription)")
-                        return
-                    }
-
-                    guard let documents = snapshot?.documents else {
-                        print("No messages found")
-                        return
-                    }
-
-                    // Check if new messages are different from current messages to prevent unnecessary refreshes
-                    let newMessages = documents.compactMap { document in
-                        try? document.data(as: Message.self)
-                    }
-
-                    if newMessages != self.messages {
-                        self.messages = newMessages
-                        DispatchQueue.main.async {
-                            scrollToBottom = true
-                        }
-                    }
+        messagesListener = db.collection("matches").document(matchID).collection("messages")
+            .order(by: "timestamp", descending: false)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error loading messages: \(error.localizedDescription)")
+                    return
                 }
-        }
+
+                guard let documents = snapshot?.documents else {
+                    print("No messages found")
+                    return
+                }
+
+                self.messages = documents.compactMap { document in
+                    try? document.data(as: Message.self)
+                }
+
+                DispatchQueue.main.async {
+                    scrollToBottom = true
+                }
+            }
     }
 
-    // Remove the listener when leaving the view
     private func removeMessagesListener() {
         messagesListener?.remove()
         messagesListener = nil
     }
 
-    // Determine if the date header should be shown between messages
+    private func markMessagesAsRead() {
+        guard let currentUserID = currentUserID else { return }
+        let db = Firestore.firestore()
+        let batch = db.batch()
+
+        messages.filter { !$0.isCurrentUser && !$0.isRead }.forEach { message in
+            let messageRef = db.collection("matches").document(matchID).collection("messages").document(message.id ?? "")
+            batch.updateData(["isRead": true], forDocument: messageRef)
+        }
+
+        batch.commit { error in
+            if let error = error {
+                print("Error marking messages as read: \(error.localizedDescription)")
+            } else {
+                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: nil)
+            }
+        }
+    }
+
     private func shouldShowDate(for message: Message) -> Bool {
         guard let index = messages.firstIndex(of: message) else { return false }
         if index == 0 { return true }
@@ -237,7 +231,6 @@ struct ChatView: View {
     }
 }
 
-// Date Formatters
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateStyle = .long
@@ -252,8 +245,13 @@ let timeFormatter: DateFormatter = {
     return formatter
 }()
 
-// Struct to handle fullscreen images
 struct IdentifiableImageURL: Identifiable {
     var id: String { url }
     var url: String
+}
+
+struct ChatView_Previews: PreviewProvider {
+    static var previews: some View {
+        ChatView(matchID: "testMatchID", recipientName: "Test User")
+    }
 }
