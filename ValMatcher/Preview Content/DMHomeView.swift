@@ -5,6 +5,7 @@
 //  Created by Daniel Han on 6/12/24.
 //
 
+
 import SwiftUI
 import Firebase
 import FirebaseFirestore
@@ -26,9 +27,6 @@ struct DMHomeView: View {
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
-    @State private var isInChatView = false
-    
-
 
     var body: some View {
         ZStack {
@@ -116,7 +114,7 @@ struct DMHomeView: View {
             .onAppear {
                 if let index = matches.firstIndex(where: { $0.id == match.id }), matches[index].hasUnreadMessages == true {
                     markMessagesAsRead(for: match)
-                    blendRedDot(for: index) // Call the function to blend the red dot
+                    blendRedDot(for: index)
                 }
             }
             .onDisappear {
@@ -145,11 +143,10 @@ struct DMHomeView: View {
 
                 if match.hasUnreadMessages ?? false {
                     Circle()
-                        .fill(blendColor) // Use the blend color here
+                        .fill(blendColor)
                         .frame(width: 10, height: 10)
                         .padding(.trailing, 10)
                 }
-
             }
             .background(isEditing && selectedMatches.contains(match.id ?? "") ? Color.gray.opacity(0.3) : Color.black.opacity(0.7))
             .cornerRadius(12)
@@ -164,19 +161,21 @@ struct DMHomeView: View {
         })
     }
 
+    // Removed selectedChatView() function since it's no longer used
+    /*
+    @ViewBuilder
+    private func selectedChatView() -> some View {
+        // Removed since we are navigating directly in matchRow
+    }
+    */
 
     private func blendRedDot(for index: Int) {
-        withAnimation {
-            blendColor = Color.black.opacity(0.7) // Use black when read
-        }
+        blendColor = Color.black.opacity(0.7)
     }
 
     private func restoreRedDot() {
-        withAnimation {
-            blendColor = Color.red // Restore red for unread messages
-        }
+        blendColor = Color.red
     }
-
 
     private func markMessagesAsRead(for chat: Chat) {
         guard let matchID = chat.id, let currentUserID = currentUserID else { return }

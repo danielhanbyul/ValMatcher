@@ -7,12 +7,13 @@
 import SwiftUI
 import Firebase
 import FirebaseFirestore
-import FirebaseFirestoreSwift
 import FirebaseAuth
 
 struct ChatView: View {
     var matchID: String
     var recipientName: String
+    @Binding var isInChatView: Bool  // Pass the state from ContentView
+
     @State private var messages: [Message] = []
     @State private var newMessage: String = ""
     @State private var currentUserID = Auth.auth().currentUser?.uid
@@ -22,7 +23,6 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
-    @State private var isInChatView: Bool = false  // Track if user is in ChatView
 
     var body: some View {
         VStack {
@@ -103,22 +103,14 @@ struct ChatView: View {
         .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
+        .onAppear(perform: setupChatListener)
         .onAppear {
-            isInChatView = true
-            setupChatListener()
-            
-            // Notify other views to pause unread message count updates when entering chat
-            NotificationCenter.default.post(name: Notification.Name("PauseUnreadMessageUpdates"), object: nil)
+            isInChatView = true  // Mark as in ChatView when it appears
         }
         .onDisappear {
-            isInChatView = false
-            // Notify DMHomeView to update the red dot for this specific chat
-            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
-            
-            // Notify other views to resume unread message count updates when leaving chat
-            NotificationCenter.default.post(name: Notification.Name("ResumeUnreadMessageUpdates"), object: matchID)
+            isInChatView = false  // Mark as out of ChatView when it disappears
+            removeMessagesListener()  // Ensure the listener is removed when leaving ChatView
         }
-        .onDisappear(perform: removeMessagesListener)
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -207,11 +199,8 @@ struct ChatView: View {
                     try? document.data(as: Message.self)
                 }
 
-                // If user is in ChatView, we update messages but do not trigger any notifications
-                if !isInChatView {
-                    DispatchQueue.main.async {
-                        scrollToBottom = true
-                    }
+                DispatchQueue.main.async {
+                    scrollToBottom = true
                 }
             }
     }
@@ -234,8 +223,6 @@ struct ChatView: View {
         batch.commit { error in
             if let error = error {
                 print("Error marking messages as read: \(error.localizedDescription)")
-            } else {
-                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
             }
         }
     }
