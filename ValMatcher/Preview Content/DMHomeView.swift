@@ -126,15 +126,17 @@ struct DMHomeView: View {
     @ViewBuilder
     private func selectedChatView() -> some View {
         if let selectedChatID = selectedChatID,
-            let chat = matches.first(where: { $0.id == selectedChatID }) {
+           let chat = matches.first(where: { $0.id == selectedChatID }) {
             ChatView(matchID: chat.id ?? "", recipientName: getRecipientName(for: chat))
                 .onAppear {
+                    isInChatView = true // Mark as inside ChatView
                     if let index = matches.firstIndex(where: { $0.id == chat.id }), matches[index].hasUnreadMessages == true {
                         markMessagesAsRead(for: chat)
                         blendRedDot(for: index)
                     }
                 }
                 .onDisappear {
+                    isInChatView = false // Reset when leaving ChatView
                     NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: chat.id)
                 }
         } else {
@@ -181,7 +183,8 @@ struct DMHomeView: View {
                 toggleSelection(for: match.id ?? "")
             } else {
                 selectedChatID = match.id
-
+                isInChatView = true // Ensure updates are paused
+                
                 if match.hasUnreadMessages ?? false {
                     if let index = matches.firstIndex(where: { $0.id == match.id }) {
                         matches[index].hasUnreadMessages = false
@@ -190,6 +193,7 @@ struct DMHomeView: View {
                 }
             }
         }
+
     }
 
     private func blendRedDot(for index: Int) {
@@ -321,35 +325,38 @@ struct DMHomeView: View {
 
                 guard let documents = snapshot?.documents else { return }
 
-                var updatedMatches = [Chat]()
-                let group = DispatchGroup()
+                if !isInChatView { // Only update if not in ChatView
+                    var updatedMatches = [Chat]()
+                    let group = DispatchGroup()
 
-                for document in documents {
-                    do {
-                        var match = try document.data(as: Chat.self)
-                        group.enter()
-                        self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
-                            if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
-                                self.matches[index] = updatedMatch
-                            } else {
-                                self.matches.append(updatedMatch)
+                    for document in documents {
+                        do {
+                            var match = try document.data(as: Chat.self)
+                            group.enter()
+                            self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
+                                if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
+                                    self.matches[index] = updatedMatch
+                                } else {
+                                    self.matches.append(updatedMatch)
+                                }
+                                group.leave()
                             }
-                            group.leave()
+                        } catch {
+                            print("Error decoding match: \(error.localizedDescription)")
                         }
-                    } catch {
-                        print("Error decoding match: \(error.localizedDescription)")
                     }
-                }
 
-                group.notify(queue: .main) {
-                    // Sort the updated matches by lastMessageTimestamp after real-time update
-                    self.matches = self.matches.sorted {
-                        ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
+                    group.notify(queue: .main) {
+                        // Sort the updated matches by lastMessageTimestamp after real-time update
+                        self.matches = self.matches.sorted {
+                            ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
+                        }
                     }
                 }
             }
         }
     }
+
 
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
         let db = Firestore.firestore()
@@ -442,7 +449,9 @@ struct DMHomeView: View {
         var count = 0
         let group = DispatchGroup()
 
-        for (index, match) in matches.enumerated() {
+        var updatedMatches = matches
+
+        for (index, match) in updatedMatches.enumerated() {
             guard let matchID = match.id else { continue }
             group.enter()
             Firestore.firestore().collection("matches").document(matchID).collection("messages")
@@ -460,11 +469,14 @@ struct DMHomeView: View {
                         return senderID != currentUserID && !isRead
                     }.count ?? 0
 
-                    // Update the matches array with self.
                     if unreadCount > 0 {
-                        self.matches[index].hasUnreadMessages = true
+                        updatedMatches[index].hasUnreadMessages = true
                     } else {
-                        self.matches[index].hasUnreadMessages = false
+                        updatedMatches[index].hasUnreadMessages = false
+                    }
+
+                    if let latestMessage = messageSnapshot?.documents.first {
+                        updatedMatches[index].lastMessageTimestamp = latestMessage.data()["timestamp"] as? Timestamp
                     }
 
                     count += unreadCount
@@ -473,10 +485,11 @@ struct DMHomeView: View {
         }
 
         group.notify(queue: .main) {
-            if !self.isInChatView {  // Use self to access state
-                self.totalUnreadMessages = count // Update the total unread messages count
+            self.totalUnreadMessages = count
+            // Sort by lastMessageTimestamp once all updates are fetched
+            self.matches = updatedMatches.sorted {
+                ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
             }
         }
     }
-
 }

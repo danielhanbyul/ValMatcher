@@ -22,7 +22,8 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
-    @State private var isInChatView = false
+    @State private var lastMessageID: String?
+    @State private var isInChatView = false // Added to track if the user is in ChatView
 
     var body: some View {
         VStack {
@@ -77,12 +78,15 @@ struct ChatView: View {
                 .onChange(of: messages) { _ in
                     if scrollToBottom {
                         DispatchQueue.main.async {
-                            proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                            if let lastMessageID = messages.last?.id {
+                                proxy.scrollTo(lastMessageID, anchor: .bottom)
+                            }
                         }
                     }
                 }
             }
 
+            // Input field and send button
             HStack {
                 TextField("Enter message", text: $newMessage)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -100,19 +104,21 @@ struct ChatView: View {
             }
             .padding()
         }
-        .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
+        .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15),
+                                                              Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear {
-            isInChatView = true
+            self.isInChatView = true // Mark as inside ChatView
             setupChatListener()
         }
         .onDisappear {
-            isInChatView = false
+            self.isInChatView = false // Mark as outside ChatView
             removeMessagesListener()
         }
     }
 
+    // View for message content (Text or Image)
     private func messageContent(for message: Message) -> some View {
         Group {
             if let imageURL = message.imageURL {
@@ -151,8 +157,9 @@ struct ChatView: View {
         }
     }
 
+    // Send a message
     private func sendMessage() {
-        guard let currentUserID = Auth.auth().currentUser?.uid, !newMessage.isEmpty else { return }
+        guard let currentUserID = currentUserID, !newMessage.isEmpty else { return }
 
         let db = Firestore.firestore()
         let messageData: [String: Any] = [
@@ -180,55 +187,47 @@ struct ChatView: View {
         }
     }
 
+    // Setup listener for incoming messages
     private func setupChatListener() {
         let db = Firestore.firestore()
-        messagesListener = db.collection("matches").document(matchID).collection("messages")
-            .order(by: "timestamp", descending: false)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("Error loading messages: \(error.localizedDescription)")
-                    return
-                }
+        
+        // Use the listener only when the user is not in the ChatView
+        if !isInChatView {
+            messagesListener = db.collection("matches").document(matchID).collection("messages")
+                .order(by: "timestamp", descending: false)
+                .addSnapshotListener { snapshot, error in
+                    if let error = error {
+                        print("Error loading messages: \(error.localizedDescription)")
+                        return
+                    }
 
-                guard let documents = snapshot?.documents else {
-                    print("No messages found")
-                    return
-                }
+                    guard let documents = snapshot?.documents else {
+                        print("No messages found")
+                        return
+                    }
 
-                self.messages = documents.compactMap { document in
-                    try? document.data(as: Message.self)
-                }
+                    // Check if new messages are different from current messages to prevent unnecessary refreshes
+                    let newMessages = documents.compactMap { document in
+                        try? document.data(as: Message.self)
+                    }
 
-                DispatchQueue.main.async {
-                    scrollToBottom = true
+                    if newMessages != self.messages {
+                        self.messages = newMessages
+                        DispatchQueue.main.async {
+                            scrollToBottom = true
+                        }
+                    }
                 }
-            }
+        }
     }
 
+    // Remove the listener when leaving the view
     private func removeMessagesListener() {
         messagesListener?.remove()
         messagesListener = nil
     }
 
-    private func markMessagesAsRead() {
-        guard let currentUserID = currentUserID else { return }
-        let db = Firestore.firestore()
-        let batch = db.batch()
-
-        messages.filter { !$0.isCurrentUser && !$0.isRead }.forEach { message in
-            let messageRef = db.collection("matches").document(matchID).collection("messages").document(message.id ?? "")
-            batch.updateData(["isRead": true], forDocument: messageRef)
-        }
-
-        batch.commit { error in
-            if let error = error {
-                print("Error marking messages as read: \(error.localizedDescription)")
-            } else {
-                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
-            }
-        }
-    }
-
+    // Determine if the date header should be shown between messages
     private func shouldShowDate(for message: Message) -> Bool {
         guard let index = messages.firstIndex(of: message) else { return false }
         if index == 0 { return true }
@@ -238,6 +237,7 @@ struct ChatView: View {
     }
 }
 
+// Date Formatters
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateStyle = .long
@@ -252,6 +252,7 @@ let timeFormatter: DateFormatter = {
     return formatter
 }()
 
+// Struct to handle fullscreen images
 struct IdentifiableImageURL: Identifiable {
     var id: String { url }
     var url: String
