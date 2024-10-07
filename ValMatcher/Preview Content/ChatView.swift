@@ -22,7 +22,7 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
-    @State private var isInChatView: Bool = false // New state to track if user is in ChatView
+    @State private var isInChatView: Bool = false  // Track if user is in ChatView
 
     var body: some View {
         VStack {
@@ -104,17 +104,20 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear {
-            isInChatView = true // Ensure that the user stays in the chat view
-            setupChatListener() // Set up the listener without causing navigation
+            isInChatView = true
+            setupChatListener()
+            
+            // Notify other views to pause unread message count updates when entering chat
+            NotificationCenter.default.post(name: Notification.Name("PauseUnreadMessageUpdates"), object: nil)
         }
         .onDisappear {
-            isInChatView = false // This just marks that the user is no longer in the chat
-            // Do not trigger navigation changes or Notifications here
-            print("ChatView disappeared, matchID: \(matchID)")
-            // Commenting out the navigation if unnecessary:
-            // NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+            isInChatView = false
+            // Notify DMHomeView to update the red dot for this specific chat
+            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+            
+            // Notify other views to resume unread message count updates when leaving chat
+            NotificationCenter.default.post(name: Notification.Name("ResumeUnreadMessageUpdates"), object: matchID)
         }
-
         .onDisappear(perform: removeMessagesListener)
     }
 
@@ -167,12 +170,14 @@ struct ChatView: View {
             "isRead": false
         ]
 
+        // Add the message to Firestore
         db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
                 return
             }
 
+            // Update the chat timestamp to the most recent
             db.collection("matches").document(matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
@@ -198,16 +203,18 @@ struct ChatView: View {
                     return
                 }
 
-                // Make sure it only updates the messages and not navigation-related code
-                DispatchQueue.main.async {
-                    self.messages = documents.compactMap { document in
-                        try? document.data(as: Message.self)
+                self.messages = documents.compactMap { document in
+                    try? document.data(as: Message.self)
+                }
+
+                // If user is in ChatView, we update messages but do not trigger any notifications
+                if !isInChatView {
+                    DispatchQueue.main.async {
+                        scrollToBottom = true
                     }
-                    scrollToBottom = true // Ensure it only scrolls and does not refresh the view unnecessarily
                 }
             }
     }
-
 
     private func removeMessagesListener() {
         messagesListener?.remove()
