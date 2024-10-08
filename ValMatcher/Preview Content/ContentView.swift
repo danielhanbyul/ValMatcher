@@ -425,17 +425,10 @@ struct ContentView: View {
     func listenForUnreadMessages() {
         print("DEBUG: listenForUnreadMessages called")
         
-        guard !isInChatView else {
-            print("DEBUG: Skipping unread messages listener because isInChatView is true")
-            return // Skip listening for unread messages if currently in ChatView
-        }
-        
-        print("DEBUG: Proceeding with unread messages listener because isInChatView is false")
-
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
 
-        // Variables to keep track of unread counts from both listeners
+        // Track unread counts for both users
         var totalUnreadCountUser1 = 0
         var totalUnreadCountUser2 = 0
 
@@ -453,12 +446,14 @@ struct ContentView: View {
                 for document in snapshot?.documents ?? [] {
                     group.enter()
                     let matchID = document.documentID
+
+                    // Prevent counting unread messages for the chat the user is currently in
                     if matchID == self.currentChatID && self.isInChatView {
-                        // Skip updating if this is the current chat and the user is in the chat view
                         print("DEBUG: Skipping matchID \(matchID) because it is the currentChatID and user is in chat")
                         group.leave()
                         continue
                     }
+
                     self.fetchUnreadMessagesCountForMatch(matchID: matchID, currentUserID: currentUserID) { unreadCount in
                         print("DEBUG: Unread messages for matchID \(matchID) (user1): \(unreadCount)")
                         totalUnreadCount += unreadCount
@@ -468,13 +463,7 @@ struct ContentView: View {
 
                 group.notify(queue: .main) {
                     totalUnreadCountUser1 = totalUnreadCount
-                    if !self.isInChatView { // Only update unread count if not in chat
-                        let combinedTotalUnreadCount = totalUnreadCountUser1 + totalUnreadCountUser2
-                        print("DEBUG: Updating unreadMessagesCount to \(combinedTotalUnreadCount)")
-                        self.unreadMessagesCount = combinedTotalUnreadCount
-                    } else {
-                        print("DEBUG: Not updating unreadMessagesCount because isInChatView is true")
-                    }
+                    self.updateUnreadCountIfNeeded(totalUnreadCountUser1: totalUnreadCountUser1, totalUnreadCountUser2: totalUnreadCountUser2)
                 }
             }
 
@@ -492,12 +481,14 @@ struct ContentView: View {
                 for document in snapshot?.documents ?? [] {
                     group.enter()
                     let matchID = document.documentID
+
+                    // Prevent counting unread messages for the chat the user is currently in
                     if matchID == self.currentChatID && self.isInChatView {
-                        // Skip updating if this is the current chat and the user is in the chat view
                         print("DEBUG: Skipping matchID \(matchID) because it is the currentChatID and user is in chat")
                         group.leave()
                         continue
                     }
+
                     self.fetchUnreadMessagesCountForMatch(matchID: matchID, currentUserID: currentUserID) { unreadCount in
                         print("DEBUG: Unread messages for matchID \(matchID) (user2): \(unreadCount)")
                         totalUnreadCount += unreadCount
@@ -507,16 +498,24 @@ struct ContentView: View {
 
                 group.notify(queue: .main) {
                     totalUnreadCountUser2 = totalUnreadCount
-                    if !self.isInChatView { // Only update unread count if not in chat
-                        let combinedTotalUnreadCount = totalUnreadCountUser1 + totalUnreadCountUser2
-                        print("DEBUG: Updating unreadMessagesCount to \(combinedTotalUnreadCount)")
-                        self.unreadMessagesCount = combinedTotalUnreadCount
-                    } else {
-                        print("DEBUG: Not updating unreadMessagesCount because isInChatView is true")
-                    }
+                    self.updateUnreadCountIfNeeded(totalUnreadCountUser1: totalUnreadCountUser1, totalUnreadCountUser2: totalUnreadCountUser2)
                 }
             }
     }
+
+    // Helper function to update unread messages count
+    private func updateUnreadCountIfNeeded(totalUnreadCountUser1: Int, totalUnreadCountUser2: Int) {
+        let combinedTotalUnreadCount = totalUnreadCountUser1 + totalUnreadCountUser2
+        if !self.isInChatView { // Only update unread count if not in chat
+            print("DEBUG: Updating unreadMessagesCount to \(combinedTotalUnreadCount)")
+            self.unreadMessagesCount = combinedTotalUnreadCount
+        } else {
+            print("DEBUG: Not updating unreadMessagesCount because isInChatView is true")
+        }
+    }
+
+
+    
 
     private func fetchUnreadMessagesCountForMatch(matchID: String, currentUserID: String, completion: @escaping (Int) -> Void) {
         if matchID == self.currentChatID {
