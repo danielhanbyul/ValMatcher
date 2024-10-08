@@ -18,15 +18,13 @@ struct DMHomeView: View {
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
     @State private var receivedNewMessage = false
-    // Removed selectedChatID
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
     @State private var previousSelectedChatID: String?
     @State private var blendColor = Color.red
     @State private var isLoaded = false
-    @State private var userNamesCache: [String: String] = [:] // Cache for usernames
-    @State private var isInChatView: Bool = false
-
+    @State private var userNamesCache: [String: String] = [:]
+    @State private var isInChatView: Bool = false // Track if user is in ChatView
 
     var body: some View {
         ZStack {
@@ -71,61 +69,27 @@ struct DMHomeView: View {
                 }
             }
         }
-        // Removed the background NavigationLink
         .alert(isPresented: $showNotificationBanner) {
             Alert(title: Text("New Message"), message: Text(bannerMessage), dismissButton: .default(Text("OK")))
         }
     }
 
-    private func toggleSelection(for matchID: String) {
-        if selectedMatches.contains(matchID) {
-            selectedMatches.remove(matchID)
-        } else {
-            selectedMatches.insert(matchID)
-        }
-    }
-
-    // Deletion of selected matches
-    func deleteSelectedMatches() {
-        let db = Firestore.firestore()
-        let batch = db.batch()
-
-        for matchID in selectedMatches {
-            if let index = matches.firstIndex(where: { $0.id == matchID }) {
-                matches.remove(at: index)
-            }
-            let matchRef = db.collection("matches").document(matchID)
-            batch.deleteDocument(matchRef)
-        }
-
-        batch.commit { error in
-            if let error = error {
-                print("Error deleting matches: \(error.localizedDescription)")
-            } else {
-                selectedMatches.removeAll()
-                loadMatches()
-            }
-        }
-    }
-
+    // MARK: - Match Row View
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
-        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match), isInChatView: $isInChatView)
+        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match), isInChatView: $isInChatView) // Pass the isInChatView binding here
             .onAppear {
                 if let index = matches.firstIndex(where: { $0.id == match.id }), matches[index].hasUnreadMessages == true {
                     markMessagesAsRead(for: match)
                     blendRedDot(for: index)
                 }
-                isInChatView = true // Set to true when the user enters the chat
             }
             .onDisappear {
                 NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: match.id)
-                isInChatView = false // Set to false when the user leaves the chat
             }
         ) {
             HStack {
                 if isEditing {
-                    // Show selection indicator
                     Button(action: {
                         toggleSelection(for: match.id ?? "")
                     }) {
@@ -163,23 +127,7 @@ struct DMHomeView: View {
         })
     }
 
-
-    // Removed selectedChatView() function since it's no longer used
-    /*
-    @ViewBuilder
-    private func selectedChatView() -> some View {
-        // Removed since we are navigating directly in matchRow
-    }
-    */
-
-    private func blendRedDot(for index: Int) {
-        blendColor = Color.black.opacity(0.7)
-    }
-
-    private func restoreRedDot() {
-        blendColor = Color.red
-    }
-
+    // MARK: - Message Handling
     private func markMessagesAsRead(for chat: Chat) {
         guard let matchID = chat.id, let currentUserID = currentUserID else { return }
 
@@ -213,29 +161,43 @@ struct DMHomeView: View {
         }
     }
 
-    // Function to get recipient's name using cache for faster access
-    private func getRecipientName(for match: Chat?) -> String {
-        guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
-        let userID = currentUserID == match.user1 ? match.user2 : match.user1
-
-        if let cachedName = getUsernameFromCache(userID: userID ?? "") {
-            return cachedName
-        }
-
-        // If not in cache, fetch the username
-        if let userID = userID {
-            fetchAndCacheUserName(for: userID) { _ in }
-        }
-
-        return "Unknown User" // Fallback in case the name isn't fetched yet
+    // MARK: - Red Dot and Selection Handling
+    private func blendRedDot(for index: Int) {
+        blendColor = Color.black.opacity(0.7)
     }
 
-    func setupListeners() {
-        loadMatches()
-        setupRealTimeListener()
+    private func toggleSelection(for matchID: String) {
+        if selectedMatches.contains(matchID) {
+            selectedMatches.remove(matchID)
+        } else {
+            selectedMatches.insert(matchID)
+        }
     }
 
-    func loadMatches() {
+    private func deleteSelectedMatches() {
+        let db = Firestore.firestore()
+        let batch = db.batch()
+
+        for matchID in selectedMatches {
+            if let index = matches.firstIndex(where: { $0.id == matchID }) {
+                matches.remove(at: index)
+            }
+            let matchRef = db.collection("matches").document(matchID)
+            batch.deleteDocument(matchRef)
+        }
+
+        batch.commit { error in
+            if let error = error {
+                print("Error deleting matches: \(error.localizedDescription)")
+            } else {
+                selectedMatches.removeAll()
+                loadMatches()
+            }
+        }
+    }
+
+    // MARK: - Firestore Data Handling
+    private func loadMatches() {
         guard let currentUserID = currentUserID else { return }
 
         let db = Firestore.firestore()
@@ -271,7 +233,6 @@ struct DMHomeView: View {
 
                 group.notify(queue: .main) {
                     self.fetchUserNames(for: newMatches) { updatedMatches in
-                        // Sort the matches by lastMessageTimestamp before updating the UI
                         self.matches = updatedMatches.sorted {
                             ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                         }
@@ -283,7 +244,12 @@ struct DMHomeView: View {
         }
     }
 
-    func setupRealTimeListener() {
+    private func setupListeners() {
+        loadMatches()
+        setupRealTimeListener()
+    }
+
+    private func setupRealTimeListener() {
         guard let currentUserID = currentUserID else { return }
         let db = Firestore.firestore()
 
@@ -322,7 +288,6 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
-                    // Sort the updated matches by lastMessageTimestamp after real-time update
                     self.matches = self.matches.sorted {
                         ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                     }
@@ -459,10 +424,24 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-            // Sort by lastMessageTimestamp once all updates are fetched
             self.matches = updatedMatches.sorted {
                 ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
             }
         }
+    }
+
+    private func getRecipientName(for match: Chat?) -> String {
+        guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
+        let userID = currentUserID == match.user1 ? match.user2 : match.user1
+
+        if let cachedName = getUsernameFromCache(userID: userID ?? "") {
+            return cachedName
+        }
+
+        if let userID = userID {
+            fetchAndCacheUserName(for: userID) { _ in }
+        }
+
+        return "Unknown User"
     }
 }
