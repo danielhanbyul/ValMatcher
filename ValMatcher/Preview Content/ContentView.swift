@@ -424,57 +424,96 @@ struct ContentView: View {
     
     func listenForUnreadMessages() {
         print("DEBUG: listenForUnreadMessages called")
+        
+        guard !isInChatView else {
+            print("DEBUG: Skipping unread messages listener because isInChatView is true")
+            return // Skip listening for unread messages if currently in ChatView
+        }
+        
+        print("DEBUG: Proceeding with unread messages listener because isInChatView is false")
 
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
 
-        let queries = [
-            db.collection("matches").whereField("user1", isEqualTo: currentUserID),
-            db.collection("matches").whereField("user2", isEqualTo: currentUserID)
-        ]
+        // Variables to keep track of unread counts from both listeners
+        var totalUnreadCountUser1 = 0
+        var totalUnreadCountUser2 = 0
 
-        var totalUnreadCount = 0
-        let group = DispatchGroup()
-
-        for query in queries {
-            group.enter()
-            query.addSnapshotListener { snapshot, error in
+        // Listener for matches where user1 == currentUserID
+        db.collection("matches").whereField("user1", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("DEBUG: Error listening for matches: \(error.localizedDescription)")
-                    group.leave()
+                    print("DEBUG: Error listening for matches where user1 == currentUserID: \(error.localizedDescription)")
                     return
                 }
 
-                guard let documents = snapshot?.documents else {
-                    group.leave()
-                    return
-                }
+                var totalUnreadCount = 0
+                let group = DispatchGroup()
 
-                for document in documents {
+                for document in snapshot?.documents ?? [] {
+                    group.enter()
                     let matchID = document.documentID
                     if matchID == self.currentChatID {
                         print("DEBUG: Skipping matchID \(matchID) because it is the currentChatID")
+                        group.leave()
                         continue
                     }
-                    group.enter()
                     self.fetchUnreadMessagesCountForMatch(matchID: matchID, currentUserID: currentUserID) { unreadCount in
-                        print("DEBUG: Unread messages for matchID \(matchID): \(unreadCount)")
+                        print("DEBUG: Unread messages for matchID \(matchID) (user1): \(unreadCount)")
                         totalUnreadCount += unreadCount
                         group.leave()
                     }
                 }
-                group.leave()
-            }
-        }
 
-        group.notify(queue: .main) {
-            if !self.isInChatView { // Only update unread count if not in chat
-                print("DEBUG: Updating unreadMessagesCount to \(totalUnreadCount)")
-                self.unreadMessagesCount = totalUnreadCount
-            } else {
-                print("DEBUG: Not updating unreadMessagesCount because isInChatView is true")
+                group.notify(queue: .main) {
+                    totalUnreadCountUser1 = totalUnreadCount
+                    if !self.isInChatView { // Only update unread count if not in chat
+                        let combinedTotalUnreadCount = totalUnreadCountUser1 + totalUnreadCountUser2
+                        print("DEBUG: Updating unreadMessagesCount to \(combinedTotalUnreadCount)")
+                        self.unreadMessagesCount = combinedTotalUnreadCount
+                    } else {
+                        print("DEBUG: Not updating unreadMessagesCount because isInChatView is true")
+                    }
+                }
             }
-        }
+
+        // Listener for matches where user2 == currentUserID
+        db.collection("matches").whereField("user2", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("DEBUG: Error listening for matches where user2 == currentUserID: \(error.localizedDescription)")
+                    return
+                }
+
+                var totalUnreadCount = 0
+                let group = DispatchGroup()
+
+                for document in snapshot?.documents ?? [] {
+                    group.enter()
+                    let matchID = document.documentID
+                    if matchID == self.currentChatID {
+                        print("DEBUG: Skipping matchID \(matchID) because it is the currentChatID")
+                        group.leave()
+                        continue
+                    }
+                    self.fetchUnreadMessagesCountForMatch(matchID: matchID, currentUserID: currentUserID) { unreadCount in
+                        print("DEBUG: Unread messages for matchID \(matchID) (user2): \(unreadCount)")
+                        totalUnreadCount += unreadCount
+                        group.leave()
+                    }
+                }
+
+                group.notify(queue: .main) {
+                    totalUnreadCountUser2 = totalUnreadCount
+                    if !self.isInChatView { // Only update unread count if not in chat
+                        let combinedTotalUnreadCount = totalUnreadCountUser1 + totalUnreadCountUser2
+                        print("DEBUG: Updating unreadMessagesCount to \(combinedTotalUnreadCount)")
+                        self.unreadMessagesCount = combinedTotalUnreadCount
+                    } else {
+                        print("DEBUG: Not updating unreadMessagesCount because isInChatView is true")
+                    }
+                }
+            }
     }
 
     private func fetchUnreadMessagesCountForMatch(matchID: String, currentUserID: String, completion: @escaping (Int) -> Void) {
