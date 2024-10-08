@@ -22,7 +22,6 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
-    @Binding var isInChatView: Bool // Binding to track chat view state
 
     var body: some View {
         VStack {
@@ -105,18 +104,14 @@ struct ChatView: View {
         .navigationTitle(recipientName)
         .onAppear {
             print("DEBUG: Entering ChatView for matchID: \(matchID)")
-            self.isInChatView = true
             NotificationCenter.default.post(name: Notification.Name("EnterChatView"), object: matchID)
             setupChatListener()
         }
         .onDisappear {
             print("DEBUG: Exiting ChatView for matchID: \(matchID)")
-            self.isInChatView = false
             NotificationCenter.default.post(name: Notification.Name("ExitChatView"), object: matchID)
             removeMessagesListener()
         }
-
-
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -211,7 +206,7 @@ struct ChatView: View {
                         }
                     }
                 }
-                
+
                 // Update the messages state only if there are new messages
                 if !newMessages.isEmpty {
                     self.messages.append(contentsOf: newMessages)

@@ -18,27 +18,34 @@ struct DMHomeView: View {
     @State private var selectedMatches = Set<String>()
     @Binding var totalUnreadMessages: Int
     @State private var receivedNewMessage = false
-    // Removed selectedChatID
     @State private var showNotificationBanner = false
     @State private var bannerMessage = ""
     @State private var previousSelectedChatID: String?
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
-    @State private var isInChatView: Bool = false
-
 
     var body: some View {
         ZStack {
-            LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
-                .edgesIgnoringSafeArea(.all)
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(red: 0.02, green: 0.18, blue: 0.15),
+                    Color(red: 0.21, green: 0.29, blue: 0.40)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .edgesIgnoringSafeArea(.all)
 
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         ForEach(matches) { match in
                             matchRow(match: match)
-                                .background(isEditing && selectedMatches.contains(match.id ?? "") ? Color.gray.opacity(0.3) : Color.clear)
+                                .background(
+                                    isEditing && selectedMatches.contains(match.id ?? "") ?
+                                    Color.gray.opacity(0.3) : Color.clear
+                                )
                         }
                     }
                 }
@@ -66,12 +73,14 @@ struct DMHomeView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshChatList"))) { notification in
             if let chatID = notification.object as? String {
-                if let index = matches.firstIndex(where: { $0.id == chatID }) {
-                    matches[index].hasUnreadMessages = false
+                if let index = matches.firstIndex(where: { $0.id == chatID }), let currentUserID = self.currentUserID {
+                    // Update the unread message count for the specific match
+                    self.updateUnreadMessageCount(for: matches[index], currentUserID: currentUserID) { updatedMatch in
+                        self.matches[index] = updatedMatch
+                    }
                 }
             }
         }
-        // Removed the background NavigationLink
         .alert(isPresented: $showNotificationBanner) {
             Alert(title: Text("New Message"), message: Text(bannerMessage), dismissButton: .default(Text("OK")))
         }
@@ -110,22 +119,20 @@ struct DMHomeView: View {
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
-        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match), isInChatView: $isInChatView)
+        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))
             .onAppear {
                 if let index = matches.firstIndex(where: { $0.id == match.id }), matches[index].hasUnreadMessages == true {
                     markMessagesAsRead(for: match)
                     blendRedDot(for: index)
                 }
-                isInChatView = true // Set to true when the user enters the chat
-                print("DEBUG: User entered ChatView, isInChatView set to true")
+                // No need to set isInChatView here
             }
             .onDisappear {
+                // Notify to refresh the chat list and update unread message counts
                 NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: match.id)
-                isInChatView = false // Set to false when the user leaves the chat
-                print("DEBUG: User exited ChatView, isInChatView set to false")
+                // No need to set isInChatView here
             }
-        )
- {
+        ) {
             HStack {
                 if isEditing {
                     // Show selection indicator
@@ -153,7 +160,10 @@ struct DMHomeView: View {
                         .padding(.trailing, 10)
                 }
             }
-            .background(isEditing && selectedMatches.contains(match.id ?? "") ? Color.gray.opacity(0.3) : Color.black.opacity(0.7))
+            .background(
+                isEditing && selectedMatches.contains(match.id ?? "") ?
+                Color.gray.opacity(0.3) : Color.black.opacity(0.7)
+            )
             .cornerRadius(12)
             .padding(.horizontal)
             .padding(.vertical, 5)
@@ -165,15 +175,6 @@ struct DMHomeView: View {
             }
         })
     }
-
-
-    // Removed selectedChatView() function since it's no longer used
-    /*
-    @ViewBuilder
-    private func selectedChatView() -> some View {
-        // Removed since we are navigating directly in matchRow
-    }
-    */
 
     private func blendRedDot(for index: Int) {
         blendColor = Color.black.opacity(0.7)
@@ -210,6 +211,7 @@ struct DMHomeView: View {
                     if let index = self.matches.firstIndex(where: { $0.id == chat.id }) {
                         self.matches[index].hasUnreadMessages = false
                     }
+                    // Notify to refresh the chat list and update unread message counts
                     NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
                 }
             }
