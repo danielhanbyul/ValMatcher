@@ -25,6 +25,8 @@ struct DMHomeView: View {
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
+    @State private var isInChatView: Bool = false
+
 
     var body: some View {
         ZStack {
@@ -108,15 +110,17 @@ struct DMHomeView: View {
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
-        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))
+        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match), isInChatView: $isInChatView)
             .onAppear {
                 if let index = matches.firstIndex(where: { $0.id == match.id }), matches[index].hasUnreadMessages == true {
                     markMessagesAsRead(for: match)
                     blendRedDot(for: index)
                 }
+                isInChatView = true // Set to true when the user enters the chat
             }
             .onDisappear {
                 NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: match.id)
+                isInChatView = false // Set to false when the user leaves the chat
             }
         ) {
             HStack {
@@ -158,6 +162,7 @@ struct DMHomeView: View {
             }
         })
     }
+
 
     // Removed selectedChatView() function since it's no longer used
     /*

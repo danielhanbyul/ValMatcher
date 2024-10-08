@@ -22,6 +22,7 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
+    @Binding var isInChatView: Bool // Ensure this is bound to the parent view
 
     var body: some View {
         VStack {
@@ -102,13 +103,13 @@ struct ChatView: View {
         .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom))
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
-        .onAppear(perform: setupChatListener)
         .onAppear {
-            // Notify that the user entered ChatView
+            self.isInChatView = true
             NotificationCenter.default.post(name: Notification.Name("EnterChatView"), object: matchID)
+            setupChatListener()
         }
         .onDisappear {
-            // Notify that the user exited ChatView
+            self.isInChatView = false
             NotificationCenter.default.post(name: Notification.Name("ExitChatView"), object: matchID)
             removeMessagesListener()
         }

@@ -11,6 +11,7 @@ import Firebase
 struct DM: View {
     var matchID: String
     var recipientName: String
+    @State private var isInChatView: Bool = false // State to track if user is in chat view
 
     init(matchID: String, recipientName: String) {
         self.matchID = matchID
@@ -22,7 +23,7 @@ struct DM: View {
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
 
-            ChatView(matchID: matchID, recipientName: recipientName)
+            ChatView(matchID: matchID, recipientName: recipientName, isInChatView: $isInChatView)
         }
     }
 }
