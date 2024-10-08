@@ -24,6 +24,7 @@ struct DMHomeView: View {
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
+    @State private var currentChatID: String? = nil // Track the current chat ID
 
     var body: some View {
         ZStack {
@@ -121,16 +122,22 @@ struct DMHomeView: View {
     private func matchRow(match: Chat) -> some View {
         NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))
             .onAppear {
-                if let index = matches.firstIndex(where: { $0.id == match.id }), matches[index].hasUnreadMessages == true {
-                    markMessagesAsRead(for: match)
-                    blendRedDot(for: index)
+                if let matchID = match.id {
+                    self.currentChatID = matchID
+                    print("DEBUG: User entered ChatView, currentChatID set to \(matchID)")
+                    if let index = matches.firstIndex(where: { $0.id == matchID }), matches[index].hasUnreadMessages == true {
+                        markMessagesAsRead(for: match)
+                        blendRedDot(for: index)
+                    }
                 }
-                // No need to set isInChatView here
             }
             .onDisappear {
-                // Notify to refresh the chat list and update unread message counts
-                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: match.id)
-                // No need to set isInChatView here
+                if let matchID = match.id {
+                    self.currentChatID = nil
+                    print("DEBUG: User exited ChatView, currentChatID reset to nil")
+                    // Notify to refresh the chat list and update unread message counts
+                    NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+                }
             }
         ) {
             HStack {
@@ -342,6 +349,13 @@ struct DMHomeView: View {
 
         var matchCopy = match
 
+        if matchID == self.currentChatID {
+            // If we're currently in this chat, set hasUnreadMessages to false
+            matchCopy.hasUnreadMessages = false
+            completion(matchCopy)
+            return
+        }
+
         db.collection("matches").document(matchID).collection("messages")
             .whereField("senderID", isNotEqualTo: currentUserID)
             .whereField("isRead", isEqualTo: false)
@@ -432,6 +446,13 @@ struct DMHomeView: View {
         for (index, match) in updatedMatches.enumerated() {
             guard let matchID = match.id else { continue }
             group.enter()
+            if matchID == self.currentChatID {
+                // If we're currently in this chat, set hasUnreadMessages to false
+                updatedMatches[index].hasUnreadMessages = false
+                group.leave()
+                continue
+            }
+
             Firestore.firestore().collection("matches").document(matchID).collection("messages")
                 .order(by: "timestamp", descending: true)
                 .getDocuments { messageSnapshot, error in
