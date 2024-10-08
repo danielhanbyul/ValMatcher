@@ -47,6 +47,7 @@ struct ContentView: View {
     @State private var acknowledgedNotifications: Set<String> = []
     @State private var unreadMessagesCount = 0
     @State private var messageListeners: [String: MessageListener] = [:]
+    @State private var isInChatView = false
      
     // Added States
     @State private var interactedUsers: Set<String> = []
@@ -123,6 +124,7 @@ struct ContentView: View {
         }
         .onAppear {
             if isSignedIn {
+                listenForUnreadMessages()
                 // Reset interacted users and fetch all users
                 self.interactedUsers.removeAll() // Optionally reset interacted users
                 loadInteractedUsers { success in // Load interacted users if necessary
@@ -134,6 +136,7 @@ struct ContentView: View {
             }
         }
     }
+    
 
     private var userCardStack: some View {
         VStack(spacing: 0) {
@@ -403,6 +406,38 @@ struct ContentView: View {
         }
     }
     
+    private func listenForUnreadMessages() {
+            guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+            let db = Firestore.firestore()
+
+            db.collection("matches").whereField("user1", isEqualTo: currentUserID)
+                .addSnapshotListener { snapshot, error in
+                    if let error = error {
+                        print("Error listening for matches: \(error.localizedDescription)")
+                        return
+                    }
+
+                    var totalUnreadCount = 0
+                    let group = DispatchGroup()
+
+                    for document in snapshot?.documents ?? [] {
+                        group.enter()
+                        let matchID = document.documentID
+                        fetchUnreadMessagesCountForMatch(matchID: matchID, currentUserID: currentUserID) { unreadCount in
+                            totalUnreadCount += unreadCount
+                            group.leave()
+                        }
+                    }
+
+                    group.notify(queue: .main) {
+                        if !isInChatView { // Update only if not in ChatView
+                            self.unreadMessagesCount = totalUnreadCount
+                        }
+                    }
+                }
+        }
+    
+
     private func fetchUnreadMessagesCountForMatch(matchID: String, currentUserID: String, completion: @escaping (Int) -> Void) {
         let db = Firestore.firestore()
         db.collection("matches").document(matchID).collection("messages")

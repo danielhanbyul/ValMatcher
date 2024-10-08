@@ -7,7 +7,6 @@
 import SwiftUI
 import Firebase
 import FirebaseFirestore
-import FirebaseFirestoreSwift
 import FirebaseAuth
 
 struct ChatView: View {
@@ -18,6 +17,7 @@ struct ChatView: View {
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var scrollToBottom: Bool = true
     @State private var messagesListener: ListenerRegistration?
+    @State private var seenMessageIDs: Set<String> = [] // Track seen message IDs to prevent duplicates
     @State private var selectedImage: UIImage?
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
@@ -103,12 +103,15 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear(perform: setupChatListener)
-        .onDisappear {
-            print("ChatView disappeared, matchID: \(matchID)")
-            // Notify DMHomeView to update the red dot for this specific chat
-            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+        .onAppear {
+            // Notify that the user entered ChatView
+            NotificationCenter.default.post(name: Notification.Name("EnterChatView"), object: matchID)
         }
-        .onDisappear(perform: removeMessagesListener)
+        .onDisappear {
+            // Notify that the user exited ChatView
+            NotificationCenter.default.post(name: Notification.Name("ExitChatView"), object: matchID)
+            removeMessagesListener()
+        }
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -193,9 +196,19 @@ struct ChatView: View {
                     return
                 }
 
-                self.messages = documents.compactMap { document in
-                    try? document.data(as: Message.self)
+                var newMessages: [Message] = []
+                for document in documents {
+                    if let message = try? document.data(as: Message.self) {
+                        // Check if the message ID is already in the set
+                        if !self.seenMessageIDs.contains(message.id ?? "") {
+                            newMessages.append(message)
+                            self.seenMessageIDs.insert(message.id ?? "")
+                        }
+                    }
                 }
+                
+                // Update the messages state
+                self.messages.append(contentsOf: newMessages)
 
                 DispatchQueue.main.async {
                     scrollToBottom = true
