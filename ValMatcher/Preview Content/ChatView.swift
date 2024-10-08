@@ -216,9 +216,35 @@ struct ChatView: View {
                     DispatchQueue.main.async {
                         scrollToBottom = true
                     }
+                    // Mark new messages as read
+                    self.markNewMessagesAsRead(messages: newMessages)
                 }
             }
     }
+    
+    private func markNewMessagesAsRead(messages: [Message]) {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        let batch = db.batch()
+
+        for message in messages {
+            if message.senderID != currentUserID && message.isRead == false {
+                if let messageID = message.id {
+                    let messageRef = db.collection("matches").document(matchID).collection("messages").document(messageID)
+                    batch.updateData(["isRead": true], forDocument: messageRef)
+                }
+            }
+        }
+
+        batch.commit { error in
+            if let error = error {
+                print("Error marking messages as read: \(error.localizedDescription)")
+            } else {
+                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+            }
+        }
+    }
+
 
     private func removeMessagesListener() {
         messagesListener?.remove()
