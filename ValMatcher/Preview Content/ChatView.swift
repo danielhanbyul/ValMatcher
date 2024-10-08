@@ -7,45 +7,22 @@
 import SwiftUI
 import Firebase
 import FirebaseFirestore
-import FirebaseFirestoreSwift
 import FirebaseAuth
-
-// Struct to handle the full-screen image presentation
-struct IdentifiableImageURL: Identifiable {
-    var id: String { url }
-    var url: String
-}
-
-// Date-only formatter to display dates in a readable format
-let dateOnlyFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .long
-    formatter.timeStyle = .none
-    return formatter
-}()
-
-// Time formatter to display time for messages
-let timeFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .none
-    formatter.timeStyle = .short
-    return formatter
-}()
 
 struct ChatView: View {
     var matchID: String
     var recipientName: String
-    @Binding var isInChatView: Bool
     @State private var messages: [Message] = []
     @State private var newMessage: String = ""
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var scrollToBottom: Bool = true
     @State private var messagesListener: ListenerRegistration?
+    @State private var seenMessageIDs: Set<String> = [] // Track seen message IDs to prevent duplicates
     @State private var selectedImage: UIImage?
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
-    @State private var recipientInChat: Bool = false
+    @Binding var isInChatView: Bool // Binding to track chat view state
 
     var body: some View {
         VStack {
@@ -60,6 +37,7 @@ struct ChatView: View {
                                         .foregroundColor(.gray)
                                         .padding(.top, 10)
                                 }
+
                                 HStack {
                                     if message.isCurrentUser {
                                         Spacer()
@@ -104,11 +82,13 @@ struct ChatView: View {
                     }
                 }
             }
+
             HStack {
                 TextField("Enter message", text: $newMessage)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding()
                     .frame(height: 40)
+
                 Button(action: sendMessage) {
                     Image(systemName: "paperplane.fill")
                         .padding()
@@ -124,16 +104,19 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear {
-            isInChatView = true // Mark the user as in the chat view
+            print("DEBUG: Entering ChatView for matchID: \(matchID)")
+            self.isInChatView = true
+            NotificationCenter.default.post(name: Notification.Name("EnterChatView"), object: matchID)
             setupChatListener()
-            updateUserPresence(isInChat: true) // Mark current user as in chat
         }
         .onDisappear {
-            isInChatView = false // Mark the user as out of the chat view
-            updateUserPresence(isInChat: false) // Mark current user as out of chat
-            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+            print("DEBUG: Exiting ChatView for matchID: \(matchID)")
+            self.isInChatView = false
+            NotificationCenter.default.post(name: Notification.Name("ExitChatView"), object: matchID)
             removeMessagesListener()
         }
+
+
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -176,6 +159,7 @@ struct ChatView: View {
 
     private func sendMessage() {
         guard let currentUserID = Auth.auth().currentUser?.uid, !newMessage.isEmpty else { return }
+
         let db = Firestore.firestore()
         let messageData: [String: Any] = [
             "senderID": currentUserID,
@@ -183,13 +167,15 @@ struct ChatView: View {
             "timestamp": Timestamp(),
             "isRead": false
         ]
+
+        // Add the message to Firestore
         db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
                 return
             }
-            // Call the function to send notifications only if User B is not in chat
-            checkRecipientInChatAndNotify()
+
+            // Update the chat timestamp to the most recent
             db.collection("matches").document(matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
@@ -209,15 +195,29 @@ struct ChatView: View {
                     print("Error loading messages: \(error.localizedDescription)")
                     return
                 }
+
                 guard let documents = snapshot?.documents else {
                     print("No messages found")
                     return
                 }
-                self.messages = documents.compactMap { document in
-                    try? document.data(as: Message.self)
+
+                var newMessages: [Message] = []
+                for document in documents {
+                    if let message = try? document.data(as: Message.self) {
+                        // Check if the message ID is already in the set
+                        if !self.seenMessageIDs.contains(message.id ?? "") {
+                            newMessages.append(message)
+                            self.seenMessageIDs.insert(message.id ?? "")
+                        }
+                    }
                 }
-                DispatchQueue.main.async {
-                    scrollToBottom = true
+                
+                // Update the messages state only if there are new messages
+                if !newMessages.isEmpty {
+                    self.messages.append(contentsOf: newMessages)
+                    DispatchQueue.main.async {
+                        scrollToBottom = true
+                    }
                 }
             }
     }
@@ -227,29 +227,21 @@ struct ChatView: View {
         messagesListener = nil
     }
 
-    private func checkRecipientInChatAndNotify() {
+    private func markMessagesAsRead() {
+        guard let currentUserID = currentUserID else { return }
         let db = Firestore.firestore()
-        db.collection("matches").document(matchID).getDocument { document, error in
-            guard let document = document, document.exists else { return }
-            let data = document.data()
-            recipientInChat = data?["recipientInChat"] as? Bool ?? false
-            if !recipientInChat {
-                sendNotificationToRecipient()
-            }
+        let batch = db.batch()
+
+        messages.filter { !$0.isCurrentUser && !$0.isRead }.forEach { message in
+            let messageRef = db.collection("matches").document(matchID).collection("messages").document(message.id ?? "")
+            batch.updateData(["isRead": true], forDocument: messageRef)
         }
-    }
 
-    private func sendNotificationToRecipient() {
-        NotificationCenter.default.post(name: Notification.Name("NewMessageNotification"), object: matchID)
-    }
-
-    private func updateUserPresence(isInChat: Bool) {
-        let db = Firestore.firestore()
-        db.collection("matches").document(matchID).updateData([
-            "recipientInChat": isInChat
-        ]) { error in
+        batch.commit { error in
             if let error = error {
-                print("Error updating user presence: \(error.localizedDescription)")
+                print("Error marking messages as read: \(error.localizedDescription)")
+            } else {
+                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
             }
         }
     }
@@ -261,4 +253,23 @@ struct ChatView: View {
         let calendar = Calendar.current
         return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
     }
+}
+
+let dateOnlyFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .long
+    formatter.timeStyle = .none
+    return formatter
+}()
+
+let timeFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .none
+    formatter.timeStyle = .short
+    return formatter
+}()
+
+struct IdentifiableImageURL: Identifiable {
+    var id: String { url }
+    var url: String
 }

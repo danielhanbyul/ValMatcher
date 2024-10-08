@@ -53,6 +53,8 @@ struct ContentView: View {
     @State private var interactedUsers: Set<String> = []
     @State private var lastRefreshDate: Date? = nil
     @State private var shownUserIDs: Set<String> = []
+    @State private var currentChatID: String? = nil
+
 
     enum InteractionResult {
         case liked
@@ -125,16 +127,30 @@ struct ContentView: View {
         .onAppear {
             if isSignedIn {
                 listenForUnreadMessages()
-                // Reset interacted users and fetch all users
-                self.interactedUsers.removeAll() // Optionally reset interacted users
-                loadInteractedUsers { success in // Load interacted users if necessary
+                self.interactedUsers.removeAll()
+                loadInteractedUsers { success in
                     if success {
-                        fetchAllUsers() // Fetch users after resetting
+                        fetchAllUsers()
                     }
                 }
-                fetchUnreadMessagesCount() // Only fetch unread count on view appearance
+                fetchUnreadMessagesCount()
+            }
+            NotificationCenter.default.addObserver(forName: Notification.Name("EnterChatView"), object: nil, queue: .main) { notification in
+                if let matchID = notification.object as? String {
+                    print("DEBUG: Received EnterChatView notification for matchID: \(matchID)")
+                    self.currentChatID = matchID
+                    self.isInChatView = true
+                    print("DEBUG: isInChatView set to true, currentChatID set to \(matchID)")
+                }
+            }
+            NotificationCenter.default.addObserver(forName: Notification.Name("ExitChatView"), object: nil, queue: .main) { notification in
+                print("DEBUG: Received ExitChatView notification")
+                self.currentChatID = nil
+                self.isInChatView = false
+                print("DEBUG: isInChatView set to false, currentChatID reset to nil")
             }
         }
+
     }
     
 
@@ -406,54 +422,82 @@ struct ContentView: View {
         }
     }
     
-    private func listenForUnreadMessages() {
-            guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-            let db = Firestore.firestore()
+    func listenForUnreadMessages() {
+        print("DEBUG: listenForUnreadMessages called")
+        
+        guard !isInChatView else {
+            print("DEBUG: Skipping unread messages listener because isInChatView is true")
+            return // Skip listening for unread messages if currently in ChatView
+        }
+        
+        print("DEBUG: Proceeding with unread messages listener because isInChatView is false")
 
-            db.collection("matches").whereField("user1", isEqualTo: currentUserID)
-                .addSnapshotListener { snapshot, error in
-                    if let error = error {
-                        print("Error listening for matches: \(error.localizedDescription)")
-                        return
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+
+        db.collection("matches").whereField("user1", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("DEBUG: Error listening for matches: \(error.localizedDescription)")
+                    return
+                }
+
+                var totalUnreadCount = 0
+                let group = DispatchGroup()
+
+                for document in snapshot?.documents ?? [] {
+                    group.enter()
+                    let matchID = document.documentID
+                    if matchID == self.currentChatID {
+                        print("DEBUG: Skipping matchID \(matchID) because it is the currentChatID")
+                        group.leave()
+                        continue
                     }
-
-                    var totalUnreadCount = 0
-                    let group = DispatchGroup()
-
-                    for document in snapshot?.documents ?? [] {
-                        group.enter()
-                        let matchID = document.documentID
-                        fetchUnreadMessagesCountForMatch(matchID: matchID, currentUserID: currentUserID) { unreadCount in
-                            totalUnreadCount += unreadCount
-                            group.leave()
-                        }
-                    }
-
-                    group.notify(queue: .main) {
-                        if !isInChatView { // Update only if not in ChatView
-                            self.unreadMessagesCount = totalUnreadCount
-                        }
+                    self.fetchUnreadMessagesCountForMatch(matchID: matchID, currentUserID: currentUserID) { unreadCount in
+                        print("DEBUG: Unread messages for matchID \(matchID): \(unreadCount)")
+                        totalUnreadCount += unreadCount
+                        group.leave()
                     }
                 }
-        }
+
+                group.notify(queue: .main) {
+                    if !self.isInChatView { // Only update unread count if not in chat
+                        print("DEBUG: Updating unreadMessagesCount to \(totalUnreadCount)")
+                        self.unreadMessagesCount = totalUnreadCount
+                    } else {
+                        print("DEBUG: Not updating unreadMessagesCount because isInChatView is true")
+                    }
+                }
+            }
+    }
+
+
+
     
 
     private func fetchUnreadMessagesCountForMatch(matchID: String, currentUserID: String, completion: @escaping (Int) -> Void) {
+        if matchID == self.currentChatID {
+            print("DEBUG: Skipping fetchUnreadMessagesCountForMatch for matchID \(matchID) because it is the currentChatID")
+            completion(0)
+            return
+        }
         let db = Firestore.firestore()
         db.collection("matches").document(matchID).collection("messages")
             .whereField("senderID", isNotEqualTo: currentUserID)
             .whereField("isRead", isEqualTo: false)
             .getDocuments { snapshot, error in
                 if let error = error {
-                    print("Error fetching unread messages: \(error.localizedDescription)")
+                    print("Error fetching unread messages: \(error)")
                     completion(0)
                     return
                 }
                 
                 let unreadCount = snapshot?.documents.count ?? 0
+                print("DEBUG: Fetched \(unreadCount) unread messages for matchID \(matchID)")
                 completion(unreadCount)
             }
     }
+
 
     private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
         guard UIApplication.shared.applicationState == .active else {
