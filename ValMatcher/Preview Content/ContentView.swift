@@ -453,8 +453,9 @@ struct ContentView: View {
                 for document in snapshot?.documents ?? [] {
                     group.enter()
                     let matchID = document.documentID
-                    if matchID == self.currentChatID {
-                        print("DEBUG: Skipping matchID \(matchID) because it is the currentChatID")
+                    if matchID == self.currentChatID && self.isInChatView {
+                        // Skip updating if this is the current chat and the user is in the chat view
+                        print("DEBUG: Skipping matchID \(matchID) because it is the currentChatID and user is in chat")
                         group.leave()
                         continue
                     }
@@ -491,8 +492,9 @@ struct ContentView: View {
                 for document in snapshot?.documents ?? [] {
                     group.enter()
                     let matchID = document.documentID
-                    if matchID == self.currentChatID {
-                        print("DEBUG: Skipping matchID \(matchID) because it is the currentChatID")
+                    if matchID == self.currentChatID && self.isInChatView {
+                        // Skip updating if this is the current chat and the user is in the chat view
+                        print("DEBUG: Skipping matchID \(matchID) because it is the currentChatID and user is in chat")
                         group.leave()
                         continue
                     }
