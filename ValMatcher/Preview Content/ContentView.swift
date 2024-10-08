@@ -406,49 +406,41 @@ struct ContentView: View {
         }
     }
     
-    private func listenForUnreadMessages() {
+    func listenForUnreadMessages() {
+        guard !isInChatView else {
+            return // Skip listening for unread messages if currently in ChatView
+        }
+        
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
 
-        let matchesQuery = db.collection("matches").whereField("user1", isEqualTo: currentUserID)
-        
-        // Monitor both user1 and user2 matches
-        let user1Query = matchesQuery.whereField("user1", isEqualTo: currentUserID)
-        let user2Query = matchesQuery.whereField("user2", isEqualTo: currentUserID)
-
-        // Combine the queries for real-time updates on both user1 and user2 chats
-        let combinedQueries = [user1Query, user2Query]
-        
-        for query in combinedQueries {
-            query.addSnapshotListener { snapshot, error in
+        db.collection("matches").whereField("user1", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("Error listening for matches: \(error.localizedDescription)")
                     return
                 }
 
-                // Run the update only if not in ChatView
-                if !self.isInChatView {
-                    var totalUnreadCount = 0
-                    let group = DispatchGroup()
+                var totalUnreadCount = 0
+                let group = DispatchGroup()
 
-                    for document in snapshot?.documents ?? [] {
-                        group.enter()
-                        let matchID = document.documentID
-                        self.fetchUnreadMessagesCountForMatch(matchID: matchID, currentUserID: currentUserID) { unreadCount in
-                            totalUnreadCount += unreadCount
-                            group.leave()
-                        }
+                for document in snapshot?.documents ?? [] {
+                    group.enter()
+                    let matchID = document.documentID
+                    fetchUnreadMessagesCountForMatch(matchID: matchID, currentUserID: currentUserID) { unreadCount in
+                        totalUnreadCount += unreadCount
+                        group.leave()
                     }
+                }
 
-                    group.notify(queue: .main) {
-                        if !self.isInChatView { // Double check before updating the count
-                            self.unreadMessagesCount = totalUnreadCount
-                        }
+                group.notify(queue: .main) {
+                    if !isInChatView { // Only update unread count if not in chat
+                        self.unreadMessagesCount = totalUnreadCount
                     }
                 }
             }
-        }
     }
+
 
     
 

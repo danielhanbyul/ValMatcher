@@ -22,7 +22,7 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
-    @Binding var isInChatView: Bool // Ensure this is bound to the parent view
+    @Binding var isInChatView: Bool // Binding to track chat view state
 
     var body: some View {
         VStack {
@@ -208,11 +208,12 @@ struct ChatView: View {
                     }
                 }
                 
-                // Update the messages state
-                self.messages.append(contentsOf: newMessages)
-
-                DispatchQueue.main.async {
-                    scrollToBottom = true
+                // Update the messages state only if there are new messages
+                if !newMessages.isEmpty {
+                    self.messages.append(contentsOf: newMessages)
+                    DispatchQueue.main.async {
+                        scrollToBottom = true
+                    }
                 }
             }
     }
