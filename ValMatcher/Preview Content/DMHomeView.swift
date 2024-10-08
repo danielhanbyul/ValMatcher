@@ -24,6 +24,7 @@ struct DMHomeView: View {
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
+    @State private var isInChatView: Bool = false // Reintroduced isInChatView
     @State private var currentChatID: String? = nil // Track the current chat ID
 
     var body: some View {
@@ -120,7 +121,7 @@ struct DMHomeView: View {
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
-        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match))
+        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match), isInChatView: $isInChatView)
             .onAppear {
                 if let matchID = match.id {
                     self.currentChatID = matchID
@@ -129,6 +130,8 @@ struct DMHomeView: View {
                         markMessagesAsRead(for: match)
                         blendRedDot(for: index)
                     }
+                    isInChatView = true // Set to true when the user enters the chat
+                    print("DEBUG: User entered ChatView, isInChatView set to true")
                 }
             }
             .onDisappear {
@@ -138,6 +141,8 @@ struct DMHomeView: View {
                     // Notify to refresh the chat list and update unread message counts
                     NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
                 }
+                isInChatView = false // Set to false when the user leaves the chat
+                print("DEBUG: User exited ChatView, isInChatView set to false")
             }
         ) {
             HStack {
@@ -160,7 +165,7 @@ struct DMHomeView: View {
                 .padding()
                 Spacer()
 
-                if match.hasUnreadMessages ?? false {
+                if (match.hasUnreadMessages ?? false) && !(isInChatView && match.id == currentChatID) {
                     Circle()
                         .fill(blendColor)
                         .frame(width: 10, height: 10)
@@ -349,7 +354,7 @@ struct DMHomeView: View {
 
         var matchCopy = match
 
-        if matchID == self.currentChatID {
+        if isInChatView && matchID == currentChatID {
             // If we're currently in this chat, set hasUnreadMessages to false
             matchCopy.hasUnreadMessages = false
             completion(matchCopy)
@@ -446,7 +451,7 @@ struct DMHomeView: View {
         for (index, match) in updatedMatches.enumerated() {
             guard let matchID = match.id else { continue }
             group.enter()
-            if matchID == self.currentChatID {
+            if isInChatView && matchID == currentChatID {
                 // If we're currently in this chat, set hasUnreadMessages to false
                 updatedMatches[index].hasUnreadMessages = false
                 group.leave()

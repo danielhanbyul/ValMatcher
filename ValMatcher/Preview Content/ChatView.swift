@@ -12,6 +12,7 @@ import FirebaseAuth
 struct ChatView: View {
     var matchID: String
     var recipientName: String
+    @Binding var isInChatView: Bool // Add this binding
     @State private var messages: [Message] = []
     @State private var newMessage: String = ""
     @State private var currentUserID = Auth.auth().currentUser?.uid
@@ -106,11 +107,13 @@ struct ChatView: View {
             print("DEBUG: Entering ChatView for matchID: \(matchID)")
             NotificationCenter.default.post(name: Notification.Name("EnterChatView"), object: matchID)
             setupChatListener()
+            isInChatView = true // Set to true when entering ChatView
         }
         .onDisappear {
             print("DEBUG: Exiting ChatView for matchID: \(matchID)")
             NotificationCenter.default.post(name: Notification.Name("ExitChatView"), object: matchID)
             removeMessagesListener()
+            isInChatView = false // Set to false when exiting ChatView
         }
     }
 
