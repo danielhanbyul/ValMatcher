@@ -12,13 +12,13 @@ import FirebaseAuth
 struct ChatView: View {
     var matchID: String
     var recipientName: String
-    @Binding var isInChatView: Bool // Add this binding
+    @Binding var isInChatView: Bool
     @State private var messages: [Message] = []
     @State private var newMessage: String = ""
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var scrollToBottom: Bool = true
     @State private var messagesListener: ListenerRegistration?
-    @State private var seenMessageIDs: Set<String> = [] // Track seen message IDs to prevent duplicates
+    @State private var seenMessageIDs: Set<String> = []
     @State private var selectedImage: UIImage?
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
@@ -105,15 +105,14 @@ struct ChatView: View {
         .navigationTitle(recipientName)
         .onAppear {
             print("DEBUG: Entering ChatView for matchID: \(matchID)")
-            NotificationCenter.default.post(name: Notification.Name("EnterChatView"), object: matchID)
+            isInChatView = true
             setupChatListener()
-            isInChatView = true // Set to true when entering ChatView
+            markAllMessagesAsRead() // Mark any unread messages as read when entering the chat
         }
         .onDisappear {
             print("DEBUG: Exiting ChatView for matchID: \(matchID)")
-            NotificationCenter.default.post(name: Notification.Name("ExitChatView"), object: matchID)
+            isInChatView = false
             removeMessagesListener()
-            isInChatView = false // Set to false when exiting ChatView
         }
     }
 
@@ -206,6 +205,10 @@ struct ChatView: View {
                         if !self.seenMessageIDs.contains(message.id ?? "") {
                             newMessages.append(message)
                             self.seenMessageIDs.insert(message.id ?? "")
+                            // If the message is from the other user and isInChatView is true, mark it as read
+                            if !message.isCurrentUser && isInChatView {
+                                markMessageAsRead(messageID: message.id ?? "")
+                            }
                         }
                     }
                 }
@@ -216,58 +219,47 @@ struct ChatView: View {
                     DispatchQueue.main.async {
                         scrollToBottom = true
                     }
-                    // Mark new messages as read
-                    self.markNewMessagesAsRead(messages: newMessages)
                 }
             }
     }
-    
-    private func markNewMessagesAsRead(messages: [Message]) {
-        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-        let db = Firestore.firestore()
-        let batch = db.batch()
-
-        for message in messages {
-            if message.senderID != currentUserID && message.isRead == false {
-                if let messageID = message.id {
-                    let messageRef = db.collection("matches").document(matchID).collection("messages").document(messageID)
-                    batch.updateData(["isRead": true], forDocument: messageRef)
-                }
-            }
-        }
-
-        batch.commit { error in
-            if let error = error {
-                print("Error marking messages as read: \(error.localizedDescription)")
-            } else {
-                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
-            }
-        }
-    }
-
 
     private func removeMessagesListener() {
         messagesListener?.remove()
         messagesListener = nil
     }
 
-    private func markMessagesAsRead() {
-        guard let currentUserID = currentUserID else { return }
+    private func markMessageAsRead(messageID: String) {
         let db = Firestore.firestore()
-        let batch = db.batch()
-
-        messages.filter { !$0.isCurrentUser && !$0.isRead }.forEach { message in
-            let messageRef = db.collection("matches").document(matchID).collection("messages").document(message.id ?? "")
-            batch.updateData(["isRead": true], forDocument: messageRef)
-        }
-
-        batch.commit { error in
+        db.collection("matches").document(matchID).collection("messages").document(messageID).updateData(["isRead": true]) { error in
             if let error = error {
-                print("Error marking messages as read: \(error.localizedDescription)")
-            } else {
-                NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+                print("Error marking message as read: \(error.localizedDescription)")
             }
         }
+    }
+
+    private func markAllMessagesAsRead() {
+        guard let currentUserID = currentUserID else { return }
+        let db = Firestore.firestore()
+        let messagesRef = db.collection("matches").document(matchID).collection("messages")
+        messagesRef.whereField("senderID", isNotEqualTo: currentUserID)
+            .whereField("isRead", isEqualTo: false)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error fetching unread messages: \(error.localizedDescription)")
+                    return
+                }
+
+                let batch = db.batch()
+                snapshot?.documents.forEach { document in
+                    let messageRef = document.reference
+                    batch.updateData(["isRead": true], forDocument: messageRef)
+                }
+                batch.commit { error in
+                    if let error = error {
+                        print("Error committing batch to mark messages as read: \(error.localizedDescription)")
+                    }
+                }
+            }
     }
 
     private func shouldShowDate(for message: Message) -> Bool {
@@ -278,6 +270,7 @@ struct ChatView: View {
         return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
     }
 }
+
 
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
