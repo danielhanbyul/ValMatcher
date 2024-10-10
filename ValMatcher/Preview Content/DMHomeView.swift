@@ -12,7 +12,6 @@ import FirebaseFirestoreSwift
 import UserNotifications
 
 struct DMHomeView: View {
-    
     @EnvironmentObject var appState: AppState  // Access the shared app state
     @State var matches: [Chat] = []
     @State private var currentUserID = Auth.auth().currentUser?.uid
@@ -123,9 +122,7 @@ struct DMHomeView: View {
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
-        @State var unreadMessageCount: Int = 0  // Local state for unread messages count
-
-        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match), isInChatView: $isInChatView, unreadMessageCount: $unreadMessageCount) // Pass the local unreadMessageCount binding
+        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match), isInChatView: $isInChatView)
             .onAppear {
                 if let matchID = match.id {
                     self.currentChatID = matchID
@@ -191,7 +188,6 @@ struct DMHomeView: View {
             }
         })
     }
-
 
     private func blendRedDot(for index: Int) {
         blendColor = Color.black.opacity(0.7)
