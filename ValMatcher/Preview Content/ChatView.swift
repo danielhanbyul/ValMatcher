@@ -177,12 +177,12 @@ struct ChatView: View {
         db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
-                // Optionally, you can restore the message to the input field if there's an error
+                // Optionally, restore the message if there's an error
                 // self.newMessage = messageToSend
                 return
             }
 
-            // Update the chat timestamp to the most recent
+            // Update the chat timestamp
             db.collection("matches").document(matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
@@ -190,6 +190,7 @@ struct ChatView: View {
             }
         }
     }
+
 
 
     private func setupChatListener() {

@@ -25,9 +25,12 @@ struct DMHomeView: View {
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
-    @State private var isInChatView: Bool = false // Reintroduced isInChatView
-    @State private var currentChatID: String? = nil // Track the current chat ID
-    
+
+    // Added State variables
+    @State private var selectedMatch: Chat?
+    @State private var isChatActive = false
+    @State private var isInChatView: Bool = false
+    @State private var currentChatID: String? = nil
 
     var body: some View {
         ZStack {
@@ -66,6 +69,27 @@ struct DMHomeView: View {
                     .padding()
                 }
             }
+
+            // Hidden NavigationLink activated by isChatActive
+            NavigationLink(
+                destination: ChatView(
+                    matchID: selectedMatch?.id ?? "",
+                    recipientName: getRecipientName(for: selectedMatch),
+                    isInChatView: $isInChatView,
+                    unreadMessageCount: $totalUnreadMessages
+                )
+                .onAppear {
+                    print("DEBUG: Entered ChatView")
+                }
+                .onDisappear {
+                    self.currentChatID = nil
+                    self.isInChatView = false
+                    self.isChatActive = false
+                    print("DEBUG: Exited ChatView")
+                },
+                isActive: $isChatActive,
+                label: { EmptyView() }
+            )
         }
         .navigationBarTitle("Messages", displayMode: .inline)
         .navigationBarItems(trailing: Button(action: { isEditing.toggle() }) {
@@ -123,73 +147,60 @@ struct DMHomeView: View {
 
     @ViewBuilder
     private func matchRow(match: Chat) -> some View {
-        NavigationLink(destination: ChatView(matchID: match.id ?? "", recipientName: getRecipientName(for: match), isInChatView: $isInChatView, unreadMessageCount: $totalUnreadMessages)  // Pass unreadMessageCount
-            .onAppear {
+        HStack {
+            if isEditing {
+                // Show selection indicator
+                Button(action: {
+                    toggleSelection(for: match.id ?? "")
+                }) {
+                    Image(systemName: selectedMatches.contains(match.id ?? "") ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(.white)
+                }
+                .padding(.leading)
+            }
+
+            VStack(alignment: .leading) {
+                Text(getRecipientName(for: match))
+                    .font(.custom("AvenirNext-Bold", size: 18))
+                    .foregroundColor(.white)
+            }
+            .padding()
+            Spacer()
+
+            if (match.hasUnreadMessages ?? false) && !(isInChatView && match.id == currentChatID) {
+                Circle()
+                    .fill(blendColor)
+                    .frame(width: 10, height: 10)
+                    .padding(.trailing, 10)
+            }
+        }
+        .contentShape(Rectangle()) // Makes the entire row tappable
+        .onTapGesture {
+            if isEditing {
+                toggleSelection(for: match.id ?? "")
+            } else {
+                self.selectedMatch = match
                 if let matchID = match.id {
                     self.currentChatID = matchID
-                    print("DEBUG: User entered ChatView, currentChatID set to \(matchID)")
+                    self.isInChatView = true
+                    self.isChatActive = true
+                    print("DEBUG: User selected matchID: \(matchID)")
                     if let index = matches.firstIndex(where: { $0.id == matchID }), matches[index].hasUnreadMessages == true {
                         markMessagesAsRead(for: match)
                         blendRedDot(for: index)
                     }
-                    isInChatView = true // Set to true when the user enters the chat
-                    print("DEBUG: User entered ChatView, isInChatView set to true")
                 }
             }
-            .onDisappear {
-                if let matchID = match.id {
-                    self.currentChatID = nil
-                    print("DEBUG: User exited ChatView, currentChatID reset to nil")
-                    // Notify to refresh the chat list and update unread message counts
-                    NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
-                }
-                isInChatView = false // Set to false when the user leaves the chat
-                print("DEBUG: User exited ChatView, isInChatView set to false")
-            }
-        ) {
-            HStack {
-                if isEditing {
-                    // Show selection indicator
-                    Button(action: {
-                        toggleSelection(for: match.id ?? "")
-                    }) {
-                        Image(systemName: selectedMatches.contains(match.id ?? "") ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(.white)
-                    }
-                    .padding(.leading)
-                }
-
-                VStack(alignment: .leading) {
-                    Text(getRecipientName(for: match))
-                        .font(.custom("AvenirNext-Bold", size: 18))
-                        .foregroundColor(.white)
-                }
-                .padding()
-                Spacer()
-
-                if (match.hasUnreadMessages ?? false) && !(isInChatView && match.id == currentChatID) {
-                    Circle()
-                        .fill(blendColor)
-                        .frame(width: 10, height: 10)
-                        .padding(.trailing, 10)
-                }
-            }
-            .background(
-                isEditing && selectedMatches.contains(match.id ?? "") ?
-                Color.gray.opacity(0.3) : Color.black.opacity(0.7)
-            )
-            .cornerRadius(12)
-            .padding(.horizontal)
-            .padding(.vertical, 5)
-            .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
         }
-        .simultaneousGesture(TapGesture().onEnded {
-            if isEditing {
-                toggleSelection(for: match.id ?? "")
-            }
-        })
+        .background(
+            isEditing && selectedMatches.contains(match.id ?? "") ?
+            Color.gray.opacity(0.3) : Color.black.opacity(0.7)
+        )
+        .cornerRadius(12)
+        .padding(.horizontal)
+        .padding(.vertical, 5)
+        .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
     }
-
 
     private func blendRedDot(for index: Int) {
         blendColor = Color.black.opacity(0.7)
@@ -375,6 +386,7 @@ struct DMHomeView: View {
             .getDocuments { snapshot, error in
                 if let error = error {
                     print("Error fetching unread messages: \(error.localizedDescription)")
+                    completion(matchCopy)
                     return
                 }
 
