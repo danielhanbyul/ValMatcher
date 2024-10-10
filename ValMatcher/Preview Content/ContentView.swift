@@ -154,10 +154,8 @@ struct ContentView: View {
                 print("DEBUG: isInChatView set to false, currentChatID reset to nil")
             }
         }
-
     }
     
-
     private var userCardStack: some View {
         VStack(spacing: 0) {
             ZStack {
@@ -515,7 +513,6 @@ struct ContentView: View {
                 completion(unreadCount)
             }
     }
-
 
     private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
         guard UIApplication.shared.applicationState == .active else {
