@@ -79,7 +79,9 @@ struct ChatView: View {
                 .onChange(of: messages) { _ in
                     if scrollToBottom {
                         DispatchQueue.main.async {
-                            proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                            if let lastMessageID = messages.last?.id {
+                                proxy.scrollTo(lastMessageID, anchor: .bottom)
+                            }
                         }
                     }
                 }
@@ -88,17 +90,15 @@ struct ChatView: View {
             HStack {
                 TextField("Enter message", text: $newMessage)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding()
                     .frame(height: 40)
 
                 Button(action: sendMessage) {
                     Image(systemName: "paperplane.fill")
-                        .padding()
+                        .padding(10)
                         .background(Color.blue)
                         .foregroundColor(.white)
                         .clipShape(Circle())
                 }
-                .padding()
             }
             .padding()
         }
@@ -110,7 +110,7 @@ struct ChatView: View {
             appState.isInChatView = true
             appState.currentChatID = matchID
             setupChatListener()
-            markAllMessagesAsRead() // Mark any unread messages as read when entering the chat
+            markAllMessagesAsRead()
         }
         .onDisappear {
             print("DEBUG: Exiting ChatView for matchID: \(matchID)")
@@ -118,7 +118,6 @@ struct ChatView: View {
             appState.currentChatID = nil
             removeMessagesListener()
         }
-
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -163,7 +162,9 @@ struct ChatView: View {
         guard let currentUserID = Auth.auth().currentUser?.uid, !newMessage.isEmpty else { return }
 
         let messageToSend = newMessage
-        self.newMessage = "" // Clear the input field immediately
+        DispatchQueue.main.async {
+            self.newMessage = "" // Clear the input field immediately
+        }
 
         let db = Firestore.firestore()
         let messageData: [String: Any] = [
@@ -173,16 +174,16 @@ struct ChatView: View {
             "isRead": false
         ]
 
-        // Add the message to Firestore
         db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
                 // Optionally, restore the message if there's an error
-                // self.newMessage = messageToSend
+                DispatchQueue.main.async {
+                    self.newMessage = messageToSend
+                }
                 return
             }
 
-            // Update the chat timestamp
             db.collection("matches").document(matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
@@ -191,42 +192,58 @@ struct ChatView: View {
         }
     }
 
-
-
     private func setupChatListener() {
         let db = Firestore.firestore()
         messagesListener = db.collection("matches").document(matchID).collection("messages")
             .order(by: "timestamp", descending: false)
-            .addSnapshotListener { snapshot, error in
+            .addSnapshotListener(includeMetadataChanges: false) { snapshot, error in
                 if let error = error {
                     print("Error loading messages: \(error.localizedDescription)")
                     return
                 }
 
-                guard let documents = snapshot?.documents else {
+                guard let snapshot = snapshot else {
                     print("No messages found")
                     return
                 }
 
                 var newMessages: [Message] = []
-                for document in documents {
-                    if let message = try? document.data(as: Message.self) {
-                        // Check if the message ID is already in the set
-                        if !self.seenMessageIDs.contains(message.id ?? "") {
-                            newMessages.append(message)
-                            self.seenMessageIDs.insert(message.id ?? "")
-                            // If the message is from the other user and isInChatView is true, mark it as read
-                            if !message.isCurrentUser && isInChatView {
-                                markMessageAsRead(messageID: message.id ?? "")
+                var shouldScrollToBottom = false
+
+                for diff in snapshot.documentChanges {
+                    switch diff.type {
+                    case .added:
+                        if let message = try? diff.document.data(as: Message.self) {
+                            if !self.seenMessageIDs.contains(message.id ?? "") {
+                                self.seenMessageIDs.insert(message.id ?? "")
+                                newMessages.append(message)
+                                shouldScrollToBottom = true
+
+                                if !message.isCurrentUser && self.isInChatView {
+                                    self.markMessageAsRead(messageID: message.id ?? "")
+                                }
+                            }
+                        }
+                    case .modified:
+                        if let message = try? diff.document.data(as: Message.self),
+                           let index = self.messages.firstIndex(where: { $0.id == message.id }) {
+                            DispatchQueue.main.async {
+                                self.messages[index] = message
+                            }
+                        }
+                    case .removed:
+                        if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
+                            DispatchQueue.main.async {
+                                self.messages.remove(at: index)
                             }
                         }
                     }
                 }
 
-                // Update the messages state only if there are new messages
                 if !newMessages.isEmpty {
-                    self.messages.append(contentsOf: newMessages)
                     DispatchQueue.main.async {
+                        self.messages.append(contentsOf: newMessages)
+                        self.messages.sort { $0.timestamp.dateValue() < $1.timestamp.dateValue() }
                         scrollToBottom = true
                     }
                 }
@@ -281,6 +298,7 @@ struct ChatView: View {
     }
 }
 
+// Date Formatters
 
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
@@ -295,6 +313,8 @@ let timeFormatter: DateFormatter = {
     formatter.timeStyle = .short
     return formatter
 }()
+
+// Identifiable Image URL for Image Presentation
 
 struct IdentifiableImageURL: Identifiable {
     var id: String { url }
