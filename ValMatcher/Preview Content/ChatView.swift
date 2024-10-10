@@ -10,6 +10,7 @@ import FirebaseFirestore
 import FirebaseAuth
 
 struct ChatView: View {
+    @EnvironmentObject var appState: AppState
     var matchID: String
     var recipientName: String
     @Binding var isInChatView: Bool
@@ -105,15 +106,18 @@ struct ChatView: View {
         .navigationTitle(recipientName)
         .onAppear {
             print("DEBUG: Entering ChatView for matchID: \(matchID)")
-            isInChatView = true
+            appState.isInChatView = true
+            appState.currentChatID = matchID
             setupChatListener()
             markAllMessagesAsRead() // Mark any unread messages as read when entering the chat
         }
         .onDisappear {
             print("DEBUG: Exiting ChatView for matchID: \(matchID)")
-            isInChatView = false
+            appState.isInChatView = false
+            appState.currentChatID = nil
             removeMessagesListener()
         }
+
     }
 
     private func messageContent(for message: Message) -> some View {

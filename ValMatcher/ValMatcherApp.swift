@@ -14,15 +14,16 @@ import UIKit
 @main
 struct ValMatcherApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @StateObject var appState = AppState()  // Create a shared instance of AppState
-
+    @StateObject var appState = AppState()
+    
     var body: some Scene {
         WindowGroup {
-            MainView()  // Ensure MainView is used here for handling navigation
-                .environmentObject(appState)  // Inject AppState into the environment
+            MainView()
+                .environmentObject(appState)
         }
     }
 }
+
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
 
