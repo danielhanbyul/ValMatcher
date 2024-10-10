@@ -10,10 +10,10 @@ import FirebaseFirestore
 import FirebaseAuth
 
 struct ChatView: View {
-    @EnvironmentObject var appState: AppState
     var matchID: String
     var recipientName: String
     @Binding var isInChatView: Bool
+    @Binding var unreadMessageCount: Int // Binding to manage unread message count in ContentView
     @State private var messages: [Message] = []
     @State private var newMessage: String = ""
     @State private var currentUserID = Auth.auth().currentUser?.uid
@@ -106,20 +106,19 @@ struct ChatView: View {
         .navigationTitle(recipientName)
         .onAppear {
             print("DEBUG: Entering ChatView for matchID: \(matchID)")
-            appState.isInChatView = true
-            appState.currentChatID = matchID
+            isInChatView = true
             setupChatListener()
             markAllMessagesAsRead() // Mark any unread messages as read when entering the chat
         }
         .onDisappear {
             print("DEBUG: Exiting ChatView for matchID: \(matchID)")
-            appState.isInChatView = false
-            appState.currentChatID = nil
+            isInChatView = false
             removeMessagesListener()
+            updateUnreadMessageCount() // Update the unread message count on exit
         }
-
     }
 
+    // Function to display message content
     private func messageContent(for message: Message) -> some View {
         Group {
             if let imageURL = message.imageURL {
@@ -266,6 +265,26 @@ struct ChatView: View {
             }
     }
 
+    // Update unread message count when leaving the chat
+    private func updateUnreadMessageCount() {
+        let db = Firestore.firestore()
+        let messagesRef = db.collection("matches").document(matchID).collection("messages")
+
+        messagesRef.whereField("isRead", isEqualTo: false)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error fetching unread messages: \(error.localizedDescription)")
+                    return
+                }
+
+                // Update the unread message count for ContentView
+                let unreadMessages = snapshot?.documents.count ?? 0
+                DispatchQueue.main.async {
+                    unreadMessageCount = unreadMessages
+                }
+            }
+    }
+
     private func shouldShowDate(for message: Message) -> Bool {
         guard let index = messages.firstIndex(of: message) else { return false }
         if index == 0 { return true }
@@ -275,7 +294,7 @@ struct ChatView: View {
     }
 }
 
-
+// Date formatters
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateStyle = .long
@@ -290,7 +309,8 @@ let timeFormatter: DateFormatter = {
     return formatter
 }()
 
+// IdentifiableImageURL for full-screen image view
 struct IdentifiableImageURL: Identifiable {
     var id: String { url }
     var url: String
-}
+} 
