@@ -321,7 +321,6 @@ struct DMHomeView: View {
 
                 guard let documents = snapshot?.documents else { return }
 
-                var updatedMatches = [Chat]()
                 let group = DispatchGroup()
 
                 for document in documents {
@@ -329,10 +328,16 @@ struct DMHomeView: View {
                         var match = try document.data(as: Chat.self)
                         group.enter()
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
-                            if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
-                                self.matches[index] = updatedMatch
+
+                            // Skip updating the match if it's the current chat and we're in ChatView
+                            if self.isInChatView && self.currentChatID == updatedMatch.id {
+                                print("DEBUG: Skipping update for current chat matchID: \(updatedMatch.id ?? "")")
                             } else {
-                                self.matches.append(updatedMatch)
+                                if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
+                                    self.matches[index] = updatedMatch
+                                } else {
+                                    self.matches.append(updatedMatch)
+                                }
                             }
                             group.leave()
                         }

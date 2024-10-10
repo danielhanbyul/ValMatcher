@@ -162,23 +162,23 @@ struct ChatView: View {
     private func sendMessage() {
         guard let currentUserID = Auth.auth().currentUser?.uid, !newMessage.isEmpty else { return }
 
+        let messageToSend = newMessage
+        self.newMessage = "" // Clear the input field immediately
+
         let db = Firestore.firestore()
         let messageData: [String: Any] = [
             "senderID": currentUserID,
-            "content": newMessage,
+            "content": messageToSend,
             "timestamp": Timestamp(),
             "isRead": false
         ]
-
-        // Clear the message field as soon as the send button is clicked
-        let messageToSend = newMessage
-        newMessage = "" // Clear the text input
 
         // Add the message to Firestore
         db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
-                newMessage = messageToSend // Restore the message text if there's an error
+                // Optionally, you can restore the message to the input field if there's an error
+                // self.newMessage = messageToSend
                 return
             }
 
@@ -190,6 +190,7 @@ struct ChatView: View {
             }
         }
     }
+
 
     private func setupChatListener() {
         let db = Firestore.firestore()
