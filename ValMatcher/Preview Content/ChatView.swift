@@ -170,10 +170,15 @@ struct ChatView: View {
             "isRead": false
         ]
 
+        // Clear the message field as soon as the send button is clicked
+        let messageToSend = newMessage
+        newMessage = "" // Clear the text input
+
         // Add the message to Firestore
         db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
+                newMessage = messageToSend // Restore the message text if there's an error
                 return
             }
 
@@ -181,8 +186,6 @@ struct ChatView: View {
             db.collection("matches").document(matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
-                } else {
-                    self.newMessage = "" // Clear the input field after sending
                 }
             }
         }
