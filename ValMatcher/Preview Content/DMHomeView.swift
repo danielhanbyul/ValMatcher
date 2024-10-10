@@ -12,7 +12,6 @@ import FirebaseFirestoreSwift
 import UserNotifications
 
 struct DMHomeView: View {
-    @EnvironmentObject var appState: AppState  // Access the shared app state
     @State var matches: [Chat] = []
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var isEditing = false
@@ -25,7 +24,7 @@ struct DMHomeView: View {
     @State private var blendColor = Color.red
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
-    @State private var isInChatView: Bool = false // Reintroduced isInChatView
+    @State private var isInChatView: Bool = false // Track if user is in ChatView
     @State private var currentChatID: String? = nil // Track the current chat ID
 
     var body: some View {
@@ -77,7 +76,6 @@ struct DMHomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshChatList"))) { notification in
             if let chatID = notification.object as? String {
                 if let index = matches.firstIndex(where: { $0.id == chatID }), let currentUserID = self.currentUserID {
-                    // Update the unread message count for the specific match
                     self.updateUnreadMessageCount(for: matches[index], currentUserID: currentUserID) { updatedMatch in
                         self.matches[index] = updatedMatch
                     }
@@ -231,7 +229,6 @@ struct DMHomeView: View {
         }
     }
 
-    // Function to get recipient's name using cache for faster access
     private func getRecipientName(for match: Chat?) -> String {
         guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
         let userID = currentUserID == match.user1 ? match.user2 : match.user1
@@ -240,12 +237,11 @@ struct DMHomeView: View {
             return cachedName
         }
 
-        // If not in cache, fetch the username
         if let userID = userID {
             fetchAndCacheUserName(for: userID) { _ in }
         }
 
-        return "Unknown User" // Fallback in case the name isn't fetched yet
+        return "Unknown User"
     }
 
     func setupListeners() {
@@ -289,7 +285,6 @@ struct DMHomeView: View {
 
                 group.notify(queue: .main) {
                     self.fetchUserNames(for: newMatches) { updatedMatches in
-                        // Sort the matches by lastMessageTimestamp before updating the UI
                         self.matches = updatedMatches.sorted {
                             ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                         }
@@ -340,7 +335,6 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
-                    // Sort the updated matches by lastMessageTimestamp after real-time update
                     self.matches = self.matches.sorted {
                         ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                     }
@@ -356,7 +350,6 @@ struct DMHomeView: View {
         var matchCopy = match
 
         if isInChatView && matchID == currentChatID {
-            // If we're currently in this chat, set hasUnreadMessages to false
             matchCopy.hasUnreadMessages = false
             completion(matchCopy)
             return
@@ -453,7 +446,6 @@ struct DMHomeView: View {
             guard let matchID = match.id else { continue }
             group.enter()
             if isInChatView && matchID == currentChatID {
-                // If we're currently in this chat, set hasUnreadMessages to false
                 updatedMatches[index].hasUnreadMessages = false
                 group.leave()
                 continue
@@ -491,7 +483,6 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-            // Sort by lastMessageTimestamp once all updates are fetched
             self.matches = updatedMatches.sorted {
                 ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
             }

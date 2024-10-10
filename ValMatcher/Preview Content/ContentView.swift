@@ -29,9 +29,8 @@ struct MessageListener {
     }
 }
 
-
 struct ContentView: View {
-    @EnvironmentObject var appState: AppState  // Access the shared app state]
+    @EnvironmentObject var appState: AppState  // Access the shared app state
     @StateObject var userProfileViewModel: UserProfileViewModel
     @Binding var isSignedIn: Bool
     @StateObject private var firestoreManager = FirestoreManager()
@@ -56,8 +55,6 @@ struct ContentView: View {
     @State private var shownUserIDs: Set<String> = []
     @State private var currentChatID: String? = nil
     @State private var unreadMessagesListener: ListenerRegistration?
-
-
 
     enum InteractionResult {
         case liked
@@ -153,10 +150,8 @@ struct ContentView: View {
                 print("DEBUG: isInChatView set to false, currentChatID reset to nil")
             }
         }
-
     }
     
-
     private var userCardStack: some View {
         VStack(spacing: 0) {
             ZStack {
@@ -472,9 +467,6 @@ struct ContentView: View {
             }
     }
 
-
-    
-
     private func fetchUnreadMessagesCountForMatch(matchID: String, currentUserID: String, completion: @escaping (Int) -> Void) {
         if matchID == self.currentChatID {
             print("DEBUG: Skipping fetchUnreadMessagesCountForMatch for matchID \(matchID) because it is the currentChatID")
@@ -497,7 +489,6 @@ struct ContentView: View {
                 completion(unreadCount)
             }
     }
-
 
     private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
         guard UIApplication.shared.applicationState == .active else {
