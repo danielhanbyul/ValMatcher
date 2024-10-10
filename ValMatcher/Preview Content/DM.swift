@@ -35,10 +35,3 @@ struct DM: View {
         }
     }
 }
-
-struct DM_Previews: PreviewProvider {
-    static var previews: some View {
-        DM(matchID: "sampleMatchID", recipientName: "Unknown User")
-            .preferredColorScheme(.dark)
-    }
-}

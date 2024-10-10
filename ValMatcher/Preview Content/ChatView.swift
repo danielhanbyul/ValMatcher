@@ -24,6 +24,7 @@ struct ChatView: View {
     @State private var isFullScreenImagePresented: IdentifiableImageURL?
     @State private var showAlert = false
     @State private var copiedText = ""
+    @Binding var unreadMessageCount: Int
 
     var body: some View {
         VStack {
