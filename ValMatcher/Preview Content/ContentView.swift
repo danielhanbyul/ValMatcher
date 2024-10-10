@@ -31,6 +31,7 @@ struct MessageListener {
 
 
 struct ContentView: View {
+    @EnvironmentObject var appState: AppState  // Access the shared app state
     @StateObject var userProfileViewModel: UserProfileViewModel
     @Binding var isSignedIn: Bool
     @StateObject private var firestoreManager = FirestoreManager()
@@ -425,51 +426,63 @@ struct ContentView: View {
     func listenForUnreadMessages() {
         print("DEBUG: listenForUnreadMessages called")
         
-        guard !isInChatView else {
-            print("DEBUG: Skipping unread messages listener because isInChatView is true")
-            return // Skip listening for unread messages if currently in ChatView
-        }
-        
-        print("DEBUG: Proceeding with unread messages listener because isInChatView is false")
-
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
 
-        db.collection("matches").whereField("user1", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
+        var totalUnreadCount = 0
+        let group = DispatchGroup()
+
+        let queries = [
+            db.collection("matches").whereField("user1", isEqualTo: currentUserID),
+            db.collection("matches").whereField("user2", isEqualTo: currentUserID)
+        ]
+
+        for query in queries {
+            group.enter()
+            query.addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("DEBUG: Error listening for matches: \(error.localizedDescription)")
+                    group.leave()
                     return
                 }
 
-                var totalUnreadCount = 0
-                let group = DispatchGroup()
+                var totalUnreadCountForQuery = 0
+
+                let innerGroup = DispatchGroup()
 
                 for document in snapshot?.documents ?? [] {
-                    group.enter()
                     let matchID = document.documentID
+
                     if matchID == self.currentChatID {
                         print("DEBUG: Skipping matchID \(matchID) because it is the currentChatID")
-                        group.leave()
                         continue
                     }
+
+                    innerGroup.enter()
                     self.fetchUnreadMessagesCountForMatch(matchID: matchID, currentUserID: currentUserID) { unreadCount in
                         print("DEBUG: Unread messages for matchID \(matchID): \(unreadCount)")
-                        totalUnreadCount += unreadCount
-                        group.leave()
+                        totalUnreadCountForQuery += unreadCount
+                        innerGroup.leave()
                     }
                 }
 
-                group.notify(queue: .main) {
-                    if !self.isInChatView { // Only update unread count if not in chat
-                        print("DEBUG: Updating unreadMessagesCount to \(totalUnreadCount)")
-                        self.unreadMessagesCount = totalUnreadCount
-                    } else {
-                        print("DEBUG: Not updating unreadMessagesCount because isInChatView is true")
-                    }
+                innerGroup.notify(queue: .main) {
+                    totalUnreadCount += totalUnreadCountForQuery
+                    group.leave()
                 }
             }
+        }
+
+        group.notify(queue: .main) {
+            if !self.isInChatView { // Only update unread count if not in chat
+                print("DEBUG: Updating unreadMessagesCount to \(totalUnreadCount)")
+                self.unreadMessagesCount = totalUnreadCount
+            } else {
+                print("DEBUG: Not updating unreadMessagesCount because isInChatView is true")
+            }
+        }
     }
+
 
 
 

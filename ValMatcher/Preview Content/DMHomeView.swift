@@ -12,6 +12,7 @@ import FirebaseFirestoreSwift
 import UserNotifications
 
 struct DMHomeView: View {
+    @EnvironmentObject var appState: AppState  // Access the shared app state
     @State var matches: [Chat] = []
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var isEditing = false

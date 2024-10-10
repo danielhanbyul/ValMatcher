@@ -14,10 +14,12 @@ import UIKit
 @main
 struct ValMatcherApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @StateObject var appState = AppState()  // Create a shared instance of AppState
 
     var body: some Scene {
         WindowGroup {
             MainView()  // Ensure MainView is used here for handling navigation
+                .environmentObject(appState)  // Inject AppState into the environment
         }
     }
 }
@@ -111,7 +113,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     private func fetchNewData(completion: @escaping (UIBackgroundFetchResult) -> Void) {
         // Implement data fetching logic
-        // For example, you could call a function that updates the unread message count or fetches new data
         completion(.newData)
     }
 
@@ -119,4 +120,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         return self.orientationLock
     }
+}
+
+
+class AppState: ObservableObject {
+    @Published var isInChatView: Bool = false
+    @Published var currentChatID: String? = nil
 }
