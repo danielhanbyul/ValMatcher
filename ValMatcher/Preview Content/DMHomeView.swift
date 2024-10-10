@@ -26,7 +26,7 @@ struct DMHomeView: View {
     @State private var isLoaded = false
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
 
-    // Added State variables
+    // State variables for navigation
     @State private var selectedMatch: Chat?
     @State private var isChatActive = false
     @State private var isInChatView: Bool = false

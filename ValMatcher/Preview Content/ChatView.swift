@@ -14,30 +14,26 @@ struct ChatView: View {
     var matchID: String
     var recipientName: String
     @Binding var isInChatView: Bool
-    @State private var messages: [Message] = []
-    @State private var newMessage: String = ""
-    @State private var currentUserID = Auth.auth().currentUser?.uid
-    @State private var scrollToBottom: Bool = true
-    @State private var messagesListener: ListenerRegistration?
-    @State private var seenMessageIDs: Set<String> = []
-    @State private var selectedImage: UIImage?
-    @State private var isFullScreenImagePresented: IdentifiableImageURL?
-    @State private var showAlert = false
-    @State private var copiedText = ""
     @Binding var unreadMessageCount: Int
-    
-    // New states for pagination and debouncing
-    @State private var lastFetchedMessage: QueryDocumentSnapshot?
-    @State private var debounceTimer: Timer?
+
+    @StateObject private var viewModel: ChatViewModel
+
+    init(matchID: String, recipientName: String, isInChatView: Binding<Bool>, unreadMessageCount: Binding<Int>) {
+        self.matchID = matchID
+        self.recipientName = recipientName
+        self._isInChatView = isInChatView
+        self._unreadMessageCount = unreadMessageCount
+        _viewModel = StateObject(wrappedValue: ChatViewModel(matchID: matchID))
+    }
 
     var body: some View {
         VStack {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack {
-                        ForEach(messages) { message in
+                        ForEach(viewModel.messages) { message in
                             VStack {
-                                if shouldShowDate(for: message) {
+                                if viewModel.shouldShowDate(for: message) {
                                     Text("\(message.timestamp.dateValue(), formatter: dateOnlyFormatter)")
                                         .font(.footnote)
                                         .foregroundColor(.gray)
@@ -80,22 +76,22 @@ struct ChatView: View {
                         }
                     }
                 }
-                .onChange(of: messages) { _ in
-                    if scrollToBottom {
+                .onChange(of: viewModel.messages) { _ in
+                    if viewModel.scrollToBottom {
                         DispatchQueue.main.async {
-                            proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                            proxy.scrollTo(viewModel.messages.last?.id, anchor: .bottom)
                         }
                     }
                 }
             }
 
             HStack {
-                TextField("Enter message", text: $newMessage)
+                TextField("Enter message", text: $viewModel.newMessage)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding()
                     .frame(height: 40)
 
-                Button(action: sendMessage) {
+                Button(action: viewModel.sendMessage) {
                     Image(systemName: "paperplane.fill")
                         .padding()
                         .background(Color.blue)
@@ -113,16 +109,17 @@ struct ChatView: View {
             print("DEBUG: Entering ChatView for matchID: \(matchID)")
             appState.isInChatView = true
             appState.currentChatID = matchID
-            setupChatListener()
-            markAllMessagesAsRead() // Mark any unread messages as read when entering the chat
+            isInChatView = true
+            viewModel.isInChatView = true
+            viewModel.markAllMessagesAsRead()
         }
         .onDisappear {
             print("DEBUG: Exiting ChatView for matchID: \(matchID)")
             appState.isInChatView = false
             appState.currentChatID = nil
-            removeMessagesListener()
+            isInChatView = false
+            viewModel.isInChatView = false
         }
-
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -135,7 +132,7 @@ struct ChatView: View {
                         .frame(width: 150, height: 150)
                         .cornerRadius(8)
                         .onTapGesture {
-                            isFullScreenImagePresented = IdentifiableImageURL(url: imageURL)
+                            viewModel.isFullScreenImagePresented = IdentifiableImageURL(url: imageURL)
                         }
                 } placeholder: {
                     ProgressView()
@@ -146,14 +143,14 @@ struct ChatView: View {
                     .padding()
                     .onTapGesture(count: 2) {
                         UIPasteboard.general.string = message.content
-                        copiedText = message.content
-                        showAlert = true
+                        viewModel.copiedText = message.content
+                        viewModel.showAlert = true
                     }
                     .contextMenu {
                         Button(action: {
                             UIPasteboard.general.string = message.content
-                            copiedText = message.content
-                            showAlert = true
+                            viewModel.copiedText = message.content
+                            viewModel.showAlert = true
                         }) {
                             Text("Copy")
                             Image(systemName: "doc.on.doc")
@@ -162,8 +159,34 @@ struct ChatView: View {
             }
         }
     }
+}
 
-    private func sendMessage() {
+// ViewModel for ChatView
+class ChatViewModel: ObservableObject {
+    @Published var messages: [Message] = []
+    @Published var newMessage: String = ""
+    @Published var isFullScreenImagePresented: IdentifiableImageURL?
+    @Published var showAlert = false
+    @Published var copiedText = ""
+    @Published var scrollToBottom: Bool = true
+
+    private var messagesListener: ListenerRegistration?
+    private var matchID: String
+    private var currentUserID: String?
+    var isInChatView: Bool = false
+    private var seenMessageIDs: Set<String> = []
+
+    init(matchID: String) {
+        self.matchID = matchID
+        self.currentUserID = Auth.auth().currentUser?.uid
+        setupChatListener()
+    }
+
+    deinit {
+        removeMessagesListener()
+    }
+
+    func sendMessage() {
         guard let currentUserID = Auth.auth().currentUser?.uid, !newMessage.isEmpty else { return }
 
         let messageToSend = newMessage
@@ -178,14 +201,16 @@ struct ChatView: View {
         ]
 
         // Add the message to Firestore
-        db.collection("matches").document(matchID).collection("messages").addDocument(data: messageData) { error in
+        db.collection("matches").document(self.matchID).collection("messages").addDocument(data: messageData) { [weak self] error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
+                // Optionally, restore the message if there's an error
+                // self?.newMessage = messageToSend
                 return
             }
 
             // Update the chat timestamp
-            db.collection("matches").document(matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
+            db.collection("matches").document(self?.matchID ?? "").updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
                 }
@@ -193,55 +218,51 @@ struct ChatView: View {
         }
     }
 
-    private func setupChatListener(limit: Int = 20) {
+
+    private func setupChatListener() {
         let db = Firestore.firestore()
-        var query = db.collection("matches").document(matchID).collection("messages")
+        messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
-            .limit(toLast: limit) // Fetch the last 'limit' messages
+            .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
+                guard let self = self else { return }  // Prevents retain cycles
 
-        if let lastMessage = lastFetchedMessage {
-            query = query.start(afterDocument: lastMessage)
-        }
-
-        debounceTimer?.invalidate()
-        debounceTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { _ in
-            self.messagesListener = query.addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("Error loading messages: \(error.localizedDescription)")
                     return
                 }
 
-                guard let documents = snapshot?.documents else {
+                guard let snapshot = snapshot else {
                     print("No messages found")
                     return
                 }
 
-                if !documents.isEmpty {
-                    self.lastFetchedMessage = documents.last // Keep track of the last fetched document
-                }
-
-                var newMessages: [Message] = []
-                for document in documents {
-                    if let message = try? document.data(as: Message.self) {
-                        if !self.seenMessageIDs.contains(message.id ?? "") {
-                            newMessages.append(message)
-                            self.seenMessageIDs.insert(message.id ?? "")
-                            if !message.isCurrentUser && isInChatView {
-                                markMessageAsRead(messageID: message.id ?? "")
+                for diff in snapshot.documentChanges {
+                    switch diff.type {
+                    case .added:
+                        if let message = try? diff.document.data(as: Message.self) {
+                            if !self.seenMessageIDs.contains(message.id ?? "") {
+                                self.messages.append(message)
+                                self.seenMessageIDs.insert(message.id ?? "")
+                                if !message.isCurrentUser && self.isInChatView {
+                                    self.markMessageAsRead(messageID: message.id ?? "")
+                                }
+                                self.scrollToBottom = true
                             }
+                        }
+                    case .modified:
+                        if let message = try? diff.document.data(as: Message.self),
+                           let index = self.messages.firstIndex(where: { $0.id == message.id }) {
+                            self.messages[index] = message
+                        }
+                    case .removed:
+                        if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
+                            self.messages.remove(at: index)
                         }
                     }
                 }
-
-                if !newMessages.isEmpty {
-                    self.messages.append(contentsOf: newMessages)
-                    DispatchQueue.main.async {
-                        scrollToBottom = true
-                    }
-                }
             }
-        }
     }
+
 
     private func removeMessagesListener() {
         messagesListener?.remove()
@@ -257,7 +278,7 @@ struct ChatView: View {
         }
     }
 
-    private func markAllMessagesAsRead() {
+    func markAllMessagesAsRead() {
         guard let currentUserID = currentUserID else { return }
         let db = Firestore.firestore()
         let messagesRef = db.collection("matches").document(matchID).collection("messages")
@@ -282,7 +303,7 @@ struct ChatView: View {
             }
     }
 
-    private func shouldShowDate(for message: Message) -> Bool {
+    func shouldShowDate(for message: Message) -> Bool {
         guard let index = messages.firstIndex(of: message) else { return false }
         if index == 0 { return true }
         let previousMessage = messages[index - 1]
