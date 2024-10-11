@@ -27,11 +27,10 @@ struct DMHomeView: View {
     @State private var userNamesCache: [String: String] = [:] // Cache for usernames
 
     // State variables for navigation
-    @State private var selectedMatchID: String?
+    @State private var selectedMatch: Chat?
     @State private var isChatActive = false
     @State private var isInChatView: Bool = false
     @State private var currentChatID: String? = nil
-
 
     var body: some View {
         ZStack {
@@ -74,8 +73,8 @@ struct DMHomeView: View {
             // Hidden NavigationLink activated by isChatActive
             NavigationLink(
                 destination: ChatView(
-                    matchID: selectedMatchID ?? "",
-                    recipientName: getRecipientName(forMatchID: selectedMatchID),
+                    matchID: selectedMatch?.id ?? "",
+                    recipientName: getRecipientName(for: selectedMatch),
                     isInChatView: $isInChatView,
                     unreadMessageCount: $totalUnreadMessages
                 )
@@ -91,7 +90,6 @@ struct DMHomeView: View {
                 isActive: $isChatActive,
                 label: { EmptyView() }
             )
-
         }
         .navigationBarTitle("Messages", displayMode: .inline)
         .navigationBarItems(trailing: Button(action: { isEditing.toggle() }) {
@@ -162,10 +160,9 @@ struct DMHomeView: View {
             }
 
             VStack(alignment: .leading) {
-                Text(getRecipientName(forMatchID: match.id))
+                Text(getRecipientName(for: match))
                     .font(.custom("AvenirNext-Bold", size: 18))
                     .foregroundColor(.white)
-
             }
             .padding()
             Spacer()
@@ -182,11 +179,11 @@ struct DMHomeView: View {
             if isEditing {
                 toggleSelection(for: match.id ?? "")
             } else {
-                self.selectedMatchID = match.id
-                self.isChatActive = true
+                self.selectedMatch = match
                 if let matchID = match.id {
                     self.currentChatID = matchID
                     self.isInChatView = true
+                    self.isChatActive = true
                     print("DEBUG: User selected matchID: \(matchID)")
                     if let index = matches.firstIndex(where: { $0.id == matchID }), matches[index].hasUnreadMessages == true {
                         markMessagesAsRead(for: match)
@@ -194,7 +191,6 @@ struct DMHomeView: View {
                     }
                 }
             }
-
         }
         .background(
             isEditing && selectedMatches.contains(match.id ?? "") ?
@@ -249,11 +245,8 @@ struct DMHomeView: View {
     }
 
     // Function to get recipient's name using cache for faster access
-    private func getRecipientName(forMatchID matchID: String?) -> String {
-        guard let matchID = matchID, let match = matches.first(where: { $0.id == matchID }) else {
-            return "Unknown User"
-        }
-        guard let currentUserID = currentUserID else { return "Unknown User" }
+    private func getRecipientName(for match: Chat?) -> String {
+        guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
         let userID = currentUserID == match.user1 ? match.user2 : match.user1
 
         if let cachedName = getUsernameFromCache(userID: userID ?? "") {
@@ -265,9 +258,8 @@ struct DMHomeView: View {
             fetchAndCacheUserName(for: userID) { _ in }
         }
 
-        return "Unknown User"
+        return "Unknown User" // Fallback in case the name isn't fetched yet
     }
-
 
     func setupListeners() {
         loadMatches()

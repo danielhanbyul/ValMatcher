@@ -221,12 +221,10 @@ class ChatViewModel: ObservableObject {
 
     private func setupChatListener() {
         let db = Firestore.firestore()
-        // Since matchID is not optional, you don't need `if let`
-        let matchID = self.matchID
-        messagesListener = db.collection("matches").document(matchID).collection("messages")
+        messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
             .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
-                guard let self = self else { return }
+                guard let self = self else { return }  // Prevents retain cycles
 
                 if let error = error {
                     print("Error loading messages: \(error.localizedDescription)")
@@ -264,7 +262,6 @@ class ChatViewModel: ObservableObject {
                 }
             }
     }
-
 
 
     private func removeMessagesListener() {
