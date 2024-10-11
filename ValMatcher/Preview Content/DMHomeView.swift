@@ -218,27 +218,31 @@ struct DMHomeView: View {
             .whereField("senderID", isNotEqualTo: currentUserID)
             .whereField("isRead", isEqualTo: false)
 
-        messagesQuery.getDocuments { snapshot, error in
-            if let error = error {
-                print("Error marking messages as read: \(error.localizedDescription)")
-                return
-            }
-
-            let batch = db.batch()
-            snapshot?.documents.forEach { document in
-                let messageRef = document.reference
-                batch.updateData(["isRead": true], forDocument: messageRef)
-            }
-
-            batch.commit { error in
+        DispatchQueue.global(qos: .userInitiated).async {
+            messagesQuery.getDocuments { snapshot, error in
                 if let error = error {
-                    print("Error committing batch: \(error.localizedDescription)")
-                } else {
-                    if let index = self.matches.firstIndex(where: { $0.id == chat.id }) {
-                        self.matches[index].hasUnreadMessages = false
+                    print("Error marking messages as read: \(error.localizedDescription)")
+                    return
+                }
+
+                let batch = db.batch()
+                snapshot?.documents.forEach { document in
+                    let messageRef = document.reference
+                    batch.updateData(["isRead": true], forDocument: messageRef)
+                }
+
+                batch.commit { error in
+                    if let error = error {
+                        print("Error committing batch: \(error.localizedDescription)")
+                    } else {
+                        DispatchQueue.main.async {
+                            if let index = self.matches.firstIndex(where: { $0.id == chat.id }) {
+                                self.matches[index].hasUnreadMessages = false
+                            }
+                            // Notify to refresh the chat list and update unread message counts
+                            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
+                        }
                     }
-                    // Notify to refresh the chat list and update unread message counts
-                    NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
                 }
             }
         }
@@ -275,39 +279,43 @@ struct DMHomeView: View {
             db.collection("matches").whereField("user2", isEqualTo: currentUserID)
         ]
 
-        for query in queries {
-            query.getDocuments { snapshot, error in
-                if let error = error {
-                    print("Error loading matches: \(error.localizedDescription)")
-                    return
-                }
-
-                guard let documents = snapshot?.documents else { return }
-
-                var newMatches = [Chat]()
-                let group = DispatchGroup()
-
-                for document in documents {
-                    do {
-                        var match = try document.data(as: Chat.self)
-                        group.enter()
-                        self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
-                            newMatches.append(updatedMatch)
-                            group.leave()
-                        }
-                    } catch {
-                        print("Error decoding match: \(error.localizedDescription)")
+        DispatchQueue.global(qos: .userInitiated).async {
+            for query in queries {
+                query.getDocuments { snapshot, error in
+                    if let error = error {
+                        print("Error loading matches: \(error.localizedDescription)")
+                        return
                     }
-                }
 
-                group.notify(queue: .main) {
-                    self.fetchUserNames(for: newMatches) { updatedMatches in
-                        // Sort the matches by lastMessageTimestamp before updating the UI
-                        self.matches = updatedMatches.sorted {
-                            ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
+                    guard let documents = snapshot?.documents else { return }
+
+                    var newMatches = [Chat]()
+                    let group = DispatchGroup()
+
+                    for document in documents {
+                        do {
+                            var match = try document.data(as: Chat.self)
+                            group.enter()
+                            self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
+                                newMatches.append(updatedMatch)
+                                group.leave()
+                            }
+                        } catch {
+                            print("Error decoding match: \(error.localizedDescription)")
                         }
-                        self.updateUnreadMessagesCount(from: self.matches)
-                        self.isLoaded = true
+                    }
+
+                    group.notify(queue: .main) {
+                        self.fetchUserNames(for: newMatches) { updatedMatches in
+                            // Sort the matches by lastMessageTimestamp before updating the UI
+                            DispatchQueue.main.async {
+                                self.matches = updatedMatches.sorted {
+                                    ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
+                                }
+                                self.updateUnreadMessagesCount(from: self.matches)
+                                self.isLoaded = true
+                            }
+                        }
                     }
                 }
             }
@@ -344,10 +352,12 @@ struct DMHomeView: View {
                             if self.isInChatView && self.currentChatID == updatedMatch.id {
                                 print("DEBUG: Skipping update for current chat matchID: \(updatedMatch.id ?? "")")
                             } else {
-                                if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
-                                    self.matches[index] = updatedMatch
-                                } else {
-                                    self.matches.append(updatedMatch)
+                                DispatchQueue.main.async {
+                                    if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
+                                        self.matches[index] = updatedMatch
+                                    } else {
+                                        self.matches.append(updatedMatch)
+                                    }
                                 }
                             }
                             group.leave()

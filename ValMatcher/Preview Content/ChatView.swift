@@ -186,45 +186,48 @@ class ChatViewModel: ObservableObject {
         removeMessagesListener()
     }
 
+    // Improved sendMessage function with background thread
     func sendMessage() {
         guard let currentUserID = Auth.auth().currentUser?.uid, !newMessage.isEmpty else { return }
 
         let messageToSend = newMessage
         self.newMessage = "" // Clear the input field immediately
 
-        let db = Firestore.firestore()
-        let messageData: [String: Any] = [
-            "senderID": currentUserID,
-            "content": messageToSend,
-            "timestamp": Timestamp(),
-            "isRead": false
-        ]
+        DispatchQueue.global(qos: .userInitiated).async {
+            let db = Firestore.firestore()
+            let messageData: [String: Any] = [
+                "senderID": currentUserID,
+                "content": messageToSend,
+                "timestamp": Timestamp(),
+                "isRead": false
+            ]
 
-        // Add the message to Firestore
-        db.collection("matches").document(self.matchID).collection("messages").addDocument(data: messageData) { [weak self] error in
-            if let error = error {
-                print("Error sending message: \(error.localizedDescription)")
-                // Optionally, restore the message if there's an error
-                // self?.newMessage = messageToSend
-                return
-            }
-
-            // Update the chat timestamp
-            db.collection("matches").document(self?.matchID ?? "").updateData(["lastMessageTimestamp": Timestamp()]) { error in
+            // Add the message to Firestore
+            db.collection("matches").document(self.matchID).collection("messages").addDocument(data: messageData) { [weak self] error in
                 if let error = error {
-                    print("Error updating chat timestamp: \(error.localizedDescription)")
+                    print("Error sending message: \(error.localizedDescription)")
+                    return
+                }
+
+                // Update the chat timestamp
+                db.collection("matches").document(self?.matchID ?? "").updateData(["lastMessageTimestamp": Timestamp()]) { error in
+                    if let error = error {
+                        print("Error updating chat timestamp: \(error.localizedDescription)")
+                    }
                 }
             }
         }
     }
 
-
     private func setupChatListener() {
+        removeMessagesListener() // Ensure we don't add multiple listeners
+
         let db = Firestore.firestore()
         messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
+            .limit(to: 30) // Limit to fetch only recent messages initially
             .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
-                guard let self = self else { return }  // Prevents retain cycles
+                guard let self = self else { return }
 
                 if let error = error {
                     print("Error loading messages: \(error.localizedDescription)")
@@ -263,44 +266,49 @@ class ChatViewModel: ObservableObject {
             }
     }
 
-
     private func removeMessagesListener() {
         messagesListener?.remove()
         messagesListener = nil
     }
 
     private func markMessageAsRead(messageID: String) {
-        let db = Firestore.firestore()
-        db.collection("matches").document(matchID).collection("messages").document(messageID).updateData(["isRead": true]) { error in
-            if let error = error {
-                print("Error marking message as read: \(error.localizedDescription)")
+        DispatchQueue.global(qos: .background).async {
+            let db = Firestore.firestore()
+            db.collection("matches").document(self.matchID).collection("messages").document(messageID).updateData(["isRead": true]) { error in
+                if let error = error {
+                    print("Error marking message as read: \(error.localizedDescription)")
+                }
             }
         }
     }
 
+    // Batch update for marking all unread messages as read
     func markAllMessagesAsRead() {
         guard let currentUserID = currentUserID else { return }
         let db = Firestore.firestore()
         let messagesRef = db.collection("matches").document(matchID).collection("messages")
-        messagesRef.whereField("senderID", isNotEqualTo: currentUserID)
-            .whereField("isRead", isEqualTo: false)
-            .getDocuments { snapshot, error in
-                if let error = error {
-                    print("Error fetching unread messages: \(error.localizedDescription)")
-                    return
-                }
 
-                let batch = db.batch()
-                snapshot?.documents.forEach { document in
-                    let messageRef = document.reference
-                    batch.updateData(["isRead": true], forDocument: messageRef)
-                }
-                batch.commit { error in
+        DispatchQueue.global(qos: .userInitiated).async {
+            messagesRef.whereField("senderID", isNotEqualTo: currentUserID)
+                .whereField("isRead", isEqualTo: false)
+                .getDocuments { snapshot, error in
                     if let error = error {
-                        print("Error committing batch to mark messages as read: \(error.localizedDescription)")
+                        print("Error fetching unread messages: \(error.localizedDescription)")
+                        return
+                    }
+
+                    let batch = db.batch()
+                    snapshot?.documents.forEach { document in
+                        let messageRef = document.reference
+                        batch.updateData(["isRead": true], forDocument: messageRef)
+                    }
+                    batch.commit { error in
+                        if let error = error {
+                            print("Error committing batch to mark messages as read: \(error.localizedDescription)")
+                        }
                     }
                 }
-            }
+        }
     }
 
     func shouldShowDate(for message: Message) -> Bool {
