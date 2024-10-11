@@ -220,43 +220,39 @@ class ChatViewModel: ObservableObject {
 
 
     private func setupChatListener() {
+        guard messagesListener == nil else {
+            print("DEBUG: Listener already initialized")
+            return
+        }
+        
+        print("DEBUG: Setting up listener for matchID: \(self.matchID)")
         let db = Firestore.firestore()
         messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
-            .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
-                guard let self = self else { return }  // Prevents retain cycles
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self else { return }
 
                 if let error = error {
-                    print("Error loading messages: \(error.localizedDescription)")
+                    print("DEBUG: Error loading messages: \(error.localizedDescription)")
                     return
                 }
 
                 guard let snapshot = snapshot else {
-                    print("No messages found")
+                    print("DEBUG: No messages found")
                     return
                 }
 
-                for diff in snapshot.documentChanges {
-                    switch diff.type {
-                    case .added:
-                        if let message = try? diff.document.data(as: Message.self) {
-                            if !self.seenMessageIDs.contains(message.id ?? "") {
-                                self.messages.append(message)
-                                self.seenMessageIDs.insert(message.id ?? "")
-                                if !message.isCurrentUser && self.isInChatView {
-                                    self.markMessageAsRead(messageID: message.id ?? "")
-                                }
-                                self.scrollToBottom = true
+                snapshot.documentChanges.forEach { diff in
+                    if diff.type == .added, let message = try? diff.document.data(as: Message.self) {
+                        if !self.seenMessageIDs.contains(message.id ?? "") {
+                            self.messages.append(message)
+                            self.seenMessageIDs.insert(message.id ?? "")
+                            print("DEBUG: Added message with ID: \(message.id ?? "")")
+
+                            if !message.isCurrentUser {
+                                print("DEBUG: Marking message as read")
+                                self.markMessageAsRead(messageID: message.id ?? "")
                             }
-                        }
-                    case .modified:
-                        if let message = try? diff.document.data(as: Message.self),
-                           let index = self.messages.firstIndex(where: { $0.id == message.id }) {
-                            self.messages[index] = message
-                        }
-                    case .removed:
-                        if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
-                            self.messages.remove(at: index)
                         }
                     }
                 }
