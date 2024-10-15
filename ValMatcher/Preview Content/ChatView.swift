@@ -216,9 +216,13 @@ class ChatViewModel: ObservableObject {
 
     private func setupChatListener() {
         let db = Firestore.firestore()
-        messagesListener = db.collection("matches").document(self.matchID).collection("messages")
+        
+        // Ensure we listen for changes to the message collection in real time
+        messagesListener = db.collection("matches")
+            .document(self.matchID)
+            .collection("messages")
             .order(by: "timestamp", descending: false)
-            .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
+            .addSnapshotListener { [weak self] snapshot, error in
                 guard let self = self else { return }  // Prevents retain cycles
 
                 if let error = error {
@@ -231,27 +235,29 @@ class ChatViewModel: ObservableObject {
                     return
                 }
 
-                for diff in snapshot.documentChanges {
+                // Process each document change in the snapshot
+                snapshot.documentChanges.forEach { diff in
                     switch diff.type {
                     case .added:
+                        // New message was added, append it to the messages array
                         if let message = try? diff.document.data(as: Message.self) {
-                            // Prevent the view from kicking the user out or refreshing unnecessarily
-                            if !self.seenMessageIDs.contains(message.id ?? "") {
-                                self.messages.append(message)
-                                self.seenMessageIDs.insert(message.id ?? "")
-                                // Mark message as read if not the current user and the user is in the chat
-                                if !message.isCurrentUser && self.appState?.isInChatView == true {
+                            self.messages.append(message)
+                            if !message.isCurrentUser {
+                                // Mark as read if the current user is viewing this chat
+                                if self.appState?.isInChatView == true {
                                     self.markMessageAsRead(messageID: message.id ?? "")
                                 }
-                                self.scrollToBottom = true
                             }
+                            self.scrollToBottom = true // Scroll to bottom after new message is received
                         }
                     case .modified:
+                        // Message was modified (e.g., marked as read), update it in the list
                         if let message = try? diff.document.data(as: Message.self),
                            let index = self.messages.firstIndex(where: { $0.id == message.id }) {
                             self.messages[index] = message
                         }
                     case .removed:
+                        // Message was removed, remove it from the messages array
                         if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
                             self.messages.remove(at: index)
                         }
