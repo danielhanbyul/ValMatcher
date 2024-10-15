@@ -91,7 +91,9 @@ struct ChatView: View {
                     .padding()
                     .frame(height: 40)
 
-                Button(action: viewModel.sendMessage) {
+                Button(action: {
+                    viewModel.sendMessage()
+                }) {
                     Image(systemName: "paperplane.fill")
                         .padding()
                         .background(Color.blue)
@@ -106,19 +108,22 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear {
-            print("DEBUG: Entering ChatView for matchID: \(matchID)")
             appState.isInChatView = true
             appState.currentChatID = matchID
             isInChatView = true
             viewModel.isInChatView = true
             viewModel.markAllMessagesAsRead()
+
+            if !viewModel.isListenerActive {
+                viewModel.setupChatListener()
+            }
         }
         .onDisappear {
-            print("DEBUG: Exiting ChatView for matchID: \(matchID)")
             appState.isInChatView = false
             appState.currentChatID = nil
             isInChatView = false
             viewModel.isInChatView = false
+            viewModel.removeMessagesListener()
         }
     }
 
@@ -169,6 +174,7 @@ class ChatViewModel: ObservableObject {
     @Published var showAlert = false
     @Published var copiedText = ""
     @Published var scrollToBottom: Bool = true
+    @Published var isListenerActive: Bool = false  // Added this
 
     private var messagesListener: ListenerRegistration?
     private var matchID: String
@@ -216,11 +222,12 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    private func setupChatListener() {
+    func setupChatListener() {
         let db = Firestore.firestore()
+        self.isListenerActive = true // Set listener as active
         messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
-            .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
+            .addSnapshotListener { [weak self] snapshot, error in
                 guard let self = self else { return }
 
                 if let error = error {
@@ -228,10 +235,7 @@ class ChatViewModel: ObservableObject {
                     return
                 }
 
-                guard let snapshot = snapshot else {
-                    print("No messages found")
-                    return
-                }
+                guard let snapshot = snapshot else { return }
 
                 for diff in snapshot.documentChanges {
                     switch diff.type {
@@ -260,9 +264,10 @@ class ChatViewModel: ObservableObject {
             }
     }
 
-    private func removeMessagesListener() {
+    func removeMessagesListener() {
         messagesListener?.remove()
         messagesListener = nil
+        self.isListenerActive = false // Reset listener status
     }
 
     private func markMessageAsRead(messageID: String) {
