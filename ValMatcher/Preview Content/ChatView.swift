@@ -91,9 +91,7 @@ struct ChatView: View {
                     .padding()
                     .frame(height: 40)
 
-                Button(action: {
-                    viewModel.sendMessage()
-                }) {
+                Button(action: viewModel.sendMessage) {
                     Image(systemName: "paperplane.fill")
                         .padding()
                         .background(Color.blue)
@@ -108,22 +106,19 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear {
+            print("DEBUG: Entering ChatView for matchID: \(matchID)")
             appState.isInChatView = true
             appState.currentChatID = matchID
             isInChatView = true
             viewModel.isInChatView = true
             viewModel.markAllMessagesAsRead()
-
-            if !viewModel.isListenerActive {
-                viewModel.setupChatListener()
-            }
         }
         .onDisappear {
+            print("DEBUG: Exiting ChatView for matchID: \(matchID)")
             appState.isInChatView = false
             appState.currentChatID = nil
             isInChatView = false
             viewModel.isInChatView = false
-            viewModel.removeMessagesListener()
         }
     }
 
@@ -167,7 +162,6 @@ struct ChatView: View {
 }
 
 // ViewModel for ChatView
-// ViewModel for ChatView
 class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var newMessage: String = ""
@@ -175,13 +169,13 @@ class ChatViewModel: ObservableObject {
     @Published var showAlert = false
     @Published var copiedText = ""
     @Published var scrollToBottom: Bool = true
-    @Published var isListenerActive: Bool = false  // Added this
 
     private var messagesListener: ListenerRegistration?
     private var matchID: String
     private var currentUserID: String?
     var isInChatView: Bool = false
     private var seenMessageIDs: Set<String> = []
+    private var isListenerActive: Bool = false
 
     init(matchID: String) {
         self.matchID = matchID
@@ -207,14 +201,12 @@ class ChatViewModel: ObservableObject {
             "isRead": false
         ]
 
-        // Add the message to Firestore
         db.collection("matches").document(self.matchID).collection("messages").addDocument(data: messageData) { [weak self] error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
                 return
             }
 
-            // Update the chat timestamp
             db.collection("matches").document(self?.matchID ?? "").updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
@@ -223,12 +215,14 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    func setupChatListener() {
+    private func setupChatListener() {
+        guard !isListenerActive else { return }  // Ensure listener is only added once
+        isListenerActive = true
+
         let db = Firestore.firestore()
-        self.isListenerActive = true // Set listener as active
         messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
-            .addSnapshotListener { [weak self] snapshot, error in
+            .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
                 guard let self = self else { return }
 
                 if let error = error {
@@ -236,43 +230,47 @@ class ChatViewModel: ObservableObject {
                     return
                 }
 
-                guard let snapshot = snapshot else { return }
+                guard let snapshot = snapshot else {
+                    print("No messages found")
+                    return
+                }
 
-                for diff in snapshot.documentChanges {
-                    switch diff.type {
-                    case .added:
-                        if let message = try? diff.document.data(as: Message.self) {
-                            if !self.seenMessageIDs.contains(message.id ?? "") {
-                                self.messages.append(message)
-                                self.seenMessageIDs.insert(message.id ?? "")
-                                if !message.isCurrentUser && self.isInChatView {
-                                    self.markMessageAsRead(messageID: message.id ?? "") // Mark the message as read
+                DispatchQueue.main.async {
+                    for diff in snapshot.documentChanges {
+                        switch diff.type {
+                        case .added:
+                            if let message = try? diff.document.data(as: Message.self) {
+                                if !self.seenMessageIDs.contains(message.id ?? "") {
+                                    self.messages.append(message)
+                                    self.seenMessageIDs.insert(message.id ?? "")
+                                    if !message.isCurrentUser && self.isInChatView {
+                                        self.markMessageAsRead(messageID: message.id ?? "")
+                                    }
+                                    self.scrollToBottom = true
                                 }
-                                self.scrollToBottom = true
                             }
-                        }
-                    case .modified:
-                        if let message = try? diff.document.data(as: Message.self),
-                           let index = self.messages.firstIndex(where: { $0.id == message.id }) {
-                            self.messages[index] = message
-                        }
-                    case .removed:
-                        if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
-                            self.messages.remove(at: index)
+                        case .modified:
+                            if let message = try? diff.document.data(as: Message.self),
+                               let index = self.messages.firstIndex(where: { $0.id == message.id }) {
+                                self.messages[index] = message
+                            }
+                        case .removed:
+                            if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
+                                self.messages.remove(at: index)
+                            }
                         }
                     }
                 }
             }
     }
 
-    func removeMessagesListener() {
+    private func removeMessagesListener() {
         messagesListener?.remove()
         messagesListener = nil
-        self.isListenerActive = false // Set listener as inactive
+        isListenerActive = false
     }
 
-    // New function to mark individual messages as read
-    func markMessageAsRead(messageID: String) {
+    private func markMessageAsRead(messageID: String) {
         let db = Firestore.firestore()
         db.collection("matches").document(matchID).collection("messages").document(messageID).updateData(["isRead": true]) { error in
             if let error = error {
@@ -314,7 +312,6 @@ class ChatViewModel: ObservableObject {
         return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
     }
 }
-
 
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
