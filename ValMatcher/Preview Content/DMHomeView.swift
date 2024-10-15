@@ -77,19 +77,11 @@ struct DMHomeView: View {
                     matchID: selectedMatch?.id ?? "",
                     recipientName: getRecipientName(for: selectedMatch),
                     unreadMessageCount: $totalUnreadMessages
-                )
-                .onAppear {
-                    print("DEBUG: Entered ChatView")
-                }
-                .onDisappear {
-                    appState.currentChatID = nil
-                    appState.isInChatView = false
-                    self.isChatActive = false
-                    print("DEBUG: Exited ChatView")
-                },
+                ),
                 isActive: $isChatActive,
                 label: { EmptyView() }
             )
+
         }
         .navigationBarTitle("Messages", displayMode: .inline)
         .navigationBarItems(trailing: Button(action: { isEditing.toggle() }) {
@@ -180,18 +172,15 @@ struct DMHomeView: View {
                 toggleSelection(for: match.id ?? "")
             } else {
                 self.selectedMatch = match
-                if let matchID = match.id {
-                    appState.currentChatID = matchID
-                    appState.isInChatView = true
-                    self.isChatActive = true
-                    print("DEBUG: User selected matchID: \(matchID)")
-                    if let index = matches.firstIndex(where: { $0.id == matchID }), matches[index].hasUnreadMessages == true {
-                        markMessagesAsRead(for: match)
-                        blendRedDot(for: index)
-                    }
+                self.isChatActive = true
+                print("DEBUG: User selected matchID: \(match.id ?? "")")
+                if let index = matches.firstIndex(where: { $0.id == match.id }), matches[index].hasUnreadMessages == true {
+                    markMessagesAsRead(for: match)
+                    blendRedDot(for: index)
                 }
             }
         }
+
         .background(
             isEditing && selectedMatches.contains(match.id ?? "") ?
             Color.gray.opacity(0.3) : Color.black.opacity(0.7)
