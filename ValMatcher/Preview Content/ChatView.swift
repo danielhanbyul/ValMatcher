@@ -9,6 +9,27 @@ import Firebase
 import FirebaseFirestore
 import FirebaseAuth
 
+// Date and time formatters used in ChatView
+let dateOnlyFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .long
+    formatter.timeStyle = .none
+    return formatter
+}()
+
+let timeFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .none
+    formatter.timeStyle = .short
+    return formatter
+}()
+
+// Struct to handle full-screen image presentation
+struct IdentifiableImageURL: Identifiable {
+    var id: String { url }
+    var url: String
+}
+
 struct ChatView: View {
     @EnvironmentObject var appState: AppState
     var matchID: String
@@ -23,7 +44,7 @@ struct ChatView: View {
         self.recipientName = recipientName
         self._isInChatView = isInChatView
         self._unreadMessageCount = unreadMessageCount
-        _viewModel = StateObject(wrappedValue: ChatViewModel(matchID: matchID))
+        _viewModel = StateObject(wrappedValue: ChatViewModel(matchID: matchID, recipientName: recipientName))
     }
 
     var body: some View {
@@ -161,7 +182,7 @@ struct ChatView: View {
     }
 }
 
-// ViewModel for ChatView
+// ViewModel for ChatView with Notification Functionality Added
 class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var newMessage: String = ""
@@ -174,10 +195,12 @@ class ChatViewModel: ObservableObject {
     private var matchID: String
     private var currentUserID: String?
     var isInChatView: Bool = false
+    private var recipientName: String
     private var seenMessageIDs: Set<String> = []
 
-    init(matchID: String) {
+    init(matchID: String, recipientName: String) {
         self.matchID = matchID
+        self.recipientName = recipientName
         self.currentUserID = Auth.auth().currentUser?.uid
         setupChatListener()
     }
@@ -204,8 +227,6 @@ class ChatViewModel: ObservableObject {
         db.collection("matches").document(self.matchID).collection("messages").addDocument(data: messageData) { [weak self] error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
-                // Optionally, restore the message if there's an error
-                // self?.newMessage = messageToSend
                 return
             }
 
@@ -215,17 +236,81 @@ class ChatViewModel: ObservableObject {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
                 }
             }
+
+            // Trigger notification for the recipient
+            self?.sendNotificationToRecipient()
         }
     }
 
+    func sendNotificationToRecipient() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
 
-    // Updated ChatView to prevent users from being kicked out
+        // Fetch recipient details to send notification
+        let db = Firestore.firestore()
+        db.collection("users").document(getRecipientID()).getDocument { snapshot, error in
+            if let error = error {
+                print("Error fetching recipient data: \(error.localizedDescription)")
+                return
+            }
+
+            guard let recipientData = snapshot?.data(),
+                  let fcmToken = recipientData["fcmToken"] as? String else {
+                print("Recipient FCM token not found")
+                return
+            }
+
+            // Send notification to recipient
+            let notificationMessage = "You have a new message from \(self.recipientName)"
+            self.sendPushNotification(to: fcmToken, message: notificationMessage)
+        }
+    }
+
+    func sendPushNotification(to fcmToken: String, message: String) {
+        let urlString = "https://fcm.googleapis.com/fcm/send"
+        let url = URL(string: urlString)!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Replace "yourServerKey" with your actual FCM server key
+        request.setValue("key=YOUR_ACTUAL_SERVER_KEY", forHTTPHeaderField: "Authorization")
+
+        let notification = [
+            "to": fcmToken,
+            "notification": [
+                "title": "New Message",
+                "body": message,
+                "sound": "default"
+            ]
+        ] as [String : Any]
+
+        let jsonData = try? JSONSerialization.data(withJSONObject: notification, options: [])
+        request.httpBody = jsonData
+
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Error sending push notification: \(error.localizedDescription)")
+                return
+            }
+            print("Notification sent successfully")
+        }
+        
+        task.resume()
+    }
+
+
+    private func getRecipientID() -> String {
+        // Placeholder logic to fetch recipient ID, implement as needed
+        return "recipientUID"
+    }
+
     private func setupChatListener() {
         let db = Firestore.firestore()
         messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
             .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
-                guard let self = self else { return }  // Prevents retain cycles
+                guard let self = self else { return }
 
                 if let error = error {
                     print("Error loading messages: \(error.localizedDescription)")
@@ -263,8 +348,6 @@ class ChatViewModel: ObservableObject {
                 }
             }
     }
-
-
 
     private func removeMessagesListener() {
         messagesListener?.remove()
@@ -312,23 +395,4 @@ class ChatViewModel: ObservableObject {
         let calendar = Calendar.current
         return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
     }
-}
-
-let dateOnlyFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .long
-    formatter.timeStyle = .none
-    return formatter
-}()
-
-let timeFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .none
-    formatter.timeStyle = .short
-    return formatter
-}()
-
-struct IdentifiableImageURL: Identifiable {
-    var id: String { url }
-    var url: String
 }
