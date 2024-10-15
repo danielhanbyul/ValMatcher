@@ -167,6 +167,7 @@ struct ChatView: View {
 }
 
 // ViewModel for ChatView
+// ViewModel for ChatView
 class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var newMessage: String = ""
@@ -245,7 +246,7 @@ class ChatViewModel: ObservableObject {
                                 self.messages.append(message)
                                 self.seenMessageIDs.insert(message.id ?? "")
                                 if !message.isCurrentUser && self.isInChatView {
-                                    self.markMessageAsRead(messageID: message.id ?? "")
+                                    self.markMessageAsRead(messageID: message.id ?? "") // Mark the message as read
                                 }
                                 self.scrollToBottom = true
                             }
@@ -267,10 +268,11 @@ class ChatViewModel: ObservableObject {
     func removeMessagesListener() {
         messagesListener?.remove()
         messagesListener = nil
-        self.isListenerActive = false // Reset listener status
+        self.isListenerActive = false // Set listener as inactive
     }
 
-    private func markMessageAsRead(messageID: String) {
+    // New function to mark individual messages as read
+    func markMessageAsRead(messageID: String) {
         let db = Firestore.firestore()
         db.collection("matches").document(matchID).collection("messages").document(messageID).updateData(["isRead": true]) { error in
             if let error = error {
@@ -312,6 +314,7 @@ class ChatViewModel: ObservableObject {
         return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
     }
 }
+
 
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
