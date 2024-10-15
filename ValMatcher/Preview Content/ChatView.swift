@@ -165,6 +165,7 @@ class ChatViewModel: ObservableObject {
     @Published var showAlert = false
     @Published var copiedText = ""
     @Published var scrollToBottom: Bool = true
+    @Published var initialMessageReceived: Bool = false  // Flag to track first message received
 
     private var messagesListener: ListenerRegistration?
     private var matchID: String
@@ -200,8 +201,6 @@ class ChatViewModel: ObservableObject {
         db.collection("matches").document(self.matchID).collection("messages").addDocument(data: messageData) { [weak self] error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
-                // Optionally, restore the message if there's an error
-                // self?.newMessage = messageToSend
                 return
             }
 
@@ -215,15 +214,12 @@ class ChatViewModel: ObservableObject {
     }
 
     private func setupChatListener() {
+        guard messagesListener == nil else { return } // Prevent multiple listeners
         let db = Firestore.firestore()
-        
-        // Ensure we listen for changes to the message collection in real time
-        messagesListener = db.collection("matches")
-            .document(self.matchID)
-            .collection("messages")
+        messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
-            .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self else { return }  // Prevents retain cycles
+            .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
+                guard let self = self else { return }
 
                 if let error = error {
                     print("Error loading messages: \(error.localizedDescription)")
@@ -235,37 +231,42 @@ class ChatViewModel: ObservableObject {
                     return
                 }
 
-                // Process each document change in the snapshot
-                snapshot.documentChanges.forEach { diff in
-                    switch diff.type {
-                    case .added:
-                        // New message was added, append it to the messages array
-                        if let message = try? diff.document.data(as: Message.self) {
-                            self.messages.append(message)
-                            if !message.isCurrentUser {
-                                // Mark as read if the current user is viewing this chat
-                                if self.appState?.isInChatView == true {
-                                    self.markMessageAsRead(messageID: message.id ?? "")
+                DispatchQueue.main.async {
+                    for diff in snapshot.documentChanges {
+                        switch diff.type {
+                        case .added:
+                            if let message = try? diff.document.data(as: Message.self) {
+                                if !self.seenMessageIDs.contains(message.id ?? "") {
+                                    self.messages.append(message)
+                                    self.seenMessageIDs.insert(message.id ?? "")
+
+                                    if !self.initialMessageReceived {
+                                        self.initialMessageReceived = true
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                            self.scrollToBottom = true
+                                        }
+                                    } else {
+                                        if !message.isCurrentUser && self.appState?.isInChatView == true {
+                                            self.markMessageAsRead(messageID: message.id ?? "")
+                                        }
+                                        self.scrollToBottom = true
+                                    }
                                 }
                             }
-                            self.scrollToBottom = true // Scroll to bottom after new message is received
-                        }
-                    case .modified:
-                        // Message was modified (e.g., marked as read), update it in the list
-                        if let message = try? diff.document.data(as: Message.self),
-                           let index = self.messages.firstIndex(where: { $0.id == message.id }) {
-                            self.messages[index] = message
-                        }
-                    case .removed:
-                        // Message was removed, remove it from the messages array
-                        if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
-                            self.messages.remove(at: index)
+                        case .modified:
+                            if let message = try? diff.document.data(as: Message.self),
+                               let index = self.messages.firstIndex(where: { $0.id == message.id }) {
+                                self.messages[index] = message
+                            }
+                        case .removed:
+                            if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
+                                self.messages.remove(at: index)
+                            }
                         }
                     }
                 }
             }
     }
-
 
     private func removeMessagesListener() {
         messagesListener?.remove()
@@ -285,25 +286,27 @@ class ChatViewModel: ObservableObject {
         guard let currentUserID = currentUserID else { return }
         let db = Firestore.firestore()
         let messagesRef = db.collection("matches").document(matchID).collection("messages")
-        messagesRef.whereField("senderID", isNotEqualTo: currentUserID)
-            .whereField("isRead", isEqualTo: false)
-            .getDocuments { snapshot, error in
-                if let error = error {
-                    print("Error fetching unread messages: \(error.localizedDescription)")
-                    return
-                }
-
-                let batch = db.batch()
-                snapshot?.documents.forEach { document in
-                    let messageRef = document.reference
-                    batch.updateData(["isRead": true], forDocument: messageRef)
-                }
-                batch.commit { error in
+        DispatchQueue.global(qos: .background).async {
+            messagesRef.whereField("senderID", isNotEqualTo: currentUserID)
+                .whereField("isRead", isEqualTo: false)
+                .getDocuments { snapshot, error in
                     if let error = error {
-                        print("Error committing batch to mark messages as read: \(error.localizedDescription)")
+                        print("Error fetching unread messages: \(error.localizedDescription)")
+                        return
+                    }
+
+                    let batch = db.batch()
+                    snapshot?.documents.forEach { document in
+                        let messageRef = document.reference
+                        batch.updateData(["isRead": true], forDocument: messageRef)
+                    }
+                    batch.commit { error in
+                        if let error = error {
+                            print("Error committing batch to mark messages as read: \(error.localizedDescription)")
+                        }
                     }
                 }
-            }
+        }
     }
 
     func shouldShowDate(for message: Message) -> Bool {
@@ -315,6 +318,7 @@ class ChatViewModel: ObservableObject {
     }
 }
 
+// Helper functions for date formatting
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateStyle = .long

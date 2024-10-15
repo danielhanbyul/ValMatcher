@@ -12,7 +12,7 @@ import FirebaseFirestoreSwift
 import UserNotifications
 
 struct DMHomeView: View {
-    @EnvironmentObject var appState: AppState  // Access the shared app state
+    @EnvironmentObject var appState: AppState
     @State var matches: [Chat] = []
     @State private var currentUserID = Auth.auth().currentUser?.uid
     @State private var isEditing = false
@@ -24,14 +24,11 @@ struct DMHomeView: View {
     @State private var previousSelectedChatID: String?
     @State private var blendColor = Color.red
     @State private var isLoaded = false
-    @State private var userNamesCache: [String: String] = [:] // Cache for usernames
+    @State private var userNamesCache: [String: String] = [:]
 
     // State variables for navigation
     @State private var selectedMatch: Chat?
     @State private var isChatActive = false
-    // Remove local isInChatView and currentChatID
-    // @State private var isInChatView: Bool = false
-    // @State private var currentChatID: String? = nil
 
     var body: some View {
         ZStack {
@@ -71,7 +68,7 @@ struct DMHomeView: View {
                 }
             }
 
-            // Hidden NavigationLink activated by isChatActive
+            // NavigationLink for ChatView
             NavigationLink(
                 destination: ChatView(
                     matchID: selectedMatch?.id ?? "",
@@ -80,6 +77,8 @@ struct DMHomeView: View {
                 )
                 .onAppear {
                     print("DEBUG: Entered ChatView")
+                    appState.currentChatID = selectedMatch?.id
+                    appState.isInChatView = true
                 }
                 .onDisappear {
                     appState.currentChatID = nil
@@ -102,7 +101,6 @@ struct DMHomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshChatList"))) { notification in
             if let chatID = notification.object as? String {
                 if let index = matches.firstIndex(where: { $0.id == chatID }), let currentUserID = self.currentUserID {
-                    // Update the unread message count for the specific match
                     self.updateUnreadMessageCount(for: matches[index], currentUserID: currentUserID) { updatedMatch in
                         self.matches[index] = updatedMatch
                     }
@@ -149,7 +147,6 @@ struct DMHomeView: View {
     private func matchRow(match: Chat) -> some View {
         HStack {
             if isEditing {
-                // Show selection indicator
                 Button(action: {
                     toggleSelection(for: match.id ?? "")
                 }) {
@@ -174,7 +171,7 @@ struct DMHomeView: View {
                     .padding(.trailing, 10)
             }
         }
-        .contentShape(Rectangle()) // Makes the entire row tappable
+        .contentShape(Rectangle())
         .onTapGesture {
             if isEditing {
                 toggleSelection(for: match.id ?? "")
@@ -237,14 +234,12 @@ struct DMHomeView: View {
                     if let index = self.matches.firstIndex(where: { $0.id == chat.id }) {
                         self.matches[index].hasUnreadMessages = false
                     }
-                    // Notify to refresh the chat list and update unread message counts
                     NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
                 }
             }
         }
     }
 
-    // Function to get recipient's name using cache for faster access
     private func getRecipientName(for match: Chat?) -> String {
         guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
         let userID = currentUserID == match.user1 ? match.user2 : match.user1
@@ -253,12 +248,11 @@ struct DMHomeView: View {
             return cachedName
         }
 
-        // If not in cache, fetch the username
         if let userID = userID {
             fetchAndCacheUserName(for: userID) { _ in }
         }
 
-        return "Unknown User" // Fallback in case the name isn't fetched yet
+        return "Unknown User"
     }
 
     func setupListeners() {
@@ -302,7 +296,6 @@ struct DMHomeView: View {
 
                 group.notify(queue: .main) {
                     self.fetchUserNames(for: newMatches) { updatedMatches in
-                        // Sort the matches by lastMessageTimestamp before updating the UI
                         self.matches = updatedMatches.sorted {
                             ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                         }
@@ -340,7 +333,6 @@ struct DMHomeView: View {
                         group.enter()
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
 
-                            // Skip updating the match if it's the current chat and we're in ChatView
                             if appState.isInChatView && appState.currentChatID == updatedMatch.id {
                                 print("DEBUG: Skipping update for current chat matchID: \(updatedMatch.id ?? "")")
                             } else {
@@ -358,7 +350,6 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
-                    // Sort the updated matches by lastMessageTimestamp after real-time update
                     self.matches = self.matches.sorted {
                         ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                     }
@@ -374,7 +365,6 @@ struct DMHomeView: View {
         var matchCopy = match
 
         if appState.isInChatView && matchID == appState.currentChatID {
-            // Do not update unread messages if the user is currently in this chat
             matchCopy.hasUnreadMessages = false
             completion(matchCopy)
             return
@@ -395,7 +385,6 @@ struct DMHomeView: View {
                 completion(matchCopy)
             }
     }
-
 
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
         var updatedMatches = matches
@@ -469,7 +458,6 @@ struct DMHomeView: View {
             guard let matchID = match.id else { continue }
             group.enter()
             if appState.isInChatView && matchID == appState.currentChatID {
-                // If we're currently in this chat, set hasUnreadMessages to false
                 updatedMatches[index].hasUnreadMessages = false
                 group.leave()
                 continue
@@ -507,7 +495,6 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-            // Sort by lastMessageTimestamp once all updates are fetched
             self.matches = updatedMatches.sorted {
                 ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
             }
