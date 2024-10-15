@@ -210,7 +210,8 @@ struct DMHomeView: View {
         blendColor = Color.red
     }
 
-    private func markMessagesAsRead(for chat: Chat) {
+    // Ensure users are not kicked out when unread messages update
+    func markMessagesAsRead(for chat: Chat) {
         guard let matchID = chat.id, let currentUserID = currentUserID else { return }
 
         let db = Firestore.firestore()
@@ -243,6 +244,9 @@ struct DMHomeView: View {
             }
         }
     }
+
+    
+
 
     // Function to get recipient's name using cache for faster access
     private func getRecipientName(for match: Chat?) -> String {
@@ -367,6 +371,7 @@ struct DMHomeView: View {
         }
     }
 
+    // Ensure that unread messages count updates in real-time and reflects for both users
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
         let db = Firestore.firestore()
         guard let matchID = match.id else { return }

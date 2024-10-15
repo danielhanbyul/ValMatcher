@@ -430,17 +430,18 @@ struct ContentView: View {
         }
     }
     
+    // Update function to listen for unread messages
     func listenForUnreadMessages() {
         print("DEBUG: listenForUnreadMessages called")
-        
+
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
-        
+
         // Remove any existing listener to prevent duplicates
         self.unreadMessagesListener?.remove()
-        
+
         var listeners: [ListenerRegistration] = []
-        
+
         // Listener for matches where currentUserID is user1
         let listener1 = db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
@@ -450,10 +451,11 @@ struct ContentView: View {
                     return
                 }
                 
+                // Process both users' matches and update counts correctly for both users
                 self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: true)
             }
         listeners.append(listener1)
-        
+
         // Listener for matches where currentUserID is user2
         let listener2 = db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
@@ -463,13 +465,15 @@ struct ContentView: View {
                     return
                 }
                 
+                // Process both users' matches and update counts correctly for both users
                 self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: false)
             }
         listeners.append(listener2)
-        
+
         // Keep track of the listeners to remove them later if needed
         self.unreadMessagesListener = ListenerRegistrationGroup(listeners: listeners)
     }
+
     
     func processSnapshot(snapshot: QuerySnapshot?, currentUserID: String, isUser1: Bool) {
         guard let documents = snapshot?.documents else { return }

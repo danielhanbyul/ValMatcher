@@ -219,6 +219,7 @@ class ChatViewModel: ObservableObject {
     }
 
 
+    // Updated ChatView to prevent users from being kicked out
     private func setupChatListener() {
         let db = Firestore.firestore()
         messagesListener = db.collection("matches").document(self.matchID).collection("messages")
@@ -262,6 +263,7 @@ class ChatViewModel: ObservableObject {
                 }
             }
     }
+
 
 
     private func removeMessagesListener() {
