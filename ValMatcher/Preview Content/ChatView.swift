@@ -204,8 +204,6 @@ class ChatViewModel: ObservableObject {
         db.collection("matches").document(self.matchID).collection("messages").addDocument(data: messageData) { [weak self] error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
-                // Optionally, restore the message if there's an error
-                // self?.newMessage = messageToSend
                 return
             }
 
@@ -218,13 +216,12 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-
     private func setupChatListener() {
         let db = Firestore.firestore()
         messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
             .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
-                guard let self = self else { return }  // Prevents retain cycles
+                guard let self = self else { return }
 
                 if let error = error {
                     print("Error loading messages: \(error.localizedDescription)")
@@ -262,7 +259,6 @@ class ChatViewModel: ObservableObject {
                 }
             }
     }
-
 
     private func removeMessagesListener() {
         messagesListener?.remove()
