@@ -127,4 +127,5 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 class AppState: ObservableObject {
     @Published var isInChatView: Bool = false
     @Published var currentChatID: String? = nil
+    @Published var unreadMessageCount: Int = 0
 }

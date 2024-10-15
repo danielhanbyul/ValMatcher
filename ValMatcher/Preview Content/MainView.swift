@@ -9,6 +9,7 @@ import SwiftUI
 import Firebase
 
 struct MainView: View {
+    @EnvironmentObject var appState: AppState  // Now can use appState across all views
     @State private var currentUser: UserProfile? = nil
     @State private var isSignedIn = false
     @State private var hasAnsweredQuestions = false
@@ -20,11 +21,13 @@ struct MainView: View {
                 if let user = currentUser {
                     if user.hasAnsweredQuestions {
                         ContentView(userProfileViewModel: UserProfileViewModel(user: user), isSignedIn: $isSignedIn)
+                            .environmentObject(appState)  // Pass appState to ContentView
                     } else {
                         QuestionsView(userProfile: Binding(
                             get: { self.currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, mediaItems: []) },
                             set: { self.currentUser = $0 }
                         ), hasAnsweredQuestions: $hasAnsweredQuestions)
+                            .environmentObject(appState)  // Pass appState to QuestionsView
                     }
                 } else {
                     Text("Loading...")
@@ -32,8 +35,10 @@ struct MainView: View {
             } else {
                 if isShowingLoginView {
                     LoginView(isSignedIn: $isSignedIn, currentUser: $currentUser, isShowingLoginView: $isShowingLoginView)
+                        .environmentObject(appState)  // Pass appState to LoginView
                 } else {
                     SignUpView(currentUser: $currentUser, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
+                        .environmentObject(appState)  // Pass appState to SignUpView
                 }
             }
         }
@@ -51,7 +56,6 @@ struct MainView: View {
                     print("Error fetching user document: \(error.localizedDescription)")
                 } else if let document = document, document.exists {
                     if let data = document.data() {
-                        // Assuming mediaItems in Firestore is stored as an array of URLs (strings)
                         let mediaItemsData = data["mediaItems"] as? [String] ?? []
                         let mediaItems = mediaItemsData.map { urlString -> MediaItem in
                             if urlString.hasSuffix(".mp4") {
@@ -70,7 +74,7 @@ struct MainView: View {
                             server: data["server"] as? String ?? "",
                             answers: data["answers"] as? [String: String] ?? [:],
                             hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false,
-                            mediaItems: mediaItems  // Corrected to use the converted mediaItems
+                            mediaItems: mediaItems
                         )
                         self.hasAnsweredQuestions = self.currentUser?.hasAnsweredQuestions ?? false
                     }
@@ -80,6 +84,4 @@ struct MainView: View {
             self.isSignedIn = false
         }
     }
-
-
 }
