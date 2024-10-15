@@ -24,8 +24,8 @@ struct DM: View {
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
 
-            // Pass unreadMessageCount to ChatView, but without the isInChatView binding if not needed
-            ChatView(matchID: matchID, recipientName: recipientName, unreadMessageCount: $unreadMessageCount)
+            // Pass unreadMessageCount to ChatView
+            ChatView(matchID: matchID, recipientName: recipientName, isInChatView: $isInChatView, unreadMessageCount: $unreadMessageCount)
         }
         .onAppear {
             isInChatView = true // Set this to true when DM view appears
