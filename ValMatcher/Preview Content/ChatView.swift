@@ -106,7 +106,7 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear {
-            print("DEBUG: Entering ChatView for matchID: \(matchID) with isInChatView: \(appState.isInChatView)")
+            print("DEBUG: Entering ChatView for matchID: \(matchID), setting isInChatView to true")
             appState.isInChatView = true
             appState.currentChatID = matchID
             isInChatView = true
@@ -120,18 +120,16 @@ struct ChatView: View {
         .onDisappear {
             print("DEBUG: Preparing to exit ChatView for matchID: \(matchID), isInChatView before exit: \(appState.isInChatView)")
             
-            // Delay the cleanup to avoid race conditions with Firestore updates
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                if appState.isInChatView {
-                    print("DEBUG: Preventing premature exit, still in chat")
-                } else {
-                    print("DEBUG: Exiting and cleaning up ChatView for matchID: \(matchID)")
-                    appState.isInChatView = false
-                    appState.currentChatID = nil
-                    isInChatView = false
-                    viewModel.isInChatView = false
-                    print("DEBUG: Removed listener and exited ChatView")
-                }
+            // Only remove listener if isInChatView is false
+            if !appState.isInChatView {
+                print("DEBUG: Exiting and cleaning up ChatView for matchID: \(matchID)")
+                appState.isInChatView = false
+                appState.currentChatID = nil
+                isInChatView = false
+                viewModel.isInChatView = false
+                print("DEBUG: Removed listener and exited ChatView")
+            } else {
+                print("DEBUG: Not removing listener, still in chat")
             }
         }
 
@@ -246,7 +244,6 @@ class ChatViewModel: ObservableObject {
             .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
                 guard let self = self else { return }
                 
-                // Debounce to avoid rapid updates when both users are in chat
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     if let error = error {
                         print("DEBUG: Error loading messages: \(error.localizedDescription)")
