@@ -110,31 +110,35 @@ struct ChatView: View {
         .onAppear {
             print("DEBUG: Entered ChatView for matchID: \(matchID)")
             
-            // Clean up old listener
+            // Reset the state and clean up old listener if necessary
             appState.removeChatListener(for: matchID)
             
-            // Set up new listener in viewModel
-            viewModel.setupChatListener() // This call doesn't need dynamic member access
+            // Set up the new listener
+            viewModel.setupChatListener()
             
-            // Update chat state
+            // Update the app state to reflect that we're in the chat
             isInChatView = true
             appState.isInChatView = true
             appState.currentChatID = matchID
+            
+            print("DEBUG: ChatView setup complete, listener set, isInChatView: \(isInChatView)")
         }
+
         .onDisappear {
             // Ensure the listener is only removed if the user is NOT in the chat
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 if !isInChatView {
                     print("DEBUG: Exiting ChatView and removing listener")
-                    appState.removeChatListener(for: matchID)
+                    viewModel.removeMessagesListener()  // Explicitly remove the listener here
                     isInChatView = false
                     appState.isInChatView = false
                     appState.currentChatID = nil
                 } else {
-                    print("DEBUG: Preventing listener removal because user is still in chat")
+                    print("DEBUG: Still in chat, not removing listener")
                 }
             }
         }
+
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -199,9 +203,14 @@ class ChatViewModel: ObservableObject {
     }
 
     deinit {
-        removeMessagesListener()
-        print("DEBUG: ChatViewModel deinitialized and listener removed for matchID: \(matchID)")
+        if !isInChatView {
+            removeMessagesListener()
+            print("DEBUG: ChatViewModel deinitialized and listener removed for matchID: \(matchID)")
+        } else {
+            print("DEBUG: ChatViewModel deinitialized but user is still in chat for matchID: \(matchID)")
+        }
     }
+
 
     func sendMessage() {
         guard let currentUserID = Auth.auth().currentUser?.uid, !newMessage.isEmpty else { return }
