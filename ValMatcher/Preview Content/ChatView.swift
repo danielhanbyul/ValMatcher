@@ -118,22 +118,26 @@ struct ChatView: View {
             }
         }
         .onDisappear {
-            print("DEBUG: Preparing to exit ChatView for matchID: \(matchID), isInChatView before exit: \(appState.isInChatView)")
-            
-            // Double-check isInChatView, only remove listener if the user is no longer in the chat
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                if appState.isInChatView == false {
-                    print("DEBUG: Exiting and cleaning up ChatView for matchID: \(matchID)")
+            print("DEBUG: onDisappear triggered for matchID: \(matchID)")
+            print("DEBUG: Current isInChatView state: \(isInChatView)")
+
+            // Check if we're actually allowed to remove the listener (if the user is NOT in the chat anymore)
+            if !isInChatView {
+                print("DEBUG: User is not in chat, proceeding with listener removal for matchID: \(matchID)")
+                DispatchQueue.main.async {
+                    print("DEBUG: Exiting ChatView, removing listener for matchID: \(matchID)")
                     appState.isInChatView = false
                     appState.currentChatID = nil
-                    isInChatView = false
                     viewModel.isInChatView = false
-                    print("DEBUG: Removed listener and exited ChatView")
-                } else {
-                    print("DEBUG: Preventing premature exit, still in chat")
+                    // Clean up listener
+                    viewModel.removeMessagesListener()
+                    print("DEBUG: Listener removed for matchID: \(matchID)")
                 }
+            } else {
+                print("DEBUG: Preventing listener removal because user is still in chat for matchID: \(matchID)")
             }
         }
+
 
 
     }
