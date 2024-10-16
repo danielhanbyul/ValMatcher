@@ -80,7 +80,6 @@ struct ChatView: View {
                     if viewModel.scrollToBottom {
                         DispatchQueue.main.async {
                             proxy.scrollTo(viewModel.messages.last?.id, anchor: .bottom)
-                            print("DEBUG: Auto-scrolling to the latest message")
                         }
                     }
                 }
@@ -92,10 +91,7 @@ struct ChatView: View {
                     .padding()
                     .frame(height: 40)
 
-                Button(action: {
-                    print("DEBUG: Sending message - \(viewModel.newMessage)")
-                    viewModel.sendMessage()
-                }) {
+                Button(action: viewModel.sendMessage) {
                     Image(systemName: "paperplane.fill")
                         .padding()
                         .background(Color.blue)
@@ -115,26 +111,24 @@ struct ChatView: View {
             appState.currentChatID = matchID
             isInChatView = true
             viewModel.isInChatView = true
-            
-            // Ensure messages are marked as read, with a slight delay to sync
+
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 print("DEBUG: Marking all messages as read for matchID: \(matchID)")
                 viewModel.markAllMessagesAsRead()
             }
         }
         .onDisappear {
-            // Add a delay to ensure any final message updates are processed before exit
+            print("DEBUG: Preparing to exit ChatView for matchID: \(matchID)")
+            
+            // Delay cleanup to ensure all updates are processed
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                print("DEBUG: Exiting ChatView for matchID: \(matchID)")
                 appState.isInChatView = false
                 appState.currentChatID = nil
                 isInChatView = false
                 viewModel.isInChatView = false
-                print("DEBUG: Removed listener and exited ChatView")
+                print("DEBUG: Exiting and cleaning up ChatView for matchID: \(matchID)")
             }
         }
-
-
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -148,7 +142,6 @@ struct ChatView: View {
                         .cornerRadius(8)
                         .onTapGesture {
                             viewModel.isFullScreenImagePresented = IdentifiableImageURL(url: imageURL)
-                            print("DEBUG: User tapped on image in messageID: \(message.id ?? "N/A")")
                         }
                 } placeholder: {
                     ProgressView()
@@ -161,14 +154,12 @@ struct ChatView: View {
                         UIPasteboard.general.string = message.content
                         viewModel.copiedText = message.content
                         viewModel.showAlert = true
-                        print("DEBUG: User double-tapped to copy messageID: \(message.id ?? "N/A")")
                     }
                     .contextMenu {
                         Button(action: {
                             UIPasteboard.general.string = message.content
                             viewModel.copiedText = message.content
                             viewModel.showAlert = true
-                            print("DEBUG: User copied messageID: \(message.id ?? "N/A")")
                         }) {
                             Text("Copy")
                             Image(systemName: "doc.on.doc")
@@ -178,6 +169,7 @@ struct ChatView: View {
         }
     }
 }
+
 
 // ViewModel for ChatView with Debug Logging
 class ChatViewModel: ObservableObject {
@@ -241,6 +233,8 @@ class ChatViewModel: ObservableObject {
 
     private func setupChatListener() {
         let db = Firestore.firestore()
+        print("DEBUG: Setting up chat listener for matchID: \(self.matchID)")
+        
         messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
             .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
@@ -291,6 +285,8 @@ class ChatViewModel: ObservableObject {
                 }
             }
     }
+
+
 
 
 
