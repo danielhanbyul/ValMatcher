@@ -115,16 +115,17 @@ struct ChatView: View {
             appState.currentChatID = matchID
             isInChatView = true
             viewModel.isInChatView = true
-            // Ensure messages are marked as read and give it a small delay if needed
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            
+            // Ensure messages are marked as read, with a slight delay to sync
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 print("DEBUG: Marking all messages as read for matchID: \(matchID)")
                 viewModel.markAllMessagesAsRead()
             }
         }
         .onDisappear {
-            // Ensure proper cleanup and prevent premature exit
-            print("DEBUG: Exiting ChatView for matchID: \(matchID)")
+            // Add a delay to ensure any final message updates are processed before exit
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                print("DEBUG: Exiting ChatView for matchID: \(matchID)")
                 appState.isInChatView = false
                 appState.currentChatID = nil
                 isInChatView = false
@@ -132,6 +133,7 @@ struct ChatView: View {
                 print("DEBUG: Removed listener and exited ChatView")
             }
         }
+
 
     }
 
@@ -245,7 +247,7 @@ class ChatViewModel: ObservableObject {
                 guard let self = self else { return }
                 
                 // Debounce to avoid frequent re-triggering of UI updates
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {  // Small delay to process messages smoothly
                     if let error = error {
                         print("DEBUG: Error loading messages: \(error.localizedDescription)")
                         return
@@ -289,6 +291,7 @@ class ChatViewModel: ObservableObject {
                 }
             }
     }
+
 
 
     func removeMessagesListener() {
