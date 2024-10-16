@@ -80,6 +80,7 @@ struct ChatView: View {
                     if viewModel.scrollToBottom {
                         DispatchQueue.main.async {
                             proxy.scrollTo(viewModel.messages.last?.id, anchor: .bottom)
+                            print("DEBUG: Auto-scrolling to the latest message")
                         }
                     }
                 }
@@ -91,7 +92,10 @@ struct ChatView: View {
                     .padding()
                     .frame(height: 40)
 
-                Button(action: viewModel.sendMessage) {
+                Button(action: {
+                    print("DEBUG: Sending message - \(viewModel.newMessage)")
+                    viewModel.sendMessage()
+                }) {
                     Image(systemName: "paperplane.fill")
                         .padding()
                         .background(Color.blue)
@@ -111,6 +115,7 @@ struct ChatView: View {
             appState.currentChatID = matchID
             isInChatView = true
             viewModel.isInChatView = true
+            print("DEBUG: Marking all messages as read for matchID: \(matchID)")
             viewModel.markAllMessagesAsRead()
         }
         .onDisappear {
@@ -119,7 +124,7 @@ struct ChatView: View {
             appState.currentChatID = nil
             isInChatView = false
             viewModel.isInChatView = false
-            viewModel.removeMessagesListener() // Clean up listeners on exit
+            print("DEBUG: Removed listener and exited ChatView")
         }
     }
 
@@ -134,6 +139,7 @@ struct ChatView: View {
                         .cornerRadius(8)
                         .onTapGesture {
                             viewModel.isFullScreenImagePresented = IdentifiableImageURL(url: imageURL)
+                            print("DEBUG: User tapped on image in messageID: \(message.id ?? "N/A")")
                         }
                 } placeholder: {
                     ProgressView()
@@ -146,12 +152,14 @@ struct ChatView: View {
                         UIPasteboard.general.string = message.content
                         viewModel.copiedText = message.content
                         viewModel.showAlert = true
+                        print("DEBUG: User double-tapped to copy messageID: \(message.id ?? "N/A")")
                     }
                     .contextMenu {
                         Button(action: {
                             UIPasteboard.general.string = message.content
                             viewModel.copiedText = message.content
                             viewModel.showAlert = true
+                            print("DEBUG: User copied messageID: \(message.id ?? "N/A")")
                         }) {
                             Text("Copy")
                             Image(systemName: "doc.on.doc")
@@ -162,7 +170,7 @@ struct ChatView: View {
     }
 }
 
-// ViewModel for ChatView
+// ViewModel for ChatView with Debug Logging
 class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var newMessage: String = ""
@@ -184,7 +192,8 @@ class ChatViewModel: ObservableObject {
     }
 
     deinit {
-        removeMessagesListener()  // Ensure the listener is removed when ViewModel is deallocated
+        removeMessagesListener()
+        print("DEBUG: ChatViewModel deinitialized and listener removed for matchID: \(matchID)")
     }
 
     func sendMessage() {
@@ -201,19 +210,21 @@ class ChatViewModel: ObservableObject {
             "isRead": false
         ]
 
-        // Add the message to Firestore
+        print("DEBUG: Sending message: \(messageData)")
+
         db.collection("matches").document(self.matchID).collection("messages").addDocument(data: messageData) { [weak self] error in
             if let error = error {
-                print("Error sending message: \(error.localizedDescription)")
-                // Optionally, restore the message if there's an error
-                // self?.newMessage = messageToSend
+                print("DEBUG: Error sending message: \(error.localizedDescription)")
                 return
             }
 
-            // Update the chat timestamp
+            print("DEBUG: Message sent successfully for matchID: \(self?.matchID ?? "")")
+
             db.collection("matches").document(self?.matchID ?? "").updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
-                    print("Error updating chat timestamp: \(error.localizedDescription)")
+                    print("DEBUG: Error updating chat timestamp: \(error.localizedDescription)")
+                } else {
+                    print("DEBUG: Chat timestamp updated for matchID: \(self?.matchID ?? "")")
                 }
             }
         }
@@ -224,26 +235,30 @@ class ChatViewModel: ObservableObject {
         messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
             .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
-                guard let self = self else { return }  // Prevents retain cycles
+                guard let self = self else { return }
 
                 if let error = error {
-                    print("Error loading messages: \(error.localizedDescription)")
+                    print("DEBUG: Error loading messages: \(error.localizedDescription)")
                     return
                 }
 
                 guard let snapshot = snapshot else {
-                    print("No messages found")
+                    print("DEBUG: No messages found for matchID: \(self.matchID)")
                     return
                 }
+
+                print("DEBUG: Received snapshot update for matchID: \(self.matchID), message count: \(snapshot.documents.count)")
 
                 for diff in snapshot.documentChanges {
                     switch diff.type {
                     case .added:
                         if let message = try? diff.document.data(as: Message.self) {
+                            print("DEBUG: New message added with ID: \(message.id ?? "N/A")")
                             if !self.seenMessageIDs.contains(message.id ?? "") {
                                 self.messages.append(message)
                                 self.seenMessageIDs.insert(message.id ?? "")
                                 if !message.isCurrentUser && self.isInChatView {
+                                    print("DEBUG: Marking message as read for ID: \(message.id ?? "N/A")")
                                     self.markMessageAsRead(messageID: message.id ?? "")
                                 }
                                 self.scrollToBottom = true
@@ -252,10 +267,12 @@ class ChatViewModel: ObservableObject {
                     case .modified:
                         if let message = try? diff.document.data(as: Message.self),
                            let index = self.messages.firstIndex(where: { $0.id == message.id }) {
+                            print("DEBUG: Message modified with ID: \(message.id ?? "N/A")")
                             self.messages[index] = message
                         }
                     case .removed:
                         if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
+                            print("DEBUG: Message removed with ID: \(diff.document.documentID)")
                             self.messages.remove(at: index)
                         }
                     }
@@ -266,13 +283,16 @@ class ChatViewModel: ObservableObject {
     func removeMessagesListener() {
         messagesListener?.remove()
         messagesListener = nil
+        print("DEBUG: Removed messages listener for matchID: \(matchID)")
     }
 
     private func markMessageAsRead(messageID: String) {
         let db = Firestore.firestore()
         db.collection("matches").document(matchID).collection("messages").document(messageID).updateData(["isRead": true]) { error in
             if let error = error {
-                print("Error marking message as read: \(error.localizedDescription)")
+                print("DEBUG: Error marking message as read: \(error.localizedDescription)")
+            } else {
+                print("DEBUG: Message marked as read for messageID: \(messageID)")
             }
         }
     }
@@ -285,7 +305,7 @@ class ChatViewModel: ObservableObject {
             .whereField("isRead", isEqualTo: false)
             .getDocuments { snapshot, error in
                 if let error = error {
-                    print("Error fetching unread messages: \(error.localizedDescription)")
+                    print("DEBUG: Error fetching unread messages: \(error.localizedDescription)")
                     return
                 }
 
@@ -293,10 +313,13 @@ class ChatViewModel: ObservableObject {
                 snapshot?.documents.forEach { document in
                     let messageRef = document.reference
                     batch.updateData(["isRead": true], forDocument: messageRef)
+                    print("DEBUG: Marking message as read in batch for messageID: \(document.documentID)")
                 }
                 batch.commit { error in
                     if let error = error {
-                        print("Error committing batch to mark messages as read: \(error.localizedDescription)")
+                        print("DEBUG: Error committing batch to mark messages as read: \(error.localizedDescription)")
+                    } else {
+                        print("DEBUG: All messages marked as read for matchID: \(self.matchID)")
                     }
                 }
             }
@@ -310,6 +333,7 @@ class ChatViewModel: ObservableObject {
         return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
     }
 }
+
 
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()
