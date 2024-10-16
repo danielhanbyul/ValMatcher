@@ -106,33 +106,34 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(recipientName)
         .onAppear {
-            print("DEBUG: Entering ChatView for matchID: \(matchID), setting isInChatView to true")
+            print("DEBUG: Entered ChatView for matchID: \(matchID)")
+            
+            // Clean up old listener
+            appState.removeChatListener(for: matchID)
+            
+            // Set up new listener
+            viewModel.setupListener(for: matchID)
+            
+            // Update chat state
+            isInChatView = true
             appState.isInChatView = true
             appState.currentChatID = matchID
-            isInChatView = true
-            viewModel.isInChatView = true
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                print("DEBUG: Marking all messages as read for matchID: \(matchID)")
-                viewModel.markAllMessagesAsRead()
-            }
         }
         .onDisappear {
-            print("DEBUG: onDisappear triggered for matchID: \(matchID)")
-            print("DEBUG: Current isInChatView state: \(appState.isInChatView)")
-
+            // Ensure the listener is only removed if the user is NOT in the chat
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                if !appState.isInChatView {
+                if !isInChatView {
                     print("DEBUG: Exiting ChatView and removing listener")
                     appState.removeChatListener(for: matchID)
+                    isInChatView = false
                     appState.isInChatView = false
                     appState.currentChatID = nil
-                    isInChatView = false
                 } else {
                     print("DEBUG: Preventing listener removal because user is still in chat")
                 }
             }
         }
+
 
 
 

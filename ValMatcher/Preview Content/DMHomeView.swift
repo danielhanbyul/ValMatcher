@@ -51,6 +51,17 @@ struct DMHomeView: View {
                                     isEditing && selectedMatches.contains(match.id ?? "") ?
                                     Color.gray.opacity(0.3) : Color.clear
                                 )
+                                .onTapGesture {
+                                    // Ensure match has an ID before proceeding
+                                    if let matchID = match.id {
+                                        // Call the function to clean up listeners and set state
+                                        enterChatView(with: matchID)
+                                        
+                                        // Set the selected match and trigger navigation
+                                        self.selectedMatch = match
+                                        self.isChatActive = true
+                                    }
+                                }
                         }
                     }
                 }
@@ -125,6 +136,20 @@ struct DMHomeView: View {
             Alert(title: Text("New Message"), message: Text(bannerMessage), dismissButton: .default(Text("OK")))
         }
     }
+
+    // Function to enter ChatView and clean up listeners
+    func enterChatView(with matchID: String) {
+        // Clean up any existing listeners
+        appState.removeChatListener(for: matchID)
+        
+        // Set up new listener and navigation state
+        self.currentChatID = matchID
+        self.isChatActive = true
+        self.isInChatView = true
+        appState.isInChatView = true
+        appState.currentChatID = matchID
+    }
+
 
     private func toggleSelection(for matchID: String) {
         if selectedMatches.contains(matchID) {
