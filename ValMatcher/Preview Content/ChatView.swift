@@ -125,19 +125,27 @@ struct ChatView: View {
         }
 
         .onDisappear {
+            print("DEBUG: onDisappear triggered for matchID: \(matchID)")
+            
             // Ensure the listener is only removed if the user is NOT in the chat
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 if !isInChatView {
-                    print("DEBUG: Exiting ChatView and removing listener")
-                    viewModel.removeMessagesListener()  // Explicitly remove the listener here
+                    if viewModel.isListenerActive {  // Check if listener is still active before trying to remove it
+                        print("DEBUG: Exiting ChatView and removing listener for matchID: \(matchID)")
+                        viewModel.removeMessagesListener()  // Explicitly remove the listener here
+                        viewModel.isListenerActive = false  // Set to false once removed
+                    } else {
+                        print("DEBUG: Listener already removed for matchID: \(matchID)")
+                    }
                     isInChatView = false
                     appState.isInChatView = false
                     appState.currentChatID = nil
                 } else {
-                    print("DEBUG: Still in chat, not removing listener")
+                    print("DEBUG: Still in chat, not removing listener for matchID: \(matchID)")
                 }
             }
         }
+
 
     }
 
@@ -180,8 +188,6 @@ struct ChatView: View {
     }
 }
 
-
-
 class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var newMessage: String = ""
@@ -194,6 +200,7 @@ class ChatViewModel: ObservableObject {
     private var matchID: String
     private var currentUserID: String?
     var isInChatView: Bool = false
+    @Published var isListenerActive: Bool = false  // New property to track listener state
     private var seenMessageIDs: Set<String> = []
 
     init(matchID: String) {
@@ -211,7 +218,7 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-
+    // Send message function
     func sendMessage() {
         guard let currentUserID = Auth.auth().currentUser?.uid, !newMessage.isEmpty else { return }
 
@@ -246,10 +253,13 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    // Change from private to internal to allow access from ChatView
+    // Setup chat listener
     func setupChatListener() {
         let db = Firestore.firestore()
         print("DEBUG: Setting up chat listener for matchID: \(self.matchID)")
+        
+        // Set listener active to true
+        isListenerActive = true
         
         messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
@@ -301,12 +311,19 @@ class ChatViewModel: ObservableObject {
             }
     }
 
+    // Remove chat listener
     func removeMessagesListener() {
+        guard isListenerActive else {
+            print("DEBUG: Listener already removed for matchID: \(matchID)")
+            return
+        }
         messagesListener?.remove()
         messagesListener = nil
+        isListenerActive = false
         print("DEBUG: Removed messages listener for matchID: \(matchID)")
     }
 
+    // Mark a specific message as read
     private func markMessageAsRead(messageID: String) {
         let db = Firestore.firestore()
         db.collection("matches").document(matchID).collection("messages").document(messageID).updateData(["isRead": true]) { error in
@@ -318,8 +335,7 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-
-
+    // Mark all messages as read
     func markAllMessagesAsRead() {
         guard let currentUserID = currentUserID else { return }
         let db = Firestore.firestore()
@@ -348,6 +364,7 @@ class ChatViewModel: ObservableObject {
             }
     }
 
+    // Determine if date should be shown for the message
     func shouldShowDate(for message: Message) -> Bool {
         guard let index = messages.firstIndex(of: message) else { return false }
         if index == 0 { return true }
@@ -356,6 +373,7 @@ class ChatViewModel: ObservableObject {
         return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
     }
 }
+
 
 
 let dateOnlyFormatter: DateFormatter = {
