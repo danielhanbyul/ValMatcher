@@ -115,17 +115,24 @@ struct ChatView: View {
             appState.currentChatID = matchID
             isInChatView = true
             viewModel.isInChatView = true
-            print("DEBUG: Marking all messages as read for matchID: \(matchID)")
-            viewModel.markAllMessagesAsRead()
+            // Ensure messages are marked as read and give it a small delay if needed
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                print("DEBUG: Marking all messages as read for matchID: \(matchID)")
+                viewModel.markAllMessagesAsRead()
+            }
         }
         .onDisappear {
+            // Ensure proper cleanup and prevent premature exit
             print("DEBUG: Exiting ChatView for matchID: \(matchID)")
-            appState.isInChatView = false
-            appState.currentChatID = nil
-            isInChatView = false
-            viewModel.isInChatView = false
-            print("DEBUG: Removed listener and exited ChatView")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                appState.isInChatView = false
+                appState.currentChatID = nil
+                isInChatView = false
+                viewModel.isInChatView = false
+                print("DEBUG: Removed listener and exited ChatView")
+            }
         }
+
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -236,49 +243,53 @@ class ChatViewModel: ObservableObject {
             .order(by: "timestamp", descending: false)
             .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
                 guard let self = self else { return }
+                
+                // Debounce to avoid frequent re-triggering of UI updates
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    if let error = error {
+                        print("DEBUG: Error loading messages: \(error.localizedDescription)")
+                        return
+                    }
 
-                if let error = error {
-                    print("DEBUG: Error loading messages: \(error.localizedDescription)")
-                    return
-                }
+                    guard let snapshot = snapshot else {
+                        print("DEBUG: No messages found for matchID: \(self.matchID)")
+                        return
+                    }
 
-                guard let snapshot = snapshot else {
-                    print("DEBUG: No messages found for matchID: \(self.matchID)")
-                    return
-                }
+                    print("DEBUG: Received snapshot update for matchID: \(self.matchID), message count: \(snapshot.documents.count)")
 
-                print("DEBUG: Received snapshot update for matchID: \(self.matchID), message count: \(snapshot.documents.count)")
-
-                for diff in snapshot.documentChanges {
-                    switch diff.type {
-                    case .added:
-                        if let message = try? diff.document.data(as: Message.self) {
-                            print("DEBUG: New message added with ID: \(message.id ?? "N/A")")
-                            if !self.seenMessageIDs.contains(message.id ?? "") {
-                                self.messages.append(message)
-                                self.seenMessageIDs.insert(message.id ?? "")
-                                if !message.isCurrentUser && self.isInChatView {
-                                    print("DEBUG: Marking message as read for ID: \(message.id ?? "N/A")")
-                                    self.markMessageAsRead(messageID: message.id ?? "")
+                    for diff in snapshot.documentChanges {
+                        switch diff.type {
+                        case .added:
+                            if let message = try? diff.document.data(as: Message.self) {
+                                print("DEBUG: New message added with ID: \(message.id ?? "N/A")")
+                                if !self.seenMessageIDs.contains(message.id ?? "") {
+                                    self.messages.append(message)
+                                    self.seenMessageIDs.insert(message.id ?? "")
+                                    if !message.isCurrentUser && self.isInChatView {
+                                        print("DEBUG: Marking message as read for ID: \(message.id ?? "N/A")")
+                                        self.markMessageAsRead(messageID: message.id ?? "")
+                                    }
+                                    self.scrollToBottom = true
                                 }
-                                self.scrollToBottom = true
                             }
-                        }
-                    case .modified:
-                        if let message = try? diff.document.data(as: Message.self),
-                           let index = self.messages.firstIndex(where: { $0.id == message.id }) {
-                            print("DEBUG: Message modified with ID: \(message.id ?? "N/A")")
-                            self.messages[index] = message
-                        }
-                    case .removed:
-                        if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
-                            print("DEBUG: Message removed with ID: \(diff.document.documentID)")
-                            self.messages.remove(at: index)
+                        case .modified:
+                            if let message = try? diff.document.data(as: Message.self),
+                               let index = self.messages.firstIndex(where: { $0.id == message.id }) {
+                                print("DEBUG: Message modified with ID: \(message.id ?? "N/A")")
+                                self.messages[index] = message
+                            }
+                        case .removed:
+                            if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
+                                print("DEBUG: Message removed with ID: \(diff.document.documentID)")
+                                self.messages.remove(at: index)
+                            }
                         }
                     }
                 }
             }
     }
+
 
     func removeMessagesListener() {
         messagesListener?.remove()
