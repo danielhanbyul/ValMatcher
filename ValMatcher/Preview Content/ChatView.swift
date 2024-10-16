@@ -16,14 +16,16 @@ struct ChatView: View {
     @Binding var isInChatView: Bool
     @Binding var unreadMessageCount: Int
 
+    // Using @StateObject to track the ChatViewModel
     @StateObject private var viewModel: ChatViewModel
 
+    // Custom initializer for ChatView
     init(matchID: String, recipientName: String, isInChatView: Binding<Bool>, unreadMessageCount: Binding<Int>) {
         self.matchID = matchID
         self.recipientName = recipientName
         self._isInChatView = isInChatView
         self._unreadMessageCount = unreadMessageCount
-        _viewModel = StateObject(wrappedValue: ChatViewModel(matchID: matchID))
+        _viewModel = StateObject(wrappedValue: ChatViewModel(matchID: matchID)) // Proper StateObject usage
     }
 
     var body: some View {
@@ -111,8 +113,8 @@ struct ChatView: View {
             // Clean up old listener
             appState.removeChatListener(for: matchID)
             
-            // Set up new listener
-            viewModel.setupListener(for: matchID)
+            // Set up new listener in viewModel
+            viewModel.setupChatListener() // This call doesn't need dynamic member access
             
             // Update chat state
             isInChatView = true
@@ -133,11 +135,6 @@ struct ChatView: View {
                 }
             }
         }
-
-
-
-
-
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -180,7 +177,7 @@ struct ChatView: View {
 }
 
 
-// ViewModel for ChatView with Debug Logging
+
 class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var newMessage: String = ""
@@ -240,7 +237,8 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    private func setupChatListener() {
+    // Change from private to internal to allow access from ChatView
+    func setupChatListener() {
         let db = Firestore.firestore()
         print("DEBUG: Setting up chat listener for matchID: \(self.matchID)")
         
@@ -310,6 +308,8 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
+
+
 
     func markAllMessagesAsRead() {
         guard let currentUserID = currentUserID else { return }
