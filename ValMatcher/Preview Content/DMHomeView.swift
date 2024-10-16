@@ -78,17 +78,26 @@ struct DMHomeView: View {
                 )
                 .onAppear {
                     print("DEBUG: Entered ChatView for matchID: \(selectedMatch?.id ?? "")")
+                    appState.isInChatView = true
+                    isInChatView = true
                 }
                 .onDisappear {
-                    self.currentChatID = nil
-                    self.isInChatView = false
-                    self.isChatActive = false
-                    print("DEBUG: Exited ChatView")
+                    print("DEBUG: Preparing to exit ChatView for matchID: \(selectedMatch?.id ?? "")")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        if !isInChatView {
+                            print("DEBUG: Exiting and cleaning up ChatView")
+                            appState.removeChatListener(for: selectedMatch?.id ?? "")
+                            isInChatView = false
+                        } else {
+                            print("DEBUG: Still in chat, not removing listener")
+                        }
+                    }
                 },
-                isActive: $isChatActive // Controls when ChatView appears
+                isActive: $isChatActive
             ) {
                 EmptyView()
             }
+
         }
         .navigationBarTitle("Messages", displayMode: .inline)
         .navigationBarItems(trailing: Button(action: { isEditing.toggle() }) {

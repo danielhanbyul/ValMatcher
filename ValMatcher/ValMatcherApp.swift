@@ -126,5 +126,27 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
 class AppState: ObservableObject {
     @Published var isInChatView: Bool = false
-    @Published var currentChatID: String? = nil
+    @Published var currentChatID: String?
+
+    private var chatListeners: [String: ListenerRegistration] = [:]
+
+    func addChatListener(for chatID: String, listener: ListenerRegistration) {
+        chatListeners[chatID] = listener
+    }
+
+    func removeChatListener(for chatID: String) {
+        if let listener = chatListeners[chatID] {
+            listener.remove()
+            chatListeners.removeValue(forKey: chatID)
+            print("DEBUG: Listener removed for matchID: \(chatID)")
+        }
+    }
+
+    func removeAllChatListeners() {
+        for (chatID, listener) in chatListeners {
+            listener.remove()
+            print("DEBUG: Removed listener for chatID: \(chatID)")
+        }
+        chatListeners.removeAll()
+    }
 }
