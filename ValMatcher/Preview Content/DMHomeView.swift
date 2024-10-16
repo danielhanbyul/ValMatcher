@@ -68,7 +68,7 @@ struct DMHomeView: View {
                 }
             }
 
-            // Hidden NavigationLink activated by isChatActive
+            // NavigationLink to trigger ChatView
             NavigationLink(
                 destination: ChatView(
                     matchID: selectedMatch?.id ?? "",
@@ -77,7 +77,7 @@ struct DMHomeView: View {
                     unreadMessageCount: $totalUnreadMessages
                 )
                 .onAppear {
-                    print("DEBUG: Entered ChatView")
+                    print("DEBUG: Entered ChatView for matchID: \(selectedMatch?.id ?? "")")
                 }
                 .onDisappear {
                     self.currentChatID = nil
@@ -85,9 +85,10 @@ struct DMHomeView: View {
                     self.isChatActive = false
                     print("DEBUG: Exited ChatView")
                 },
-                isActive: $isChatActive,
-                label: { EmptyView() }
-            )
+                isActive: $isChatActive // Controls when ChatView appears
+            ) {
+                EmptyView()
+            }
         }
         .navigationBarTitle("Messages", displayMode: .inline)
         .navigationBarItems(trailing: Button(action: { isEditing.toggle() }) {

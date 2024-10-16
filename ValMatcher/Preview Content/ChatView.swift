@@ -120,18 +120,21 @@ struct ChatView: View {
         .onDisappear {
             print("DEBUG: Preparing to exit ChatView for matchID: \(matchID), isInChatView before exit: \(appState.isInChatView)")
             
-            // Only remove listener if isInChatView is false
-            if !appState.isInChatView {
-                print("DEBUG: Exiting and cleaning up ChatView for matchID: \(matchID)")
-                appState.isInChatView = false
-                appState.currentChatID = nil
-                isInChatView = false
-                viewModel.isInChatView = false
-                print("DEBUG: Removed listener and exited ChatView")
-            } else {
-                print("DEBUG: Not removing listener, still in chat")
+            // Double-check isInChatView, only remove listener if the user is no longer in the chat
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if appState.isInChatView == false {
+                    print("DEBUG: Exiting and cleaning up ChatView for matchID: \(matchID)")
+                    appState.isInChatView = false
+                    appState.currentChatID = nil
+                    isInChatView = false
+                    viewModel.isInChatView = false
+                    print("DEBUG: Removed listener and exited ChatView")
+                } else {
+                    print("DEBUG: Preventing premature exit, still in chat")
+                }
             }
         }
+
 
     }
 
