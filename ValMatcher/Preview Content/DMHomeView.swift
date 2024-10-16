@@ -8,8 +8,6 @@ import SwiftUI
 import Firebase
 import FirebaseFirestore
 import FirebaseAuth
-import FirebaseFirestoreSwift
-import UserNotifications
 
 struct DMHomeView: View {
     @EnvironmentObject var appState: AppState  // Access the shared app state
@@ -97,6 +95,10 @@ struct DMHomeView: View {
                 .foregroundColor(.white)
         })
         .onAppear {
+            if !isLoaded {
+                // Load chats if they aren't already loaded
+                loadMatches()
+            }
             setupListeners()
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshChatList"))) { notification in
@@ -262,7 +264,7 @@ struct DMHomeView: View {
     }
 
     func setupListeners() {
-        loadMatches()
+        // Setup real-time listeners for chat updates
         setupRealTimeListener()
     }
 
@@ -302,12 +304,11 @@ struct DMHomeView: View {
 
                 group.notify(queue: .main) {
                     self.fetchUserNames(for: newMatches) { updatedMatches in
-                        // Sort the matches by lastMessageTimestamp before updating the UI
                         self.matches = updatedMatches.sorted {
                             ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                         }
                         self.updateUnreadMessagesCount(from: self.matches)
-                        self.isLoaded = true
+                        self.isLoaded = true // Mark as loaded to avoid reloading on re-entry
                     }
                 }
             }
@@ -339,8 +340,6 @@ struct DMHomeView: View {
                         var match = try document.data(as: Chat.self)
                         group.enter()
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
-
-                            // Skip updating the match if it's the current chat and we're in ChatView
                             if self.isInChatView && self.currentChatID == updatedMatch.id {
                                 print("DEBUG: Skipping update for current chat matchID: \(updatedMatch.id ?? "")")
                             } else {
@@ -358,7 +357,6 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
-                    // Sort the updated matches by lastMessageTimestamp after real-time update
                     self.matches = self.matches.sorted {
                         ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                     }
@@ -374,7 +372,6 @@ struct DMHomeView: View {
         var matchCopy = match
 
         if isInChatView && matchID == currentChatID {
-            // If we're currently in this chat, set hasUnreadMessages to false
             matchCopy.hasUnreadMessages = false
             completion(matchCopy)
             return
@@ -391,9 +388,6 @@ struct DMHomeView: View {
                 }
 
                 let unreadCount = snapshot?.documents.count ?? 0
-                if matchCopy.unreadMessages == nil {
-                    matchCopy.unreadMessages = [:]
-                }
                 matchCopy.unreadMessages?[currentUserID] = unreadCount
                 matchCopy.hasUnreadMessages = unreadCount > 0
                 completion(matchCopy)
@@ -472,7 +466,6 @@ struct DMHomeView: View {
             guard let matchID = match.id else { continue }
             group.enter()
             if isInChatView && matchID == currentChatID {
-                // If we're currently in this chat, set hasUnreadMessages to false
                 updatedMatches[index].hasUnreadMessages = false
                 group.leave()
                 continue
@@ -510,10 +503,10 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
-            // Sort by lastMessageTimestamp once all updates are fetched
             self.matches = updatedMatches.sorted {
                 ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
             }
         }
     }
 }
+

@@ -119,6 +119,7 @@ struct ChatView: View {
             appState.currentChatID = nil
             isInChatView = false
             viewModel.isInChatView = false
+            viewModel.removeMessagesListener() // Clean up listeners on exit
         }
     }
 
@@ -175,7 +176,6 @@ class ChatViewModel: ObservableObject {
     private var currentUserID: String?
     var isInChatView: Bool = false
     private var seenMessageIDs: Set<String> = []
-    private var isListenerActive: Bool = false
 
     init(matchID: String) {
         self.matchID = matchID
@@ -184,7 +184,7 @@ class ChatViewModel: ObservableObject {
     }
 
     deinit {
-        removeMessagesListener()
+        removeMessagesListener()  // Ensure the listener is removed when ViewModel is deallocated
     }
 
     func sendMessage() {
@@ -201,12 +201,16 @@ class ChatViewModel: ObservableObject {
             "isRead": false
         ]
 
+        // Add the message to Firestore
         db.collection("matches").document(self.matchID).collection("messages").addDocument(data: messageData) { [weak self] error in
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
+                // Optionally, restore the message if there's an error
+                // self?.newMessage = messageToSend
                 return
             }
 
+            // Update the chat timestamp
             db.collection("matches").document(self?.matchID ?? "").updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
@@ -216,14 +220,11 @@ class ChatViewModel: ObservableObject {
     }
 
     private func setupChatListener() {
-        guard !isListenerActive else { return }  // Ensure listener is only added once
-        isListenerActive = true
-
         let db = Firestore.firestore()
         messagesListener = db.collection("matches").document(self.matchID).collection("messages")
             .order(by: "timestamp", descending: false)
             .addSnapshotListener(includeMetadataChanges: false) { [weak self] snapshot, error in
-                guard let self = self else { return }
+                guard let self = self else { return }  // Prevents retain cycles
 
                 if let error = error {
                     print("Error loading messages: \(error.localizedDescription)")
@@ -235,39 +236,36 @@ class ChatViewModel: ObservableObject {
                     return
                 }
 
-                DispatchQueue.main.async {
-                    for diff in snapshot.documentChanges {
-                        switch diff.type {
-                        case .added:
-                            if let message = try? diff.document.data(as: Message.self) {
-                                if !self.seenMessageIDs.contains(message.id ?? "") {
-                                    self.messages.append(message)
-                                    self.seenMessageIDs.insert(message.id ?? "")
-                                    if !message.isCurrentUser && self.isInChatView {
-                                        self.markMessageAsRead(messageID: message.id ?? "")
-                                    }
-                                    self.scrollToBottom = true
+                for diff in snapshot.documentChanges {
+                    switch diff.type {
+                    case .added:
+                        if let message = try? diff.document.data(as: Message.self) {
+                            if !self.seenMessageIDs.contains(message.id ?? "") {
+                                self.messages.append(message)
+                                self.seenMessageIDs.insert(message.id ?? "")
+                                if !message.isCurrentUser && self.isInChatView {
+                                    self.markMessageAsRead(messageID: message.id ?? "")
                                 }
+                                self.scrollToBottom = true
                             }
-                        case .modified:
-                            if let message = try? diff.document.data(as: Message.self),
-                               let index = self.messages.firstIndex(where: { $0.id == message.id }) {
-                                self.messages[index] = message
-                            }
-                        case .removed:
-                            if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
-                                self.messages.remove(at: index)
-                            }
+                        }
+                    case .modified:
+                        if let message = try? diff.document.data(as: Message.self),
+                           let index = self.messages.firstIndex(where: { $0.id == message.id }) {
+                            self.messages[index] = message
+                        }
+                    case .removed:
+                        if let index = self.messages.firstIndex(where: { $0.id == diff.document.documentID }) {
+                            self.messages.remove(at: index)
                         }
                     }
                 }
             }
     }
 
-    private func removeMessagesListener() {
+    func removeMessagesListener() {
         messagesListener?.remove()
         messagesListener = nil
-        isListenerActive = false
     }
 
     private func markMessageAsRead(messageID: String) {
