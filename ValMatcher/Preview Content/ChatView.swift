@@ -123,27 +123,21 @@ struct ChatView: View {
         }
 
         .onDisappear {
-            print("DEBUG: onDisappear - Leaving ChatView for matchID: \(matchID)")
-            print("DEBUG: Current unreadMessageCount on exit: \(unreadMessageCount)")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                if !isInChatView {
-                    print("DEBUG: onDisappear - Cleaning up and removing listener for matchID: \(matchID)")
-                    appState.removeChatListener(for: matchID)
-                    viewModel.isInChatView = false
-                    isInChatView = false
-                    appState.isInChatView = false
-                } else {
-                    print("DEBUG: onDisappear - Still in ChatView, listener not removed for matchID: \(matchID)")
-                }
-            }
-
+            print("DEBUG: onDisappear - Triggered for matchID: \(matchID)")
             if !isInChatView {
-                DispatchQueue.main.async {
-                    unreadMessageCount = 0
-                    print("DEBUG: Updating unreadMessageCount to 0 after leaving ChatView for matchID: \(matchID)")
+                // Prevent unnecessary clean-up if still in ChatView
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    if !isInChatView {
+                        print("DEBUG: Cleaning up and removing listener for matchID: \(matchID)")
+                        appState.removeChatListener(for: matchID)
+                        isInChatView = false
+                    } else {
+                        print("DEBUG: Still in ChatView, listener not removed for matchID: \(matchID)")
+                    }
                 }
             }
         }
+
 
 
 
