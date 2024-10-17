@@ -116,22 +116,24 @@ struct DMHomeView: View {
                 .foregroundColor(.white)
         })
         .onAppear {
+            print("DEBUG: onAppear - Entering DMHomeView")
             if !isLoaded {
                 loadMatches()
             }
             setupListeners()
 
-            // Refresh unread message count ONLY when entering DMHomeView
+            // Debugging unread message count updates
             if !isInChatView {
+                print("DEBUG: Refreshing unreadMessageCount as not in ChatView")
                 refreshUnreadMessageCount()
             }
         }
 
         .onDisappear {
-            // When leaving DMHomeView, ensure state is properly reset
-            print("DEBUG: Leaving DMHomeView")
+            print("DEBUG: onDisappear - Leaving DMHomeView")
             isInChatView = false
         }
+
 
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshChatList"))) { notification in
             if let chatID = notification.object as? String {
