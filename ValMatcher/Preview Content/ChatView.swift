@@ -118,7 +118,6 @@ struct ChatView: View {
             shouldRemoveListener = false  // Reset the flag on appear
         }
         .onDisappear {
-            // Only remove listener if view is exited by navigating back
             if shouldRemoveListener {
                 print("DEBUG: Exiting and cleaning up ChatView for matchID: \(matchID)")
                 appState.removeChatListener(for: matchID)
@@ -128,7 +127,16 @@ struct ChatView: View {
             } else {
                 print("DEBUG: Not removing listener, still in chat")
             }
+
+            // Ensure that the unread message count only updates when leaving ChatView
+            DispatchQueue.main.async {
+                if appState.isInChatView == false {
+                    unreadMessageCount = 0
+                    print("DEBUG: Updating unread message count to 0 after returning to DMHomeView")
+                }
+            }
         }
+
     }
 
     private func messageContent(for message: Message) -> some View {

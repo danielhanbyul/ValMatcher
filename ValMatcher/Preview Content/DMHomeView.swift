@@ -52,12 +52,11 @@ struct DMHomeView: View {
                                     Color.gray.opacity(0.3) : Color.clear
                                 )
                                 .onTapGesture {
-                                    // Ensure match has an ID before proceeding
                                     if let matchID = match.id {
-                                        // Call the function to clean up listeners and set state
+                                        // Clean up listeners and enter ChatView
                                         enterChatView(with: matchID)
                                         
-                                        // Set the selected match and trigger navigation
+                                        // Set selected match and trigger navigation
                                         self.selectedMatch = match
                                         self.isChatActive = true
                                     }
@@ -103,12 +102,13 @@ struct DMHomeView: View {
                             print("DEBUG: Still in chat, not removing listener")
                         }
                     }
+                    // Update unread messages count after returning to DMHomeView
+                    refreshUnreadMessageCount()
                 },
                 isActive: $isChatActive
             ) {
                 EmptyView()
             }
-
         }
         .navigationBarTitle("Messages", displayMode: .inline)
         .navigationBarItems(trailing: Button(action: { isEditing.toggle() }) {
@@ -150,6 +150,42 @@ struct DMHomeView: View {
         appState.currentChatID = matchID
     }
 
+    // Function to refresh unread message count after navigating back
+    func refreshUnreadMessageCount() {
+        let db = Firestore.firestore()
+        guard let currentUserID = currentUserID else { return }
+
+        var totalUnread = 0
+        let matchesRef = db.collection("matches")
+        
+        matchesRef.whereField("user1", isEqualTo: currentUserID).getDocuments { snapshot, error in
+            if let error = error {
+                print("Error fetching matches: \(error.localizedDescription)")
+                return
+            }
+
+            for document in snapshot?.documents ?? [] {
+                let matchID = document.documentID
+                db.collection("matches").document(matchID).collection("messages")
+                    .whereField("isRead", isEqualTo: false)
+                    .whereField("senderID", isNotEqualTo: currentUserID)
+                    .getDocuments { messageSnapshot, error in
+                        if let messageError = error {
+                            print("Error fetching unread messages: \(messageError.localizedDescription)")
+                            return
+                        }
+                        totalUnread += messageSnapshot?.documents.count ?? 0
+
+                        DispatchQueue.main.async {
+                            totalUnreadMessages = totalUnread
+                            print("DEBUG: Unread messages refreshed: \(totalUnread)")
+                        }
+                    }
+            }
+        }
+    }
+
+    // Other existing functions such as toggleSelection, deleteSelectedMatches, markMessagesAsRead...
 
     private func toggleSelection(for matchID: String) {
         if selectedMatches.contains(matchID) {
@@ -159,7 +195,6 @@ struct DMHomeView: View {
         }
     }
 
-    // Deletion of selected matches
     func deleteSelectedMatches() {
         let db = Firestore.firestore()
         let batch = db.batch()
@@ -186,7 +221,6 @@ struct DMHomeView: View {
     private func matchRow(match: Chat) -> some View {
         HStack {
             if isEditing {
-                // Show selection indicator
                 Button(action: {
                     toggleSelection(for: match.id ?? "")
                 }) {
@@ -211,7 +245,7 @@ struct DMHomeView: View {
                     .padding(.trailing, 10)
             }
         }
-        .contentShape(Rectangle()) // Makes the entire row tappable
+        .contentShape(Rectangle())
         .onTapGesture {
             if isEditing {
                 toggleSelection(for: match.id ?? "")
@@ -221,7 +255,6 @@ struct DMHomeView: View {
                     self.currentChatID = matchID
                     self.isInChatView = true
                     self.isChatActive = true
-                    print("DEBUG: User selected matchID: \(matchID)")
                     if let index = matches.firstIndex(where: { $0.id == matchID }), matches[index].hasUnreadMessages == true {
                         markMessagesAsRead(for: match)
                         blendRedDot(for: index)
@@ -274,14 +307,12 @@ struct DMHomeView: View {
                     if let index = self.matches.firstIndex(where: { $0.id == chat.id }) {
                         self.matches[index].hasUnreadMessages = false
                     }
-                    // Notify to refresh the chat list and update unread message counts
                     NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
                 }
             }
         }
     }
 
-    // Function to get recipient's name using cache for faster access
     private func getRecipientName(for match: Chat?) -> String {
         guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
         let userID = currentUserID == match.user1 ? match.user2 : match.user1
@@ -290,16 +321,14 @@ struct DMHomeView: View {
             return cachedName
         }
 
-        // If not in cache, fetch the username
         if let userID = userID {
             fetchAndCacheUserName(for: userID) { _ in }
         }
 
-        return "Unknown User" // Fallback in case the name isn't fetched yet
+        return "Unknown User"
     }
 
     func setupListeners() {
-        // Setup real-time listeners for chat updates
         setupRealTimeListener()
     }
 
@@ -343,7 +372,7 @@ struct DMHomeView: View {
                             ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                         }
                         self.updateUnreadMessagesCount(from: self.matches)
-                        self.isLoaded = true // Mark as loaded to avoid reloading on re-entry
+                        self.isLoaded = true
                     }
                 }
             }
@@ -544,4 +573,3 @@ struct DMHomeView: View {
         }
     }
 }
-
