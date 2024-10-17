@@ -118,24 +118,26 @@ struct ChatView: View {
             shouldRemoveListener = false  // Reset the flag on appear
         }
         .onDisappear {
-            if shouldRemoveListener {
-                print("DEBUG: Exiting and cleaning up ChatView for matchID: \(matchID)")
-                appState.removeChatListener(for: matchID)
-                viewModel.isInChatView = false
-                isInChatView = false
-                appState.isInChatView = false
-            } else {
-                print("DEBUG: Not removing listener, still in chat")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if !isInChatView {
+                    print("DEBUG: Exiting and cleaning up ChatView for matchID: \(matchID)")
+                    appState.removeChatListener(for: matchID)
+                    viewModel.isInChatView = false
+                    isInChatView = false
+                    appState.isInChatView = false
+                } else {
+                    print("DEBUG: Still in chat, not removing listener")
+                }
             }
-
-            // Ensure that the unread message count only updates when leaving ChatView
-            DispatchQueue.main.async {
-                if appState.isInChatView == false {
+            // Don't refresh unread message count here, only after fully exiting ChatView
+            if !isInChatView {
+                DispatchQueue.main.async {
                     unreadMessageCount = 0
-                    print("DEBUG: Updating unread message count to 0 after returning to DMHomeView")
+                    print("DEBUG: Updating unreadMessageCount to 0 after leaving ChatView")
                 }
             }
         }
+
 
     }
 

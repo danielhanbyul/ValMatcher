@@ -117,11 +117,22 @@ struct DMHomeView: View {
         })
         .onAppear {
             if !isLoaded {
-                // Load chats if they aren't already loaded
                 loadMatches()
             }
             setupListeners()
+
+            // Refresh unread message count ONLY when entering DMHomeView
+            if !isInChatView {
+                refreshUnreadMessageCount()
+            }
         }
+
+        .onDisappear {
+            // When leaving DMHomeView, ensure state is properly reset
+            print("DEBUG: Leaving DMHomeView")
+            isInChatView = false
+        }
+
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshChatList"))) { notification in
             if let chatID = notification.object as? String {
                 if let index = matches.firstIndex(where: { $0.id == chatID }), let currentUserID = self.currentUserID {
