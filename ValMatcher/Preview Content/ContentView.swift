@@ -453,11 +453,17 @@ struct ContentView: View {
                     print("DEBUG: Error listening for matches (user1): \(error.localizedDescription)")
                     return
                 }
-                // Only process updates if not in the current chat view
-                if !appState.isInChatView {
-                    self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: true)
-                } else {
-                    print("DEBUG: Skipping unread message updates while in ChatView")
+                // Log the current state of isInChatView and appState
+                print("DEBUG: appState.isInChatView = \(appState.isInChatView), currentChatID = \(appState.currentChatID ?? "None")")
+                
+                snapshot?.documentChanges.forEach { change in
+                    let matchID = change.document.documentID
+                    if appState.isInChatView && matchID == appState.currentChatID {
+                        print("DEBUG: Skipping unread message updates for current chat \(matchID)")
+                    } else {
+                        // Process updates for other chats
+                        self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: true)
+                    }
                 }
             }
         listeners.append(listener1)
@@ -470,11 +476,15 @@ struct ContentView: View {
                     print("DEBUG: Error listening for matches (user2): \(error.localizedDescription)")
                     return
                 }
-                // Only process updates if not in the current chat view
-                if !appState.isInChatView {
-                    self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: false)
-                } else {
-                    print("DEBUG: Skipping unread message updates while in ChatView")
+                print("DEBUG: appState.isInChatView = \(appState.isInChatView), currentChatID = \(appState.currentChatID ?? "None")")
+                
+                snapshot?.documentChanges.forEach { change in
+                    let matchID = change.document.documentID
+                    if appState.isInChatView && matchID == appState.currentChatID {
+                        print("DEBUG: Skipping unread message updates for current chat \(matchID)")
+                    } else {
+                        self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: false)
+                    }
                 }
             }
         listeners.append(listener2)

@@ -114,18 +114,14 @@ struct ChatView: View {
             viewModel.markAllMessagesAsRead()
         }
         .onDisappear {
-            // Prevent premature exit unless the user intentionally leaves the chat
-            if appState.isInChatView && appState.currentChatID == matchID {
-                print("DEBUG: Preventing premature exit from ChatView.")
-                return
-            }
-            
-            // Proceed with proper exit if user is leaving
             print("DEBUG: Exiting ChatView for matchID: \(matchID)")
+            print("DEBUG: Setting appState.isInChatView = false")
+            
+            // Mark as not in chat view
             appState.isInChatView = false
             appState.currentChatID = nil
-            isInChatView = false
-            viewModel.isInChatView = false
+            
+            
         }
 
 
