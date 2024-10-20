@@ -8,6 +8,8 @@ import SwiftUI
 import Firebase
 import FirebaseFirestore
 import FirebaseAuth
+import FirebaseFirestoreSwift
+import UserNotifications
 
 struct DMHomeView: View {
     @EnvironmentObject var appState: AppState  // Access the shared app state
@@ -51,16 +53,6 @@ struct DMHomeView: View {
                                     isEditing && selectedMatches.contains(match.id ?? "") ?
                                     Color.gray.opacity(0.3) : Color.clear
                                 )
-                                .onTapGesture {
-                                    if let matchID = match.id {
-                                        // Clean up listeners and enter ChatView
-                                        enterChatView(with: matchID)
-                                        
-                                        // Set selected match and trigger navigation
-                                        self.selectedMatch = match
-                                        self.isChatActive = true
-                                    }
-                                }
                         }
                     }
                 }
@@ -78,7 +70,7 @@ struct DMHomeView: View {
                 }
             }
 
-            // NavigationLink to trigger ChatView
+            // Hidden NavigationLink activated by isChatActive
             NavigationLink(
                 destination: ChatView(
                     matchID: selectedMatch?.id ?? "",
@@ -87,28 +79,24 @@ struct DMHomeView: View {
                     unreadMessageCount: $totalUnreadMessages
                 )
                 .onAppear {
-                    print("DEBUG: Entered ChatView for matchID: \(selectedMatch?.id ?? "")")
+                    print("DEBUG: Entered ChatView")
                     appState.isInChatView = true
-                    isInChatView = true
+                    appState.currentChatID = selectedMatch?.id ?? ""
                 }
                 .onDisappear {
-                    print("DEBUG: Preparing to exit ChatView for matchID: \(selectedMatch?.id ?? "")")
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        if !isInChatView {
-                            print("DEBUG: Exiting and cleaning up ChatView")
-                            appState.removeChatListener(for: selectedMatch?.id ?? "")
-                            isInChatView = false
-                        } else {
-                            print("DEBUG: Still in chat, not removing listener")
-                        }
+                    // Prevent unintended exit
+                    if appState.isInChatView && appState.currentChatID == selectedMatch?.id {
+                        print("DEBUG: Preventing NavigationLink exit")
+                        return
                     }
-                    // Update unread messages count after returning to DMHomeView
-                    refreshUnreadMessageCount()
+                    appState.isInChatView = false
+                    appState.currentChatID = nil
                 },
                 isActive: $isChatActive
             ) {
                 EmptyView()
             }
+
         }
         .navigationBarTitle("Messages", displayMode: .inline)
         .navigationBarItems(trailing: Button(action: { isEditing.toggle() }) {
@@ -116,25 +104,8 @@ struct DMHomeView: View {
                 .foregroundColor(.white)
         })
         .onAppear {
-            print("DEBUG: onAppear - Entering DMHomeView")
-            if !isLoaded {
-                loadMatches()
-            }
             setupListeners()
-
-            // Debugging unread message count updates
-            if !isInChatView {
-                print("DEBUG: Refreshing unreadMessageCount as not in ChatView")
-                refreshUnreadMessageCount()
-            }
         }
-
-        .onDisappear {
-            print("DEBUG: onDisappear - Leaving DMHomeView")
-            isInChatView = false
-        }
-
-
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshChatList"))) { notification in
             if let chatID = notification.object as? String {
                 if let index = matches.firstIndex(where: { $0.id == chatID }), let currentUserID = self.currentUserID {
@@ -150,56 +121,6 @@ struct DMHomeView: View {
         }
     }
 
-    // Function to enter ChatView and clean up listeners
-    func enterChatView(with matchID: String) {
-        // Clean up any existing listeners
-        appState.removeChatListener(for: matchID)
-        
-        // Set up new listener and navigation state
-        self.currentChatID = matchID
-        self.isChatActive = true
-        self.isInChatView = true
-        appState.isInChatView = true
-        appState.currentChatID = matchID
-    }
-
-    // Function to refresh unread message count after navigating back
-    func refreshUnreadMessageCount() {
-        let db = Firestore.firestore()
-        guard let currentUserID = currentUserID else { return }
-
-        var totalUnread = 0
-        let matchesRef = db.collection("matches")
-        
-        matchesRef.whereField("user1", isEqualTo: currentUserID).getDocuments { snapshot, error in
-            if let error = error {
-                print("Error fetching matches: \(error.localizedDescription)")
-                return
-            }
-
-            for document in snapshot?.documents ?? [] {
-                let matchID = document.documentID
-                db.collection("matches").document(matchID).collection("messages")
-                    .whereField("isRead", isEqualTo: false)
-                    .whereField("senderID", isNotEqualTo: currentUserID)
-                    .getDocuments { messageSnapshot, error in
-                        if let messageError = error {
-                            print("Error fetching unread messages: \(messageError.localizedDescription)")
-                            return
-                        }
-                        totalUnread += messageSnapshot?.documents.count ?? 0
-
-                        DispatchQueue.main.async {
-                            totalUnreadMessages = totalUnread
-                            print("DEBUG: Unread messages refreshed: \(totalUnread)")
-                        }
-                    }
-            }
-        }
-    }
-
-    // Other existing functions such as toggleSelection, deleteSelectedMatches, markMessagesAsRead...
-
     private func toggleSelection(for matchID: String) {
         if selectedMatches.contains(matchID) {
             selectedMatches.remove(matchID)
@@ -208,6 +129,7 @@ struct DMHomeView: View {
         }
     }
 
+    // Deletion of selected matches
     func deleteSelectedMatches() {
         let db = Firestore.firestore()
         let batch = db.batch()
@@ -234,6 +156,7 @@ struct DMHomeView: View {
     private func matchRow(match: Chat) -> some View {
         HStack {
             if isEditing {
+                // Show selection indicator
                 Button(action: {
                     toggleSelection(for: match.id ?? "")
                 }) {
@@ -258,7 +181,7 @@ struct DMHomeView: View {
                     .padding(.trailing, 10)
             }
         }
-        .contentShape(Rectangle())
+        .contentShape(Rectangle()) // Makes the entire row tappable
         .onTapGesture {
             if isEditing {
                 toggleSelection(for: match.id ?? "")
@@ -268,6 +191,7 @@ struct DMHomeView: View {
                     self.currentChatID = matchID
                     self.isInChatView = true
                     self.isChatActive = true
+                    print("DEBUG: User selected matchID: \(matchID)")
                     if let index = matches.firstIndex(where: { $0.id == matchID }), matches[index].hasUnreadMessages == true {
                         markMessagesAsRead(for: match)
                         blendRedDot(for: index)
@@ -320,12 +244,14 @@ struct DMHomeView: View {
                     if let index = self.matches.firstIndex(where: { $0.id == chat.id }) {
                         self.matches[index].hasUnreadMessages = false
                     }
+                    // Notify to refresh the chat list and update unread message counts
                     NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
                 }
             }
         }
     }
 
+    // Function to get recipient's name using cache for faster access
     private func getRecipientName(for match: Chat?) -> String {
         guard let match = match, let currentUserID = currentUserID else { return "Unknown User" }
         let userID = currentUserID == match.user1 ? match.user2 : match.user1
@@ -334,14 +260,16 @@ struct DMHomeView: View {
             return cachedName
         }
 
+        // If not in cache, fetch the username
         if let userID = userID {
             fetchAndCacheUserName(for: userID) { _ in }
         }
 
-        return "Unknown User"
+        return "Unknown User" // Fallback in case the name isn't fetched yet
     }
 
     func setupListeners() {
+        loadMatches()
         setupRealTimeListener()
     }
 
@@ -381,6 +309,7 @@ struct DMHomeView: View {
 
                 group.notify(queue: .main) {
                     self.fetchUserNames(for: newMatches) { updatedMatches in
+                        // Sort the matches by lastMessageTimestamp before updating the UI
                         self.matches = updatedMatches.sorted {
                             ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                         }
@@ -417,6 +346,8 @@ struct DMHomeView: View {
                         var match = try document.data(as: Chat.self)
                         group.enter()
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
+
+                            // Skip updating the match if it's the current chat and we're in ChatView
                             if self.isInChatView && self.currentChatID == updatedMatch.id {
                                 print("DEBUG: Skipping update for current chat matchID: \(updatedMatch.id ?? "")")
                             } else {
@@ -434,6 +365,7 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
+                    // Sort the updated matches by lastMessageTimestamp after real-time update
                     self.matches = self.matches.sorted {
                         ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                     }
@@ -449,6 +381,7 @@ struct DMHomeView: View {
         var matchCopy = match
 
         if isInChatView && matchID == currentChatID {
+            // If we're currently in this chat, set hasUnreadMessages to false
             matchCopy.hasUnreadMessages = false
             completion(matchCopy)
             return
@@ -465,6 +398,9 @@ struct DMHomeView: View {
                 }
 
                 let unreadCount = snapshot?.documents.count ?? 0
+                if matchCopy.unreadMessages == nil {
+                    matchCopy.unreadMessages = [:]
+                }
                 matchCopy.unreadMessages?[currentUserID] = unreadCount
                 matchCopy.hasUnreadMessages = unreadCount > 0
                 completion(matchCopy)
@@ -543,6 +479,7 @@ struct DMHomeView: View {
             guard let matchID = match.id else { continue }
             group.enter()
             if isInChatView && matchID == currentChatID {
+                // If we're currently in this chat, set hasUnreadMessages to false
                 updatedMatches[index].hasUnreadMessages = false
                 group.leave()
                 continue
@@ -580,6 +517,7 @@ struct DMHomeView: View {
 
         group.notify(queue: .main) {
             self.totalUnreadMessages = count
+            // Sort by lastMessageTimestamp once all updates are fetched
             self.matches = updatedMatches.sorted {
                 ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
             }

@@ -58,6 +58,7 @@ struct ContentView: View {
     @State private var unreadMessagesListener: ListenerRegistration?
     @State private var unreadCountUser1 = 0
     @State private var unreadCountUser2 = 0
+    @State private var isUnreadMessagesListenerActive = false
 
 
 
@@ -433,6 +434,9 @@ struct ContentView: View {
     func listenForUnreadMessages() {
         print("DEBUG: listenForUnreadMessages called")
         
+        guard !isUnreadMessagesListenerActive else { return }
+        isUnreadMessagesListenerActive = true
+        
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
         
@@ -446,11 +450,15 @@ struct ContentView: View {
             .whereField("user1", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("DEBUG: Error listening for matches: \(error.localizedDescription)")
+                    print("DEBUG: Error listening for matches (user1): \(error.localizedDescription)")
                     return
                 }
-                
-                self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: true)
+                // Only process updates if not in the current chat view
+                if !appState.isInChatView {
+                    self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: true)
+                } else {
+                    print("DEBUG: Skipping unread message updates while in ChatView")
+                }
             }
         listeners.append(listener1)
         
@@ -459,18 +467,22 @@ struct ContentView: View {
             .whereField("user2", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("DEBUG: Error listening for matches: \(error.localizedDescription)")
+                    print("DEBUG: Error listening for matches (user2): \(error.localizedDescription)")
                     return
                 }
-                
-                self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: false)
+                // Only process updates if not in the current chat view
+                if !appState.isInChatView {
+                    self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: false)
+                } else {
+                    print("DEBUG: Skipping unread message updates while in ChatView")
+                }
             }
         listeners.append(listener2)
         
         // Keep track of the listeners to remove them later if needed
         self.unreadMessagesListener = ListenerRegistrationGroup(listeners: listeners)
     }
-    
+
     func processSnapshot(snapshot: QuerySnapshot?, currentUserID: String, isUser1: Bool) {
         guard let documents = snapshot?.documents else { return }
         
@@ -499,15 +511,19 @@ struct ContentView: View {
             } else {
                 self.unreadCountUser2 = totalUnreadCount
             }
-            
-            // Update the total unread messages count
+
             let totalUnreadMessages = self.unreadCountUser1 + self.unreadCountUser2
             
-            if !self.isInChatView {
-                print("DEBUG: Updating unreadMessagesCount to \(totalUnreadMessages)")
+            // Modify to use self.currentChatID instead of matchID
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                // Skip update if user is still in any chat (i.e., self.currentChatID is not nil)
+                if self.isInChatView {
+                    print("DEBUG: Preventing unreadMessagesCount update while in ChatView.")
+                    return
+                }
+                
                 self.unreadMessagesCount = totalUnreadMessages
-            } else {
-                print("DEBUG: Not updating unreadMessagesCount because isInChatView is true")
+                print("DEBUG: Updating unreadMessagesCount to \(totalUnreadMessages)")
             }
         }
     }
