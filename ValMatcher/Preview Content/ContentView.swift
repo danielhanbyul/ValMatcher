@@ -691,21 +691,36 @@ struct ContentView: View {
                         if let error = error {
                             print("Error creating match: \(error.localizedDescription)")
                         } else {
-                            let matchMessage = "You matched with \(likedUser.name)!"
-                            if !self.notifications.contains(matchMessage) && !self.acknowledgedNotifications.contains(matchMessage) {
-                                self.notifications.append(matchMessage)
-                                notificationCount += 1
+                            // Send personalized notifications to both users
+                            let currentUserName = userProfileViewModel.user.name
+                            let likedUserName = likedUser.name
+
+                            let currentUserMessage = "You matched with \(likedUserName)!"
+                            let likedUserMessage = "You matched with \(currentUserName)!"
+
+                            // Check if the notifications are not already acknowledged
+                            if !self.notifications.contains(currentUserMessage) && !self.acknowledgedNotifications.contains(currentUserMessage) {
+                                // Show alert and send notification to current user
+                                self.notifications.append(currentUserMessage)
+                                self.alertMessage = currentUserMessage
                                 self.showAlert = true
-                                self.sendNotification(to: currentUserID, message: matchMessage)
-                                self.sendNotification(to: likedUserID, message: matchMessage)
+                                self.notificationCount += 1
+                                self.sendNotification(to: currentUserID, message: currentUserMessage)
                             }
 
+                            if !self.notifications.contains(likedUserMessage) && !self.acknowledgedNotifications.contains(likedUserMessage) {
+                                // Send notification to liked user
+                                self.sendNotification(to: likedUserID, message: likedUserMessage)
+                            }
+
+                            // Create the DM chat between both users
                             self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
                         }
                     }
                 }
             }
     }
+
 
     private func createDMChat(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
         let db = Firestore.firestore()
@@ -754,10 +769,11 @@ struct ContentView: View {
             if let error = error {
                 print("Error sending notification: \(error.localizedDescription)")
             } else {
-                print("Notification sent successfully")
+                print("Notification sent successfully to userID: \(userID)")
             }
         }
     }
+
 
     private func passAction() {
         interactionResult = .passed
