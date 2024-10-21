@@ -174,9 +174,10 @@ struct DMHomeView: View {
             .padding()
             Spacer()
 
+            // Only show the red dot if there are unread messages and it's not the currently active chat
             if (match.hasUnreadMessages ?? false) && !(isInChatView && match.id == currentChatID) {
                 Circle()
-                    .fill(blendColor)
+                    .fill(Color.red)
                     .frame(width: 10, height: 10)
                     .padding(.trailing, 10)
             }
@@ -192,9 +193,10 @@ struct DMHomeView: View {
                     self.isInChatView = true
                     self.isChatActive = true
                     print("DEBUG: User selected matchID: \(matchID)")
+                    
+                    // Only mark messages as read for this specific chat
                     if let index = matches.firstIndex(where: { $0.id == matchID }), matches[index].hasUnreadMessages == true {
-                        markMessagesAsRead(for: match)
-                        blendRedDot(for: index)
+                        markMessagesAsRead(for: match) // This only affects the current chat
                     }
                 }
             }
@@ -208,6 +210,7 @@ struct DMHomeView: View {
         .padding(.vertical, 5)
         .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 2)
     }
+
 
     private func blendRedDot(for index: Int) {
         blendColor = Color.black.opacity(0.7)
@@ -242,7 +245,7 @@ struct DMHomeView: View {
                     print("Error committing batch: \(error.localizedDescription)")
                 } else {
                     if let index = self.matches.firstIndex(where: { $0.id == chat.id }) {
-                        self.matches[index].hasUnreadMessages = false
+                        self.matches[index].hasUnreadMessages = false  // Only update this chat's unread status
                     }
                     // Notify to refresh the chat list and update unread message counts
                     NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
@@ -250,6 +253,7 @@ struct DMHomeView: View {
             }
         }
     }
+
 
     // Function to get recipient's name using cache for faster access
     private func getRecipientName(for match: Chat?) -> String {
