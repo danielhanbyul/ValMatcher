@@ -8,13 +8,14 @@
 import SwiftUI
 import Firebase
 
+// Fixing the extra argument issue in MainView
 struct MainView: View {
-    @EnvironmentObject var appState: AppState  // Now can use appState across all views
+    @EnvironmentObject var appState: AppState
     @State private var currentUser: UserProfile? = nil
     @State private var isSignedIn = false
     @State private var hasAnsweredQuestions = false
     @State private var isShowingLoginView = true
-    @State private var isTutorialSeen: Bool = UserDefaults.standard.bool(forKey: "isTutorialSeen")  // Track if tutorial has been seen
+    @State private var isTutorialSeen: Bool = UserDefaults.standard.bool(forKey: "isTutorialSeen")
 
     var body: some View {
         NavigationView {
@@ -29,10 +30,12 @@ struct MainView: View {
                                     }
                                 }
                         } else {
+                            // Adjusting the ContentView call, removing 'isFirstTimeUser' if it doesn't exist in ContentView
                             ContentView(userProfileViewModel: UserProfileViewModel(user: user), isSignedIn: $isSignedIn)
                                 .environmentObject(appState)
                         }
                     } else {
+                        // Assuming 'QuestionsView' also doesn't have 'isFirstTimeUser'
                         QuestionsView(userProfile: Binding(
                             get: { self.currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, mediaItems: []) },
                             set: { self.currentUser = $0 }
@@ -91,12 +94,10 @@ struct MainView: View {
                         self.hasAnsweredQuestions = self.currentUser?.hasAnsweredQuestions ?? false
 
                         if !self.hasAnsweredQuestions {
-                            // Automatically navigate to QuestionsView for first-time users
                             DispatchQueue.main.async {
                                 self.isShowingLoginView = false
                             }
                         } else if !self.isTutorialSeen {
-                            // First-time users who answered questions but didn't see the tutorial
                             DispatchQueue.main.async {
                                 self.isShowingLoginView = false
                             }

@@ -201,7 +201,7 @@ struct SignUpView: View {
                     Text("Already have an account?")
                         .foregroundColor(.white)
                     Button(action: {
-                        isShowingLoginView = true
+                        isShowingLoginView = true  // Switch to LoginView
                     }) {
                         Text("Log In")
                             .foregroundColor(Color(red: 0.98, green: 0.27, blue: 0.29))
@@ -331,9 +331,9 @@ struct SignUpView: View {
                     return
                 }
 
-                // After the user is created, proceed to profile questions
-                self.isSignedIn = true
-                self.isShowingLoginView = false  // Hide the SignUpView
+                // After the user is created, proceed to login
+                self.isSignedIn = false  // Set to false, forcing user to login after sign-up
+                self.isShowingLoginView = true  // Switch to LoginView after signing up
             }
         }
     }

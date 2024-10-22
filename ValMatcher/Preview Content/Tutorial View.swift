@@ -9,7 +9,7 @@ import SwiftUI
 
 struct TutorialView: View {
     @Binding var isTutorialSeen: Bool
-    @State private var currentCardIndex = 0  // For simulating the swipe interaction
+    @State private var currentCardIndex = 0
     @State private var interactionResult: ContentView.InteractionResult? = nil
 
     let tutorialCards: [UserProfile] = [
@@ -28,7 +28,7 @@ struct TutorialView: View {
 
             VStack(spacing: 20) {
                 Text("Welcome to ValMatcher!")
-                    .font(.custom("AvenirNext-Bold", size: 26))
+                    .font(.custom("AvenirNext-Bold", size: 24))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
                     .padding(.top, 20)
@@ -36,8 +36,8 @@ struct TutorialView: View {
                 ZStack {
                     if currentCardIndex < tutorialCards.count {
                         UserCardView(user: tutorialCards[currentCardIndex])
-                            .frame(height: 200)  // Reduced the card height
-                            .padding(.horizontal, 20) // Added some horizontal padding
+                            .frame(height: 180)  // Reduced card height to fit
+                            .padding(.horizontal, 20)
                             .gesture(
                                 DragGesture(minimumDistance: 20)
                                     .onEnded { gesture in
@@ -55,12 +55,11 @@ struct TutorialView: View {
                                     }
                             )
                     }
-
                     if let result = interactionResult {
                         interactionResultView(result)
                     }
                 }
-                .frame(height: 200)  // Adjusted the overall frame to match the card height
+                .frame(height: 180)  // Adjusted frame to match card size
                 .padding()
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -130,24 +129,17 @@ struct TutorialView: View {
             if result == .liked {
                 Image(systemName: "heart.fill")
                     .resizable()
-                    .frame(width: 80, height: 80)
+                    .frame(width: 60, height: 60)  // Adjusted size
                     .foregroundColor(.green)
                     .transition(.opacity)
             } else if result == .passed {
                 Image(systemName: "xmark.circle.fill")
                     .resizable()
-                    .frame(width: 80, height: 80)
+                    .frame(width: 60, height: 60)  // Adjusted size
                     .foregroundColor(.red)
                     .transition(.opacity)
             }
         }
         .animation(.easeInOut, value: result)
-    }
-}
-
-// Preview for the TutorialView
-struct TutorialView_Previews: PreviewProvider {
-    static var previews: some View {
-        TutorialView(isTutorialSeen: .constant(false))
     }
 }
