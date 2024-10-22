@@ -8,7 +8,6 @@
 import SwiftUI
 import Firebase
 
-// Fixing the extra argument issue in MainView
 struct MainView: View {
     @EnvironmentObject var appState: AppState
     @State private var currentUser: UserProfile? = nil
@@ -16,42 +15,49 @@ struct MainView: View {
     @State private var hasAnsweredQuestions = false
     @State private var isShowingLoginView = true
     @State private var isTutorialSeen: Bool = UserDefaults.standard.bool(forKey: "isTutorialSeen")
+    @State private var isLoading = true // To handle loading state
 
     var body: some View {
         NavigationView {
-            if isSignedIn {
-                if let user = currentUser {
-                    if user.hasAnsweredQuestions {
-                        if !isTutorialSeen {
-                            TutorialView(isTutorialSeen: $isTutorialSeen)
-                                .onChange(of: isTutorialSeen) { newValue in
-                                    if newValue {
-                                        UserDefaults.standard.set(true, forKey: "isTutorialSeen")
+            if isLoading {
+                Text("Loading...")
+                    .font(.title)
+                    .foregroundColor(.gray)
+            } else {
+                if isSignedIn {
+                    if let user = currentUser {
+                        if user.hasAnsweredQuestions {
+                            if !isTutorialSeen {
+                                TutorialView(isTutorialSeen: $isTutorialSeen)
+                                    .onChange(of: isTutorialSeen) { newValue in
+                                        if newValue {
+                                            UserDefaults.standard.set(true, forKey: "isTutorialSeen")
+                                        }
                                     }
-                                }
+                            } else {
+                                // Adjusting the ContentView call, removing 'isFirstTimeUser' if it doesn't exist in ContentView
+                                ContentView(userProfileViewModel: UserProfileViewModel(user: user), isSignedIn: $isSignedIn)
+                                    .environmentObject(appState)
+                            }
                         } else {
-                            // Adjusting the ContentView call, removing 'isFirstTimeUser' if it doesn't exist in ContentView
-                            ContentView(userProfileViewModel: UserProfileViewModel(user: user), isSignedIn: $isSignedIn)
+                            // Navigate to QuestionsView if user hasn't answered profile questions yet
+                            QuestionsView(userProfile: Binding(
+                                get: { self.currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, mediaItems: []) },
+                                set: { self.currentUser = $0 }
+                            ), hasAnsweredQuestions: $hasAnsweredQuestions)
                                 .environmentObject(appState)
                         }
                     } else {
-                        // Assuming 'QuestionsView' also doesn't have 'isFirstTimeUser'
-                        QuestionsView(userProfile: Binding(
-                            get: { self.currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, mediaItems: []) },
-                            set: { self.currentUser = $0 }
-                        ), hasAnsweredQuestions: $hasAnsweredQuestions)
-                            .environmentObject(appState)
+                        Text("Loading user data...")
                     }
                 } else {
-                    Text("Loading...")
-                }
-            } else {
-                if isShowingLoginView {
-                    LoginView(isSignedIn: $isSignedIn, currentUser: $currentUser, isShowingLoginView: $isShowingLoginView)
-                        .environmentObject(appState)
-                } else {
-                    SignUpView(currentUser: $currentUser, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
-                        .environmentObject(appState)
+                    if isShowingLoginView {
+                        LoginView(isSignedIn: $isSignedIn, currentUser: $currentUser, isShowingLoginView: $isShowingLoginView)
+                            .environmentObject(appState)
+                    } else {
+                        SignUpView(currentUser: $currentUser, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
+                            .environmentObject(appState)
+                    }
                 }
             }
         }
@@ -60,6 +66,7 @@ struct MainView: View {
         }
     }
 
+    // Function to check user status and navigate accordingly
     func checkUserStatus() {
         if let user = Auth.auth().currentUser {
             self.isSignedIn = true
@@ -68,6 +75,7 @@ struct MainView: View {
             db.collection("users").document(user.uid).getDocument { document, error in
                 if let error = error {
                     print("Error fetching user document: \(error.localizedDescription)")
+                    self.isLoading = false
                 } else if let document = document, document.exists {
                     if let data = document.data() {
                         let mediaItemsData = data["mediaItems"] as? [String] ?? []
@@ -93,22 +101,23 @@ struct MainView: View {
 
                         self.hasAnsweredQuestions = self.currentUser?.hasAnsweredQuestions ?? false
 
-                        if !self.hasAnsweredQuestions {
-                            DispatchQueue.main.async {
+                        DispatchQueue.main.async {
+                            if !self.hasAnsweredQuestions {
                                 self.isShowingLoginView = false
-                            }
-                        } else if !self.isTutorialSeen {
-                            DispatchQueue.main.async {
+                            } else if !self.isTutorialSeen {
                                 self.isShowingLoginView = false
                             }
                         }
                     }
+                    self.isLoading = false
                 } else {
                     self.isSignedIn = false
+                    self.isLoading = false
                 }
             }
         } else {
             self.isSignedIn = false
+            self.isLoading = false
         }
     }
 }
