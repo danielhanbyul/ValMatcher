@@ -59,6 +59,7 @@
 		A95858322C13F76100D68763 /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95858312C13F76100D68763 /* NetworkManager.swift */; };
 		A96F022F2C760E7600567DC6 /* NotificationViewBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A96F022E2C760E7600567DC6 /* NotificationViewBanner.swift */; };
 		A971C76F2C4C6C6200E9634A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A971C76E2C4C6C6200E9634A /* SettingsView.swift */; };
+		A97966452CC72514009BDD11 /* Tutorial View.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97966442CC72514009BDD11 /* Tutorial View.swift */; };
 		A984D4DB2C1A222800BB75DB /* MatchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A984D4DA2C1A222800BB75DB /* MatchView.swift */; };
 		A984D4DF2C1A23A500BB75DB /* ProfileSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A984D4DE2C1A23A500BB75DB /* ProfileSetupView.swift */; };
 		A984D4E72C1A299500BB75DB /* RandomProfileAlgorithm.swift in Sources */ = {isa = PBXBuildFile; fileRef = A984D4E62C1A299500BB75DB /* RandomProfileAlgorithm.swift */; };
@@ -114,6 +115,7 @@
 		A95858312C13F76100D68763 /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkManager.swift; sourceTree = "<group>"; };
 		A96F022E2C760E7600567DC6 /* NotificationViewBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationViewBanner.swift; sourceTree = "<group>"; };
 		A971C76E2C4C6C6200E9634A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A97966442CC72514009BDD11 /* Tutorial View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tutorial View.swift"; sourceTree = "<group>"; };
 		A984D4DA2C1A222800BB75DB /* MatchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchView.swift; sourceTree = "<group>"; };
 		A984D4DE2C1A23A500BB75DB /* ProfileSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSetupView.swift; sourceTree = "<group>"; };
 		A984D4E62C1A299500BB75DB /* RandomProfileAlgorithm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandomProfileAlgorithm.swift; sourceTree = "<group>"; };
@@ -245,6 +247,7 @@
 				A91470AF2C280B3200380D39 /* Chat.swift */,
 				A956FE802C1E78B200C9A8C3 /* ProfileView.swift */,
 				A9FAA11D2C4F5D7700048F32 /* UserProfileView.swift */,
+				A97966442CC72514009BDD11 /* Tutorial View.swift */,
 				A96F022E2C760E7600567DC6 /* NotificationViewBanner.swift */,
 			);
 			path = "Preview Content";
@@ -437,6 +440,7 @@
 				A9115AA82C824A7000FBAF00 /* RequestPhotoAccess.swift in Sources */,
 				A971C76F2C4C6C6200E9634A /* SettingsView.swift in Sources */,
 				A95858302C13F66000D68763 /* SignUpView.swift in Sources */,
+				A97966452CC72514009BDD11 /* Tutorial View.swift in Sources */,
 				A9FAA1202C4F65D300048F32 /* ChatView.swift in Sources */,
 				A958582E2C13F63D00D68763 /* LoginView.swift in Sources */,
 				A956FE832C1E7B9400C9A8C3 /* UserProfile.swift in Sources */,
