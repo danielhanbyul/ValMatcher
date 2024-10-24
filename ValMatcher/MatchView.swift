@@ -99,27 +99,125 @@ struct MatchView: View {
             }
 
             if document?.exists == true {
-                self.createMatch(likedUserID: likedUserID)
+                // Call createMatch with both currentUserID and likedUserID
+                self.createMatch(currentUserID: currentUserID, likedUserID: likedUserID)
             } else {
                 self.currentIndex += 1
             }
         }
     }
 
-    func createMatch(likedUserID: String) {
-        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
 
-        firestoreManager.createMatch(user1: currentUserID, user2: likedUserID) { matchID in
-            if let matchID = matchID {
-                self.alertMessage = "You have matched with \(self.firestoreManager.users[self.currentIndex].name)!"
-                self.showAlert = true
-                self.newMatchID = matchID
-                self.navigateToChat = true
-                self.matchedUser = self.firestoreManager.users[self.currentIndex]
+    func createMatch(currentUserID: String, likedUserID: String) {
+        let db = Firestore.firestore()
+        
+        // Check if a match already exists between the two users
+        db.collection("matches")
+            .whereField("user1", isEqualTo: currentUserID)
+            .whereField("user2", isEqualTo: likedUserID)
+            .getDocuments { querySnapshot, error in
+                if let error = error {
+                    print("Error checking existing match: \(error.localizedDescription)")
+                    return
+                }
+                if querySnapshot?.documents.isEmpty == true {
+                    // No existing match, create a new match
+                    let matchData: [String: Any] = [
+                        "user1": currentUserID,
+                        "user2": likedUserID,
+                        "timestamp": Timestamp()
+                    ]
+                    db.collection("matches").addDocument(data: matchData) { error in
+                        if let error = error {
+                            print("Error creating match: \(error.localizedDescription)")
+                        } else {
+                            print("Match created successfully")
+
+                            // Send push notifications to both users
+                            sendPushNotificationToMatchedUsers(currentUserID: currentUserID, likedUserID: likedUserID)
+                        }
+                    }
+                }
             }
-            self.currentIndex += 1
+    }
+
+    // Add this helper function to handle sending the push notifications
+    private func sendPushNotificationToMatchedUsers(currentUserID: String, likedUserID: String) {
+        let db = Firestore.firestore()
+
+        // Get the FCM tokens of both users from Firestore
+        let usersRef = db.collection("users")
+        
+        // Fetch current user's FCM token
+        usersRef.document(currentUserID).getDocument { (document, error) in
+            if let document = document, document.exists {
+                let currentUserName = document.data()?["name"] as? String ?? "Someone"
+                let currentUserFCMToken = document.data()?["fcmToken"] as? String
+
+                // Fetch liked user's FCM token
+                usersRef.document(likedUserID).getDocument { (likedUserDocument, error) in
+                    if let likedUserDocument = likedUserDocument, likedUserDocument.exists {
+                        let likedUserFCMToken = likedUserDocument.data()?["fcmToken"] as? String
+                        let likedUserName = likedUserDocument.data()?["name"] as? String ?? "Someone"
+
+                        // Now send push notifications to both users
+                        if let likedUserFCMToken = likedUserFCMToken {
+                            // Push notification to liked user
+                            sendFCMNotification(to: likedUserFCMToken, title: "New Match!", body: "You matched with \(currentUserName)!")
+                        }
+                        if let currentUserFCMToken = currentUserFCMToken {
+                            // Push notification to current user
+                            sendFCMNotification(to: currentUserFCMToken, title: "New Match!", body: "You matched with \(likedUserName)!")
+                        }
+                    }
+                }
+            }
         }
     }
+
+    // Helper function to send the actual FCM notification
+    private func sendFCMNotification(to fcmToken: String, title: String, body: String) {
+        let urlString = "https://fcm.googleapis.com/fcm/send"
+        let url = URL(string: urlString)!
+        
+        let notification: [String: Any] = [
+            "to": fcmToken,
+            "notification": [
+                "title": title,
+                "body": body,
+                "sound": "default"
+            ],
+            "data": [
+                "type": "match_notification"
+            ]
+        ]
+        
+        // Firebase Server Key from your Firebase console (go to project settings -> Cloud Messaging)
+        let serverKey = "YOUR_SERVER_KEY" // Replace with your actual server key
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("key=\(serverKey)", forHTTPHeaderField: "Authorization")
+        
+        let jsonData = try? JSONSerialization.data(withJSONObject: notification)
+        request.httpBody = jsonData
+        
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Error sending FCM notification: \(error.localizedDescription)")
+                return
+            }
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+                print("Error: FCM notification failed with status code \(httpResponse.statusCode)")
+            } else {
+                print("FCM notification sent successfully")
+            }
+        }
+        
+        task.resume()
+    }
+
 }
 
 struct MatchView_Previews: PreviewProvider {

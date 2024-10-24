@@ -90,6 +90,7 @@
 /* Begin PBXFileReference section */
 		2726BC6C2C12CA4A001F6885 /* profilequestion .swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "profilequestion .swift"; sourceTree = "<group>"; };
 		A9115AA72C824A7000FBAF00 /* RequestPhotoAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestPhotoAccess.swift; sourceTree = "<group>"; };
+		A912EBD52CC8FB0E00713155 /* ValMatcher.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ValMatcher.entitlements; sourceTree = "<group>"; };
 		A91470AD2C28076000380D39 /* FirestoreManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreManager.swift; sourceTree = "<group>"; };
 		A91470AF2C280B3200380D39 /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
 		A924425B2C82EE7A00995C76 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -213,6 +214,7 @@
 		A9551CB12C12BAF30002AF0B /* ValMatcher */ = {
 			isa = PBXGroup;
 			children = (
+				A912EBD52CC8FB0E00713155 /* ValMatcher.entitlements */,
 				A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */,
 				A950C2392C49DF21001BA6B5 /* ImagePicker.swift */,
 				A958582D2C13F63D00D68763 /* LoginView.swift */,
@@ -622,6 +624,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ValMatcher/ValMatcher.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ValMatcher/Preview Content\"";
@@ -653,6 +656,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ValMatcher/ValMatcher.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ValMatcher/Preview Content\"";

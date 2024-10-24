@@ -454,7 +454,6 @@ struct ContentView: View {
                     print("DEBUG: Error listening for matches (user1): \(error.localizedDescription)")
                     return
                 }
-                // Log the current state of isInChatView and appState
                 print("DEBUG: appState.isInChatView = \(appState.isInChatView), currentChatID = \(appState.currentChatID ?? "None")")
                 
                 snapshot?.documentChanges.forEach { change in
@@ -464,6 +463,11 @@ struct ContentView: View {
                     } else {
                         // Process updates for other chats
                         self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: true)
+                        
+                        // Send push notification if app is in background
+                        if UIApplication.shared.applicationState != .active {
+                            self.sendPushNotification(for: matchID)
+                        }
                     }
                 }
             }
@@ -485,6 +489,11 @@ struct ContentView: View {
                         print("DEBUG: Skipping unread message updates for current chat \(matchID)")
                     } else {
                         self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: false)
+                        
+                        // Send push notification if app is in background
+                        if UIApplication.shared.applicationState != .active {
+                            self.sendPushNotification(for: matchID)
+                        }
                     }
                 }
             }
@@ -493,6 +502,45 @@ struct ContentView: View {
         // Keep track of the listeners to remove them later if needed
         self.unreadMessagesListener = ListenerRegistrationGroup(listeners: listeners)
     }
+    
+    private func sendPushNotification(for matchID: String) {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+
+        // Fetch the most recent message from Firestore for this chat
+        let db = Firestore.firestore()
+        db.collection("matches").document(matchID).collection("messages")
+            .order(by: "timestamp", descending: true)
+            .limit(to: 1)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error fetching latest message: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let document = snapshot?.documents.first else { return }
+                let data = document.data()
+                let messageText = data["text"] as? String ?? "New message"
+                let senderName = data["senderName"] as? String ?? "Someone"
+
+                // Trigger a push notification
+                let title = "New Message from \(senderName)"
+                let body = messageText
+
+                // Create the notification content
+                let content = UNMutableNotificationContent()
+                content.title = title
+                content.body = body
+                content.sound = .default
+
+                // Send the notification via APNs
+                let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+                UNUserNotificationCenter.current().add(request)
+
+                // You may also send it to Firebase Cloud Messaging (Server-side) if required.
+            }
+    }
+
+
 
     func processSnapshot(snapshot: QuerySnapshot?, currentUserID: String, isUser1: Bool) {
         guard let documents = snapshot?.documents else { return }

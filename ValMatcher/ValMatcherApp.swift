@@ -43,22 +43,38 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 print("Error requesting notification permissions: \(error.localizedDescription)")
             } else {
                 print("Notification permission granted: \(granted)")
+                if granted {
+                    DispatchQueue.main.async {
+                        application.registerForRemoteNotifications()
+                    }
+                }
             }
         }
 
         // Register for remote notifications
         application.registerForRemoteNotifications()
 
-        // Set the delegate for FCM
+        // Set the delegate for Firebase Messaging
         Messaging.messaging().delegate = self
+
+        // Get the current FCM token if already available
+        Messaging.messaging().token { token, error in
+            if let error = error {
+                print("Error fetching FCM registration token: \(error.localizedDescription)")
+            } else if let token = token {
+                print("FCM registration token: \(token)")
+                // Send token to your server if needed
+            }
+        }
 
         return true
     }
 
     // Handle successful registration for remote notifications
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        // Pass the device token to Firebase to link it with the FCM
         Messaging.messaging().apnsToken = deviceToken
-        print("Successfully registered for remote notifications.")
+        print("Successfully registered for remote notifications with APNs token.")
     }
 
     // Handle failure to register for remote notifications
@@ -66,35 +82,39 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         print("Failed to register for remote notifications: \(error.localizedDescription)")
     }
 
-    // Handle notifications when the app is in the foreground
+    // Handle foreground notifications
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        // Show the notification as an alert, with sound and badge
-        completionHandler([.banner, .badge, .sound])
+        // Display the notification as a banner with sound and badge, even if the app is in the foreground
+        completionHandler([.banner, .sound, .badge])
     }
 
-    // Handle notification tap action
+    // Handle notification tap actions
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let userInfo = response.notification.request.content.userInfo
-        
-        // Handle the notification data and navigate to the appropriate view
+
+        // Extract relevant information from the notification payload
         if let messageId = userInfo["messageId"] as? String {
             navigateToChat(withMessageId: messageId)
         }
         
-        print("Notification received with userInfo: \(userInfo)")
+        print("Notification tapped with userInfo: \(userInfo)")
         completionHandler()
     }
 
-    // Handle token refresh
+    // Handle token refresh for FCM
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         print("Firebase registration token: \(fcmToken ?? "")")
-        // If necessary, send the token to your server
+        // If necessary, send the token to your server to associate with the user's account
     }
 
     // Custom function to navigate to a specific chat/message when a notification is tapped
     private func navigateToChat(withMessageId messageId: String) {
-        // Implement navigation logic here
+        // Implement navigation logic here (deep linking or navigating within the app)
         // For example, trigger a deep link or send a notification within the app to open the chat screen
+        // Example: If using AppState, you could update it to reflect the current chat:
+        if let rootView = window?.rootViewController as? UIHostingController<MainView> {
+            // Use rootView to access your SwiftUI environment and handle navigation
+        }
     }
 
     // Handle silent notifications for background fetches or data updates
@@ -122,6 +142,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return self.orientationLock
     }
 }
+
 
 
 class AppState: ObservableObject {

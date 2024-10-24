@@ -247,12 +247,14 @@ struct DMHomeView: View {
                     if let index = self.matches.firstIndex(where: { $0.id == chat.id }) {
                         self.matches[index].hasUnreadMessages = false  // Only update this chat's unread status
                     }
+                    
                     // Notify to refresh the chat list and update unread message counts
                     NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
                 }
             }
         }
     }
+
 
 
     // Function to get recipient's name using cache for faster access
@@ -527,4 +529,5 @@ struct DMHomeView: View {
             }
         }
     }
+    
 }
