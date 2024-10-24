@@ -216,7 +216,8 @@ struct SignUpView: View {
         }
     }
 
-    // Validates email and password, sends verification email
+    // Functions (inside the View) such as validateEmailPassword, submitUsername, etc.
+
     func validateEmailPassword() {
         guard password == confirmPassword else {
             errorMessage = "Passwords do not match"
@@ -233,8 +234,8 @@ struct SignUpView: View {
         // Create a new account and send verification email
         Auth.auth().createUser(withEmail: email, password: password) { authResult, error in
             if let error = error {
-                self.errorMessage = error.localizedDescription
-                self.showAlert = true
+                errorMessage = error.localizedDescription
+                showAlert = true
                 return
             }
 
@@ -242,50 +243,46 @@ struct SignUpView: View {
             if let user = Auth.auth().currentUser {
                 user.sendEmailVerification { error in
                     if let error = error {
-                        self.errorMessage = "Error sending verification email: \(error.localizedDescription)"
-                        self.showAlert = true
+                        errorMessage = "Error sending verification email: \(error.localizedDescription)"
+                        showAlert = true
                         return
                     }
 
-                    self.emailVerificationSent = true
-                    self.startVerificationCheckTimer()
+                    emailVerificationSent = true
+                    startVerificationCheckTimer()
                 }
             }
         }
     }
 
-    // Starts a timer to periodically check if the email is verified
     func startVerificationCheckTimer() {
         verificationTimer?.invalidate() // Invalidate any existing timer
         verificationTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
-            self.checkEmailVerification()
+            checkEmailVerification()
         }
     }
 
-    // Checks if the user's email is verified
     func checkEmailVerification() {
         Auth.auth().currentUser?.reload { _ in
             if Auth.auth().currentUser?.isEmailVerified == true {
-                self.verificationTimer?.invalidate() // Stop checking
-                self.isUsernameStep = true // Proceed to the username step
-                self.emailVerificationSent = false  // Hide the verification message
+                verificationTimer?.invalidate() // Stop checking
+                isUsernameStep = true // Proceed to the username step
+                emailVerificationSent = false  // Hide the verification message
             }
         }
     }
 
-    // Proceeds if email is verified, else shows an alert
     func checkEmailVerificationAndProceed() {
         Auth.auth().currentUser?.reload { _ in
             if Auth.auth().currentUser?.isEmailVerified == true {
                 submitUsername()
             } else {
-                self.errorMessage = "Please verify your email before proceeding."
-                self.showAlert = true
+                errorMessage = "Please verify your email before proceeding."
+                showAlert = true
             }
         }
     }
 
-    // Submits the username and saves user data to Firestore
     func submitUsername() {
         let db = Firestore.firestore()
 
@@ -294,21 +291,21 @@ struct SignUpView: View {
 
         usernameQuery.getDocuments { (snapshot, error) in
             if let error = error {
-                self.errorMessage = "Error checking username: \(error.localizedDescription)"
-                self.showAlert = true
+                errorMessage = "Error checking username: \(error.localizedDescription)"
+                showAlert = true
                 return
             }
 
             if snapshot?.isEmpty == false {
-                self.errorMessage = "Username is already in use"
-                self.showAlert = true
+                errorMessage = "Username is already in use"
+                showAlert = true
                 return
             }
 
             // Save the username and user data to Firestore
             guard let uid = Auth.auth().currentUser?.uid else {
-                self.errorMessage = "Failed to retrieve user ID."
-                self.showAlert = true
+                errorMessage = "Failed to retrieve user ID."
+                showAlert = true
                 return
             }
 
@@ -321,23 +318,26 @@ struct SignUpView: View {
                 "server": "Unknown",
                 "answers": [:],
                 "hasAnsweredQuestions": false,
-                "mediaItems": []
+                "mediaItems": [],
+                "createdAt": Timestamp() // Add timestamp
             ]
 
             db.collection("users").document(uid).setData(userData) { error in
                 if let error = error {
-                    self.errorMessage = "Error saving user data: \(error.localizedDescription)"
-                    self.showAlert = true
+                    errorMessage = "Error saving user data: \(error.localizedDescription)"
+                    showAlert = true
                     return
                 }
 
                 // After the user is created, proceed to login
-                self.isSignedIn = false  // Set to false, forcing user to login after sign-up
-                self.isShowingLoginView = true  // Switch to LoginView after signing up
+                isSignedIn = false  // Force user to log in again
+                isShowingLoginView = true  // Navigate to login after sign-up
             }
         }
     }
 }
+
+
 
 struct SignUpView_Previews: PreviewProvider {
     static var previews: some View {

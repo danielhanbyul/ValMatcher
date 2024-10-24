@@ -144,6 +144,7 @@ struct ContentView: View {
                     }
                 }
                 fetchUnreadMessagesCount()
+                listenForUserDeletions()
             }
             NotificationCenter.default.addObserver(forName: Notification.Name("EnterChatView"), object: nil, queue: .main) { notification in
                 if let matchID = notification.object as? String {
@@ -162,6 +163,41 @@ struct ContentView: View {
         }
 
     }
+    
+    
+    // Listen for deletions in Firestore and remove the corresponding user from `users`
+        private func listenForUserDeletions() {
+            let db = Firestore.firestore()
+            
+            db.collection("users").addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Error listening for deletions: \(error.localizedDescription)")
+                    return
+                }
+                
+                snapshot?.documentChanges.forEach { change in
+                    if change.type == .removed {
+                        if let deletedUser = try? change.document.data(as: UserProfile.self), let userID = deletedUser.id {
+                            self.removeUserFromList(userID: userID)
+                        }
+                    }
+                }
+            }
+        }
+    
+    private func removeUserFromList(userID: String) {
+            if let index = self.users.firstIndex(where: { $0.id == userID }) {
+                self.users.remove(at: index)
+                print("User \(userID) removed from users list.")
+            }
+        }
+    
+    private func clearLocalUserData() {
+            guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+
+            // Clear UserDefaults for stored users if necessary
+            UserDefaults.standard.removeObject(forKey: "interactedUsers_\(currentUserID)")
+        }
     
 
     private var userCardStack: some View {
@@ -307,29 +343,31 @@ struct ContentView: View {
 
         let db = Firestore.firestore()
 
-        // Fetch all users from Firestore
-        db.collection("users").getDocuments { (querySnapshot, error) in
-            if let error = error {
-                print("Error fetching users: \(error)")
-                return
+        // Define the cutoff date (e.g., the date you deployed this update)
+        let cutoffDate = Timestamp(date: Date(timeIntervalSince1970: 1724496000)) // Example timestamp for future date, replace with your own deployment date
+
+        db.collection("users")
+            .whereField("createdAt", isGreaterThan: cutoffDate)  // Fetch users created after the cutoff date
+            .getDocuments { (querySnapshot, error) in
+                if let error = error {
+                    print("Error fetching users: \(error)")
+                    return
+                }
+
+                let fetchedUsers = querySnapshot?.documents.compactMap { document in
+                    try? document.data(as: UserProfile.self)
+                } ?? []
+
+                // Filter out the current user
+                self.users = fetchedUsers.filter { user in
+                    guard let userID = user.id else { return false }
+                    return userID != currentUserID
+                }
+
+                print("Filtered users count: \(self.users.count)")
             }
-
-            // Ensure all users are fetched, except the current user and those already interacted with
-            let fetchedUsers = querySnapshot?.documents.compactMap { document in
-                try? document.data(as: UserProfile.self)
-            } ?? []
-
-            // Filter out the current user and users that have already been interacted with
-            let filteredUsers = fetchedUsers.filter { user in
-                guard let userID = user.id else { return false }
-                return userID != currentUserID && !self.interactedUsers.contains(userID)
-            }
-
-            // Update the users array with the filtered users
-            self.users = filteredUsers
-            print("Fetched users: \(self.users.count)")
-        }
     }
+
 
     private func fetchIncomingLikes() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
