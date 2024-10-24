@@ -96,6 +96,8 @@ struct TutorialView: View {
 
                         Button(action: {
                             isTutorialSeen = true
+                            // Save tutorial completion to UserDefaults
+                            UserDefaults.standard.set(true, forKey: "isTutorialSeen")
                         }) {
                             Text("Got it!")
                                 .font(.custom("AvenirNext-Bold", size: geometry.size.width * 0.05))
