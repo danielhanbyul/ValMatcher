@@ -343,20 +343,41 @@ struct ContentView: View {
 
         let db = Firestore.firestore()
 
-        // Define the cutoff date (e.g., the date you deployed this update)
-        let cutoffDate = Timestamp(date: Date(timeIntervalSince1970: 1724496000)) // Example timestamp for future date, replace with your own deployment date
+        // Set the cutoff date to October 29, 2024, at 12:00 PM UTC
+        var dateComponents = DateComponents()
+        dateComponents.year = 2024
+        dateComponents.month = 10
+        dateComponents.day = 27
+        dateComponents.hour = 12
+        dateComponents.minute = 0
+        dateComponents.timeZone = TimeZone(secondsFromGMT: 0)  // Use UTC time zone
 
+        let calendar = Calendar.current
+        guard let specificDate = calendar.date(from: dateComponents) else {
+            print("Error: Failed to create the specified cutoff date.")
+            return
+        }
+        
+        let cutoffDate = Timestamp(date: specificDate)
+        
         db.collection("users")
             .whereField("createdAt", isGreaterThan: cutoffDate)  // Fetch users created after the cutoff date
             .getDocuments { (querySnapshot, error) in
                 if let error = error {
-                    print("Error fetching users: \(error)")
+                    print("Error fetching users: \(error.localizedDescription)")
                     return
                 }
+                
+                guard let documents = querySnapshot?.documents else {
+                    print("No documents found after applying date filter.")
+                    return
+                }
+                
+                print("DEBUG: Total documents fetched: \(documents.count)")
 
-                let fetchedUsers = querySnapshot?.documents.compactMap { document in
+                let fetchedUsers = documents.compactMap { document in
                     try? document.data(as: UserProfile.self)
-                } ?? []
+                }
 
                 // Filter out the current user
                 self.users = fetchedUsers.filter { user in
@@ -364,9 +385,10 @@ struct ContentView: View {
                     return userID != currentUserID
                 }
 
-                print("Filtered users count: \(self.users.count)")
+                print("DEBUG: Filtered users count (excluding current user): \(self.users.count)")
             }
     }
+
 
 
     private func fetchIncomingLikes() {
