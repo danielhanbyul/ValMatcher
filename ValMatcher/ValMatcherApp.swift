@@ -37,7 +37,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Set the delegate for UNUserNotificationCenter
         UNUserNotificationCenter.current().delegate = self
 
-        // Request notification authorization
+        // Request notification permissions at app startup
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if let error = error {
                 print("Error requesting notification permissions: \(error.localizedDescription)")
@@ -45,11 +45,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 print("Notification permission granted: \(granted)")
                 if granted {
                     DispatchQueue.main.async {
-                        application.registerForRemoteNotifications()
+                        UIApplication.shared.registerForRemoteNotifications()
                     }
                 }
             }
         }
+
 
         // Register for remote notifications
         application.registerForRemoteNotifications()
