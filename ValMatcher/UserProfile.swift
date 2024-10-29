@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import FirebaseFirestore
 import FirebaseFirestoreSwift
 
 struct UserProfile: Identifiable, Codable, Equatable {
@@ -18,9 +19,10 @@ struct UserProfile: Identifiable, Codable, Equatable {
     var answers: [String: String]
     var hasAnsweredQuestions: Bool
     var mediaItems: [MediaItem]?
+    var createdAt: Timestamp? // Add createdAt property
 
-    // This initializer ensures that all fields are set, even if `mediaItems` is missing.
-    init(id: String? = nil, name: String, rank: String, imageName: String, age: String, server: String, answers: [String: String], hasAnsweredQuestions: Bool, mediaItems: [MediaItem]? = nil) {
+    // Initializer with `createdAt` as an optional parameter
+    init(id: String? = nil, name: String, rank: String, imageName: String, age: String, server: String, answers: [String: String], hasAnsweredQuestions: Bool, mediaItems: [MediaItem]? = nil, createdAt: Timestamp? = nil) {
         self.id = id
         self.name = name
         self.rank = rank
@@ -30,5 +32,6 @@ struct UserProfile: Identifiable, Codable, Equatable {
         self.answers = answers
         self.hasAnsweredQuestions = hasAnsweredQuestions
         self.mediaItems = mediaItems ?? [] // Initialize with an empty array if `mediaItems` is nil
+        self.createdAt = createdAt ?? Timestamp() // Set createdAt to current timestamp if nil
     }
 }
