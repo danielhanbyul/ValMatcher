@@ -343,11 +343,11 @@ struct ContentView: View {
 
         let db = Firestore.firestore()
 
-        // Set the cutoff date to October 29, 2024, at 12:00 PM UTC
+        // Define the cutoff date as October 29, 2024, at 12:00 PM UTC
         var dateComponents = DateComponents()
         dateComponents.year = 2024
         dateComponents.month = 10
-        dateComponents.day = 27
+        dateComponents.day = 28
         dateComponents.hour = 12
         dateComponents.minute = 0
         dateComponents.timeZone = TimeZone(secondsFromGMT: 0)  // Use UTC time zone
@@ -359,10 +359,11 @@ struct ContentView: View {
         }
         
         let cutoffDate = Timestamp(date: specificDate)
-        
+        print("DEBUG: Using cutoff date \(cutoffDate.dateValue()) for filtering users")
+
         db.collection("users")
             .whereField("createdAt", isGreaterThan: cutoffDate)  // Fetch users created after the cutoff date
-            .getDocuments { (querySnapshot, error) in
+            .getDocuments(source: .server) { (querySnapshot, error) in  // Force fetch from server to avoid caching issues
                 if let error = error {
                     print("Error fetching users: \(error.localizedDescription)")
                     return
@@ -376,16 +377,24 @@ struct ContentView: View {
                 print("DEBUG: Total documents fetched: \(documents.count)")
 
                 let fetchedUsers = documents.compactMap { document in
-                    try? document.data(as: UserProfile.self)
+                    let userData = try? document.data(as: UserProfile.self)
+                    
+                    if let userData = userData, let createdAt = document.data()["createdAt"] as? Timestamp {
+                        print("DEBUG: User \(userData.id ?? "Unknown ID") createdAt: \(createdAt.dateValue())")
+                    }
+                    
+                    return userData
                 }
-
-                // Filter out the current user
+                
+                // Apply additional filtering to exclude the current user, interacted users, and already shown users
                 self.users = fetchedUsers.filter { user in
                     guard let userID = user.id else { return false }
-                    return userID != currentUserID
+                    return userID != currentUserID &&
+                           !self.interactedUsers.contains(userID) &&
+                           !self.shownUserIDs.contains(userID)
                 }
 
-                print("DEBUG: Filtered users count (excluding current user): \(self.users.count)")
+                print("DEBUG: Filtered users count (excluding current user and interacted users): \(self.users.count)")
             }
     }
 
