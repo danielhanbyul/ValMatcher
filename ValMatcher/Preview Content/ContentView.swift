@@ -804,6 +804,7 @@ struct ContentView: View {
                     print("Error checking existing match: \(error.localizedDescription)")
                     return
                 }
+                
                 if querySnapshot?.documents.isEmpty == true {
                     db.collection("matches").addDocument(data: matchData) { error in
                         if let error = error {
@@ -816,9 +817,8 @@ struct ContentView: View {
                             let currentUserMessage = "You matched with \(likedUserName)!"
                             let likedUserMessage = "You matched with \(currentUserName)!"
 
-                            // Check if the notifications are not already acknowledged
+                            // Send notifications to both users
                             if !self.notifications.contains(currentUserMessage) && !self.acknowledgedNotifications.contains(currentUserMessage) {
-                                // Show alert and send notification to current user
                                 self.notifications.append(currentUserMessage)
                                 self.alertMessage = currentUserMessage
                                 self.showAlert = true
@@ -827,7 +827,6 @@ struct ContentView: View {
                             }
 
                             if !self.notifications.contains(likedUserMessage) && !self.acknowledgedNotifications.contains(likedUserMessage) {
-                                // Send notification to liked user
                                 self.sendNotification(to: likedUserID, message: likedUserMessage)
                             }
 
@@ -838,7 +837,7 @@ struct ContentView: View {
                 }
             }
     }
-
+    
 
     private func createDMChat(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
         let db = Firestore.firestore()
