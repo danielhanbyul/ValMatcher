@@ -203,43 +203,56 @@ class ChatViewModel: ObservableObject {
         ]
 
         db.collection("matches").document(self.matchID).collection("messages").addDocument(data: messageData) { [weak self] error in
-            guard let self = self else { return }
-            
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
                 return
             }
 
-            self.sendPushNotification(toRecipient: self.recipientName, message: messageToSend)
-
-            db.collection("matches").document(self.matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
+            db.collection("matches").document(self?.matchID ?? "").updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
+                } else {
+                    // Successfully sent message, now send push notification to recipient
+                    self?.sendPushNotification(toRecipient: self?.matchID ?? "", message: messageToSend)
                 }
             }
         }
     }
 
-    private func sendPushNotification(toRecipient recipientName: String, message: String) {
+
+    private func sendPushNotification(toRecipient recipientID: String, message: String) {
         let db = Firestore.firestore()
 
-        db.collection("users").document(recipientName).getDocument { [weak self] document, error in
-            guard let self = self else { return }
-
+        // Fetch the recipient's FCM token from Firestore
+        db.collection("users").document(recipientID).getDocument { document, error in
             if let document = document, document.exists {
                 let recipientFCMToken = document.data()?["fcmToken"] as? String
-                
                 if let recipientFCMToken = recipientFCMToken {
-                    let senderName = Auth.auth().currentUser?.displayName ?? "Someone"
-                    self.sendFCMNotification(
-                        to: recipientFCMToken,
-                        title: "New message from \(senderName)",
-                        body: message
-                    )
+                    
+                    // Fetch sender's name from Firestore if available
+                    let currentUserID = Auth.auth().currentUser?.uid
+                    db.collection("users").document(currentUserID ?? "").getDocument { senderDoc, error in
+                        if let senderDoc = senderDoc, senderDoc.exists {
+                            let senderName = senderDoc.data()?["name"] as? String ?? "Someone"
+                            print("DEBUG: Sender name fetched: \(senderName)")
+                            
+                            // Send notification with sender's name
+                            self.sendFCMNotification(
+                                to: recipientFCMToken,
+                                title: "New message from \(senderName)",
+                                body: message
+                            )
+                        }
+                    }
+                } else {
+                    print("Error: Recipient FCM token not found")
                 }
+            } else {
+                print("Error: Recipient document not found")
             }
         }
     }
+
 
 
     private func setupChatListener() {
