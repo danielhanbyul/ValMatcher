@@ -141,7 +141,6 @@ struct MatchView: View {
             }
     }
 
-    // Add this helper function to handle sending the push notifications
     private func sendPushNotificationToMatchedUsers(currentUserID: String, likedUserID: String) {
         let db = Firestore.firestore()
 
@@ -153,12 +152,20 @@ struct MatchView: View {
             if let document = document, document.exists {
                 let currentUserName = document.data()?["name"] as? String ?? "Someone"
                 let currentUserFCMToken = document.data()?["fcmToken"] as? String
+                
+                // Debugging log
+                print("DEBUG: Current user's name: \(currentUserName)")
+                print("DEBUG: Current user's FCM token: \(String(describing: currentUserFCMToken))")
 
                 // Fetch liked user's FCM token
                 usersRef.document(likedUserID).getDocument { (likedUserDocument, error) in
                     if let likedUserDocument = likedUserDocument, likedUserDocument.exists {
-                        let likedUserFCMToken = likedUserDocument.data()?["fcmToken"] as? String
                         let likedUserName = likedUserDocument.data()?["name"] as? String ?? "Someone"
+                        let likedUserFCMToken = likedUserDocument.data()?["fcmToken"] as? String
+
+                        // Debugging log
+                        print("DEBUG: Liked user's name: \(likedUserName)")
+                        print("DEBUG: Liked user's FCM token: \(String(describing: likedUserFCMToken))")
 
                         // Now send push notifications to both users
                         if let likedUserFCMToken = likedUserFCMToken {
@@ -169,8 +176,12 @@ struct MatchView: View {
                             // Push notification to current user
                             sendFCMNotification(to: currentUserFCMToken, title: "New Match!", body: "You matched with \(likedUserName)!")
                         }
+                    } else {
+                        print("Error: Liked user document not found or missing 'name' field.")
                     }
                 }
+            } else {
+                print("Error: Current user document not found or missing 'name' field.")
             }
         }
     }
