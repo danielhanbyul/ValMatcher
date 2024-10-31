@@ -185,13 +185,21 @@ struct MatchView: View {
             }
         }
     }
+    
+    
 
-    // Helper function to send the actual FCM notification
-    private func sendFCMNotification(to fcmToken: String, title: String, body: String) {
-        let urlString = "https://fcm.googleapis.com/fcm/send"
-        let url = URL(string: urlString)!
-        
-        let notification: [String: Any] = [
+   
+
+    func sendFCMNotification(to fcmToken: String, title: String, body: String) {
+        let serverKey = "AIzaSyA-Eew48TEhrZnX80C8lyYcKkuYRx0hNME"
+        let url = URL(string: "https://fcm.googleapis.com/fcm/send")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("key=\(serverKey)", forHTTPHeaderField: "Authorization")
+
+        // Payload for the notification
+        let payload: [String: Any] = [
             "to": fcmToken,
             "notification": [
                 "title": title,
@@ -199,35 +207,34 @@ struct MatchView: View {
                 "sound": "default"
             ],
             "data": [
-                "type": "match_notification"
+                "customDataKey": "customDataValue" // Optional custom data
             ]
         ]
-        
-        // Firebase Server Key from your Firebase console (go to project settings -> Cloud Messaging)
-        let serverKey = "YOUR_SERVER_KEY" // Replace with your actual server key
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("key=\(serverKey)", forHTTPHeaderField: "Authorization")
-        
-        let jsonData = try? JSONSerialization.data(withJSONObject: notification)
-        request.httpBody = jsonData
-        
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
+        } catch {
+            print("DEBUG: Failed to serialize JSON for FCM payload: \(error)")
+            return
+        }
+
+        // Send the request
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
-                print("Error sending FCM notification: \(error.localizedDescription)")
+                print("DEBUG: Error sending FCM notification: \(error.localizedDescription)")
                 return
             }
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
-                print("Error: FCM notification failed with status code \(httpResponse.statusCode)")
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                print("DEBUG: FCM notification sent successfully with title: '\(title)' and body: '\(body)'")
             } else {
-                print("FCM notification sent successfully")
+                print("DEBUG: FCM notification failed with response: \(String(describing: response))")
             }
         }
-        
         task.resume()
     }
+
+
 
 }
 

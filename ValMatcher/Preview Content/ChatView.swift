@@ -23,7 +23,7 @@ struct ChatView: View {
         self.recipientName = recipientName
         self._isInChatView = isInChatView
         self._unreadMessageCount = unreadMessageCount
-        _viewModel = StateObject(wrappedValue: ChatViewModel(matchID: matchID))
+        _viewModel = StateObject(wrappedValue: ChatViewModel(matchID: matchID, recipientName: recipientName))
     }
 
     var body: some View {
@@ -117,14 +117,9 @@ struct ChatView: View {
             print("DEBUG: Exiting ChatView for matchID: \(matchID)")
             print("DEBUG: Setting appState.isInChatView = false")
             
-            // Mark as not in chat view
             appState.isInChatView = false
             appState.currentChatID = nil
-            
-            
         }
-
-
     }
 
     private func messageContent(for message: Message) -> some View {
@@ -166,7 +161,6 @@ struct ChatView: View {
     }
 }
 
-// ViewModel for ChatView
 class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var newMessage: String = ""
@@ -178,12 +172,14 @@ class ChatViewModel: ObservableObject {
     private var messagesListener: ListenerRegistration?
     private var matchID: String
     private var currentUserID: String?
+    private var recipientName: String
     var isInChatView: Bool = false
     private var seenMessageIDs: Set<String> = []
     private var isListenerActive: Bool = false
 
-    init(matchID: String) {
+    init(matchID: String, recipientName: String) {
         self.matchID = matchID
+        self.recipientName = recipientName
         self.currentUserID = Auth.auth().currentUser?.uid
         setupChatListener()
     }
@@ -207,12 +203,16 @@ class ChatViewModel: ObservableObject {
         ]
 
         db.collection("matches").document(self.matchID).collection("messages").addDocument(data: messageData) { [weak self] error in
+            guard let self = self else { return }
+            
             if let error = error {
                 print("Error sending message: \(error.localizedDescription)")
                 return
             }
 
-            db.collection("matches").document(self?.matchID ?? "").updateData(["lastMessageTimestamp": Timestamp()]) { error in
+            self.sendPushNotification(toRecipient: self.recipientName, message: messageToSend)
+
+            db.collection("matches").document(self.matchID).updateData(["lastMessageTimestamp": Timestamp()]) { error in
                 if let error = error {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
                 }
@@ -220,8 +220,30 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    private func sendPushNotification(toRecipient recipientName: String, message: String) {
+        let db = Firestore.firestore()
+
+        db.collection("users").document(recipientName).getDocument { [weak self] document, error in
+            guard let self = self else { return }
+
+            if let document = document, document.exists {
+                let recipientFCMToken = document.data()?["fcmToken"] as? String
+                
+                if let recipientFCMToken = recipientFCMToken {
+                    let senderName = Auth.auth().currentUser?.displayName ?? "Someone"
+                    self.sendFCMNotification(
+                        to: recipientFCMToken,
+                        title: "New message from \(senderName)",
+                        body: message
+                    )
+                }
+            }
+        }
+    }
+
+
     private func setupChatListener() {
-        guard !isListenerActive else { return }  // Ensure listener is only added once
+        guard !isListenerActive else { return }
         isListenerActive = true
 
         let db = Firestore.firestore()
@@ -279,8 +301,6 @@ class ChatViewModel: ObservableObject {
         isListenerActive = false
     }
 
-
-
     private func markMessageAsRead(messageID: String) {
         let db = Firestore.firestore()
         db.collection("matches").document(matchID).collection("messages").document(messageID).updateData(["isRead": true]) { error in
@@ -321,6 +341,44 @@ class ChatViewModel: ObservableObject {
         let previousMessage = messages[index - 1]
         let calendar = Calendar.current
         return !calendar.isDate(message.timestamp.dateValue(), inSameDayAs: previousMessage.timestamp.dateValue())
+    }
+
+    private func sendFCMNotification(to fcmToken: String, title: String, body: String) {
+        let serverKey = "YOUR_SERVER_KEY"
+        let url = URL(string: "https://fcm.googleapis.com/fcm/send")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("key=\(serverKey)", forHTTPHeaderField: "Authorization")
+
+        let payload: [String: Any] = [
+            "to": fcmToken,
+            "notification": [
+                "title": title,
+                "body": body,
+                "sound": "default"
+            ]
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
+        } catch {
+            print("Error serializing JSON: \(error)")
+            return
+        }
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Error sending FCM notification: \(error.localizedDescription)")
+                return
+            }
+
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                print("Notification sent successfully")
+            } else {
+                print("Failed to send notification: \(response.debugDescription)")
+            }
+        }.resume()
     }
 }
 
