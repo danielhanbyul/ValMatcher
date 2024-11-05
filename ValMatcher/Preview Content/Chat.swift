@@ -42,6 +42,7 @@ extension Chat {
 struct Message: Identifiable, Codable, Equatable {
     @DocumentID var id: String?
     var senderID: String
+    var senderName: String  // Added senderName field
     var content: String
     var timestamp: Timestamp
     var isRead: Bool = false

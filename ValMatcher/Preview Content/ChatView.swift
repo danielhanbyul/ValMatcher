@@ -161,6 +161,13 @@ struct ChatView: View {
     }
 }
 
+import SwiftUI
+import Firebase
+import FirebaseFirestore
+import FirebaseAuth
+import FirebaseFirestoreSwift
+import UserNotifications
+
 class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var newMessage: String = ""
@@ -176,20 +183,36 @@ class ChatViewModel: ObservableObject {
     var isInChatView: Bool = false
     private var seenMessageIDs: Set<String> = []
     private var isListenerActive: Bool = false
+    private var currentUserName: String?  // Added currentUserName property
 
     init(matchID: String, recipientName: String) {
         self.matchID = matchID
         self.recipientName = recipientName
         self.currentUserID = Auth.auth().currentUser?.uid
-        setupChatListener()
+        self.fetchCurrentUserName()
+        self.setupChatListener()
     }
 
     deinit {
         removeMessagesListener()
     }
 
+    // Function to fetch the current user's name
+    private func fetchCurrentUserName() {
+        guard let currentUserID = self.currentUserID else { return }
+        let db = Firestore.firestore()
+        db.collection("users").document(currentUserID).getDocument { (document, error) in
+            if let document = document, document.exists {
+                self.currentUserName = document.data()?["name"] as? String
+            } else {
+                print("Error fetching current user name: \(error?.localizedDescription ?? "Unknown error")")
+                self.currentUserName = "Unknown"
+            }
+        }
+    }
+
     func sendMessage() {
-        guard let currentUserID = Auth.auth().currentUser?.uid, !newMessage.isEmpty else { return }
+        guard let currentUserID = self.currentUserID, !newMessage.isEmpty else { return }
 
         let messageToSend = newMessage
         self.newMessage = "" // Clear the input field immediately
@@ -197,6 +220,7 @@ class ChatViewModel: ObservableObject {
         let db = Firestore.firestore()
         let messageData: [String: Any] = [
             "senderID": currentUserID,
+            "senderName": currentUserName ?? "Unknown",  // Include senderName
             "content": messageToSend,
             "timestamp": Timestamp(),
             "isRead": false
@@ -219,7 +243,6 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-
     private func sendPushNotification(toRecipient recipientID: String, message: String) {
         let db = Firestore.firestore()
 
@@ -228,22 +251,13 @@ class ChatViewModel: ObservableObject {
             if let document = document, document.exists {
                 let recipientFCMToken = document.data()?["fcmToken"] as? String
                 if let recipientFCMToken = recipientFCMToken {
-                    
-                    // Fetch sender's name from Firestore if available
-                    let currentUserID = Auth.auth().currentUser?.uid
-                    db.collection("users").document(currentUserID ?? "").getDocument { senderDoc, error in
-                        if let senderDoc = senderDoc, senderDoc.exists {
-                            let senderName = senderDoc.data()?["name"] as? String ?? "Someone"
-                            print("DEBUG: Sender name fetched: \(senderName)")
-                            
-                            // Send notification with sender's name
-                            self.sendFCMNotification(
-                                to: recipientFCMToken,
-                                title: "New message from \(senderName)",
-                                body: message
-                            )
-                        }
-                    }
+                    // Use currentUserName to send in the notification
+                    let senderName = self.currentUserName ?? "Someone"
+                    self.sendFCMNotification(
+                        to: recipientFCMToken,
+                        title: "New message from \(senderName)",
+                        body: message
+                    )
                 } else {
                     print("Error: Recipient FCM token not found")
                 }
@@ -252,8 +266,6 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
-
-
 
     private func setupChatListener() {
         guard !isListenerActive else { return }
@@ -357,7 +369,7 @@ class ChatViewModel: ObservableObject {
     }
 
     private func sendFCMNotification(to fcmToken: String, title: String, body: String) {
-        let serverKey = "YOUR_SERVER_KEY"
+        let serverKey = "AIzaSyA-Eew48TEhrZnX80C8lyYcKkuYRx0hNME"  // Replace with your actual server key
         let url = URL(string: "https://fcm.googleapis.com/fcm/send")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -394,6 +406,7 @@ class ChatViewModel: ObservableObject {
         }.resume()
     }
 }
+
 
 let dateOnlyFormatter: DateFormatter = {
     let formatter = DateFormatter()

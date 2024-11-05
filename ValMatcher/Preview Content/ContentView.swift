@@ -585,10 +585,10 @@ struct ContentView: View {
                     print("Error fetching latest message: \(error.localizedDescription)")
                     return
                 }
-                
+
                 guard let document = snapshot?.documents.first else { return }
                 let data = document.data()
-                let messageText = data["text"] as? String ?? "New message"
+                let messageText = data["content"] as? String ?? "New message"
                 let senderName = data["senderName"] as? String ?? "Someone"
 
                 // Trigger a push notification
@@ -604,10 +604,9 @@ struct ContentView: View {
                 // Send the notification via APNs
                 let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
                 UNUserNotificationCenter.current().add(request)
-
-                // You may also send it to Firebase Cloud Messaging (Server-side) if required.
             }
     }
+
 
 
 
