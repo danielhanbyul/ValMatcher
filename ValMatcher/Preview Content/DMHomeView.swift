@@ -414,14 +414,17 @@ struct DMHomeView: View {
                 }
 
                 let unreadCount = snapshot?.documents.count ?? 0
-                if matchCopy.unreadMessages == nil {
-                    matchCopy.unreadMessages = [:]
-                }
-                matchCopy.unreadMessages?[currentUserID] = unreadCount
                 matchCopy.hasUnreadMessages = unreadCount > 0
-                completion(matchCopy)
+
+                // Deduplicate before completing
+                if !self.matches.contains(where: { $0.id == matchID }) {
+                    completion(matchCopy)
+                } else {
+                    completion(matchCopy) // Just update the existing chat
+                }
             }
     }
+
 
     private func fetchUserNames(for matches: [Chat], completion: @escaping ([Chat]) -> Void) {
         var updatedMatches = matches
