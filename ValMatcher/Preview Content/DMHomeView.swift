@@ -355,6 +355,7 @@ struct DMHomeView: View {
 
                 guard let documents = snapshot?.documents else { return }
 
+                var tempMatches: [String: Chat] = [:] // Use a dictionary to ensure unique matches by ID
                 let group = DispatchGroup()
 
                 for document in documents {
@@ -362,22 +363,9 @@ struct DMHomeView: View {
                         var match = try document.data(as: Chat.self)
                         group.enter()
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
-
-                            // Deduplication logic
-                            if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
-                                // Update the existing match only if necessary
-                                if self.matches[index] != updatedMatch {
-                                    self.matches[index] = updatedMatch
-                                    print("DEBUG: Updating existing match with ID \(updatedMatch.id ?? "unknown")")
-                                } else {
-                                    print("DEBUG: No changes needed for match ID \(updatedMatch.id ?? "unknown")")
-                                }
-                            } else {
-                                // Append the match only if it doesn't already exist
-                                self.matches.append(updatedMatch)
-                                print("DEBUG: Appending new match with ID \(updatedMatch.id ?? "unknown")")
+                            if let matchID = updatedMatch.id {
+                                tempMatches[matchID] = updatedMatch // Use matchID as the unique key
                             }
-
                             group.leave()
                         }
                     } catch {
@@ -386,15 +374,16 @@ struct DMHomeView: View {
                 }
 
                 group.notify(queue: .main) {
-                    // Sort the updated matches by lastMessageTimestamp after real-time update
-                    self.matches = self.matches.sorted {
+                    // Update the main matches array after processing all updates
+                    self.matches = Array(tempMatches.values).sorted {
                         ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                     }
-                    print("DEBUG: Matches sorted by lastMessageTimestamp")
+                    print("DEBUG: Matches updated and sorted, total: \(self.matches.count)")
                 }
             }
         }
     }
+
 
 
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
