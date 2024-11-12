@@ -363,16 +363,21 @@ struct DMHomeView: View {
                         group.enter()
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
 
-                            // Skip updating the match if it's the current chat and we're in ChatView
-                            if self.isInChatView && self.currentChatID == updatedMatch.id {
-                                print("DEBUG: Skipping update for current chat matchID: \(updatedMatch.id ?? "")")
-                            } else {
-                                if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
+                            // Deduplication logic
+                            if let index = self.matches.firstIndex(where: { $0.id == updatedMatch.id }) {
+                                // Update the existing match only if necessary
+                                if self.matches[index] != updatedMatch {
                                     self.matches[index] = updatedMatch
+                                    print("DEBUG: Updating existing match with ID \(updatedMatch.id ?? "unknown")")
                                 } else {
-                                    self.matches.append(updatedMatch)
+                                    print("DEBUG: No changes needed for match ID \(updatedMatch.id ?? "unknown")")
                                 }
+                            } else {
+                                // Append the match only if it doesn't already exist
+                                self.matches.append(updatedMatch)
+                                print("DEBUG: Appending new match with ID \(updatedMatch.id ?? "unknown")")
                             }
+
                             group.leave()
                         }
                     } catch {
@@ -385,10 +390,12 @@ struct DMHomeView: View {
                     self.matches = self.matches.sorted {
                         ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                     }
+                    print("DEBUG: Matches sorted by lastMessageTimestamp")
                 }
             }
         }
     }
+
 
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
         let db = Firestore.firestore()
