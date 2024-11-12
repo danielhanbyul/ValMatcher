@@ -115,11 +115,13 @@ struct ChatView: View {
         }
         .onDisappear {
             print("DEBUG: Exiting ChatView for matchID: \(matchID)")
-            print("DEBUG: Setting appState.isInChatView = false")
-            
             appState.isInChatView = false
             appState.currentChatID = nil
+
+            // Notify DMHomeView to refresh data
+            NotificationCenter.default.post(name: Notification.Name("RefreshChatList"), object: matchID)
         }
+
     }
 
     private func messageContent(for message: Message) -> some View {

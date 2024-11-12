@@ -113,12 +113,22 @@ struct DMHomeView: View {
                     self.updateUnreadMessageCount(for: matches[index], currentUserID: currentUserID) { updatedMatch in
                         self.matches[index] = updatedMatch
                     }
+                } else {
+                    // Fetch the chat again if it was missing
+                    let db = Firestore.firestore()
+                    db.collection("matches").document(chatID).getDocument { snapshot, error in
+                        if let error = error {
+                            print("Error fetching chat: \(error.localizedDescription)")
+                            return
+                        }
+                        if let chatData = try? snapshot?.data(as: Chat.self) {
+                            self.matches.append(chatData)
+                        }
+                    }
                 }
             }
         }
-        .alert(isPresented: $showNotificationBanner) {
-            Alert(title: Text("New Message"), message: Text(bannerMessage), dismissButton: .default(Text("OK")))
-        }
+
     }
 
     private func toggleSelection(for matchID: String) {
