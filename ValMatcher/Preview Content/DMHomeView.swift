@@ -298,44 +298,46 @@ struct DMHomeView: View {
             db.collection("matches").whereField("user2", isEqualTo: currentUserID)
         ]
 
+        var tempMatches: [String: Chat] = [:] // Temporary dictionary to deduplicate matches
+        let dispatchGroup = DispatchGroup() // To wait for all queries to complete
+
         for query in queries {
+            dispatchGroup.enter()
             query.getDocuments { snapshot, error in
                 if let error = error {
                     print("Error loading matches: \(error.localizedDescription)")
+                    dispatchGroup.leave()
                     return
                 }
 
-                guard let documents = snapshot?.documents else { return }
-
-                var newMatches = [Chat]()
-                let group = DispatchGroup()
+                guard let documents = snapshot?.documents else {
+                    dispatchGroup.leave()
+                    return
+                }
 
                 for document in documents {
                     do {
-                        var match = try document.data(as: Chat.self)
-                        group.enter()
-                        self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
-                            newMatches.append(updatedMatch)
-                            group.leave()
+                        let match = try document.data(as: Chat.self)
+                        if let matchID = match.id {
+                            tempMatches[matchID] = match // Deduplicate using match ID
                         }
                     } catch {
                         print("Error decoding match: \(error.localizedDescription)")
                     }
                 }
-
-                group.notify(queue: .main) {
-                    self.fetchUserNames(for: newMatches) { updatedMatches in
-                        // Sort the matches by lastMessageTimestamp before updating the UI
-                        self.matches = updatedMatches.sorted {
-                            ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
-                        }
-                        self.updateUnreadMessagesCount(from: self.matches)
-                        self.isLoaded = true
-                    }
-                }
+                dispatchGroup.leave()
             }
         }
+
+        // Once all queries are complete, update the matches array
+        dispatchGroup.notify(queue: .main) {
+            self.matches = Array(tempMatches.values).sorted {
+                ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
+            }
+            print("DEBUG: Matches loaded, total: \(self.matches.count)")
+        }
     }
+
 
     func setupRealTimeListener() {
         guard let currentUserID = currentUserID else { return }
@@ -355,45 +357,46 @@ struct DMHomeView: View {
 
                 guard let documents = snapshot?.documents else { return }
 
-                var tempMatches: [String: Chat] = [:] // Use a dictionary to ensure unique matches by ID
-                let group = DispatchGroup()
+                var tempMatches: [String: Chat] = [:] // Temporary dictionary for deduplication
+                let dispatchGroup = DispatchGroup()
 
                 for document in documents {
                     do {
                         var match = try document.data(as: Chat.self)
-                        group.enter()
+                        dispatchGroup.enter()
                         self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
                             if let matchID = updatedMatch.id {
-                                tempMatches[matchID] = updatedMatch // Use matchID as the unique key
+                                tempMatches[matchID] = updatedMatch
                             }
-                            group.leave()
+                            dispatchGroup.leave()
                         }
                     } catch {
                         print("Error decoding match: \(error.localizedDescription)")
                     }
                 }
 
-                group.notify(queue: .main) {
-                    // Update the main matches array after processing all updates
+                dispatchGroup.notify(queue: .main) {
                     self.matches = Array(tempMatches.values).sorted {
                         ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                     }
-                    print("DEBUG: Matches updated and sorted, total: \(self.matches.count)")
+                    print("DEBUG: Real-time matches updated and sorted, total: \(self.matches.count)")
                 }
             }
         }
     }
 
 
-
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
         let db = Firestore.firestore()
-        guard let matchID = match.id else { return }
+        guard let matchID = match.id else {
+            completion(match) // Return the original match if there's no valid ID
+            return
+        }
 
         var matchCopy = match
 
         if isInChatView && matchID == currentChatID {
-            // If we're currently in this chat, set hasUnreadMessages to false
+            // If currently viewing this chat, mark all messages as read
             matchCopy.hasUnreadMessages = false
             completion(matchCopy)
             return
@@ -412,12 +415,13 @@ struct DMHomeView: View {
                 let unreadCount = snapshot?.documents.count ?? 0
                 matchCopy.hasUnreadMessages = unreadCount > 0
 
-                // Deduplicate before completing
-                if !self.matches.contains(where: { $0.id == matchID }) {
-                    completion(matchCopy)
-                } else {
-                    completion(matchCopy) // Just update the existing chat
+                // Update the last message timestamp if available
+                if let lastMessage = snapshot?.documents.last {
+                    let timestamp = lastMessage.data()["timestamp"] as? Timestamp
+                    matchCopy.lastMessageTimestamp = timestamp
                 }
+
+                completion(matchCopy)
             }
     }
 
