@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-
 import UserNotifications
 
 func requestNotificationPermission() {
@@ -18,6 +17,23 @@ func requestNotificationPermission() {
         }
     }
 }
+
+func sendSystemNotification(title: String, message: String) {
+    let content = UNMutableNotificationContent()
+    content.title = title
+    content.body = message
+    content.sound = .default
+
+    let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+    UNUserNotificationCenter.current().add(request) { error in
+        if let error = error {
+            print("Error delivering system notification: \(error.localizedDescription)")
+        } else {
+            print("DEBUG: System notification delivered successfully.")
+        }
+    }
+}
+
 
 
 struct NotificationBannerView: View {

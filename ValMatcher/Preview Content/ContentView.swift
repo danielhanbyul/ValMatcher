@@ -59,7 +59,8 @@ struct ContentView: View {
     @State private var unreadCountUser1 = 0
     @State private var unreadCountUser2 = 0
     @State private var isUnreadMessagesListenerActive = false
-    
+    @State private var shouldShowProfileQuestions = false
+        @State private var shouldShowTutorial = false
 
 
 
@@ -800,15 +801,17 @@ struct ContentView: View {
             .whereField("user2", isEqualTo: likedUserID)
             .getDocuments { querySnapshot, error in
                 if let error = error {
-                    print("Error checking existing match: \(error.localizedDescription)")
+                    print("DEBUG: Error checking existing match: \(error.localizedDescription)")
                     return
                 }
-                
+
                 if querySnapshot?.documents.isEmpty == true {
                     db.collection("matches").addDocument(data: matchData) { error in
                         if let error = error {
-                            print("Error creating match: \(error.localizedDescription)")
+                            print("DEBUG: Error creating match: \(error.localizedDescription)")
                         } else {
+                            print("DEBUG: Match created successfully between \(currentUserID) and \(likedUserID)")
+
                             // Send personalized notifications to both users
                             let currentUserName = userProfileViewModel.user.name
                             let likedUserName = likedUser.name
@@ -816,26 +819,23 @@ struct ContentView: View {
                             let currentUserMessage = "You matched with \(likedUserName)!"
                             let likedUserMessage = "You matched with \(currentUserName)!"
 
-                            // Send notifications to both users
-                            if !self.notifications.contains(currentUserMessage) && !self.acknowledgedNotifications.contains(currentUserMessage) {
-                                self.notifications.append(currentUserMessage)
-                                self.alertMessage = currentUserMessage
-                                self.showAlert = true
-                                self.notificationCount += 1
-                                self.sendNotification(to: currentUserID, message: currentUserMessage)
-                            }
+                            // Debugging Notification Logic
+                            print("DEBUG: Sending notification to \(currentUserID): \(currentUserMessage)")
+                            print("DEBUG: Sending notification to \(likedUserID): \(likedUserMessage)")
 
-                            if !self.notifications.contains(likedUserMessage) && !self.acknowledgedNotifications.contains(likedUserMessage) {
-                                self.sendNotification(to: likedUserID, message: likedUserMessage)
-                            }
+                            self.sendNotification(to: currentUserID, message: currentUserMessage)
+                            self.sendNotification(to: likedUserID, message: likedUserMessage)
 
                             // Create the DM chat between both users
                             self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
                         }
                     }
+                } else {
+                    print("DEBUG: Match already exists between \(currentUserID) and \(likedUserID)")
                 }
             }
     }
+ 
     
 
     private func createDMChat(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
@@ -874,21 +874,23 @@ struct ContentView: View {
     }
 
     private func sendNotification(to userID: String, message: String) {
-        let db = Firestore.firestore()
-        let notificationData: [String: Any] = [
-            "userID": userID,
-            "message": message,
-            "timestamp": Timestamp()
-        ]
+        print("DEBUG: Preparing to send local notification.")
+        let content = UNMutableNotificationContent()
+        content.title = "New Match"
+        content.body = message
+        content.sound = .default
 
-        db.collection("notifications").addDocument(data: notificationData) { error in
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+
+        UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("Error sending notification: \(error.localizedDescription)")
+                print("DEBUG: Failed to deliver local notification: \(error.localizedDescription)")
             } else {
-                print("Notification sent successfully to userID: \(userID)")
+                print("DEBUG: Local notification delivered successfully.")
             }
         }
     }
+
 
 
     private func passAction() {

@@ -19,10 +19,11 @@ struct UserProfile: Identifiable, Codable, Equatable {
     var answers: [String: String]
     var hasAnsweredQuestions: Bool
     var mediaItems: [MediaItem]?
-    var createdAt: Timestamp? // Add createdAt property
+    var createdAt: Timestamp?
+    var hasSeenTutorial: Bool // New property to track tutorial status
 
-    // Initializer with `createdAt` as an optional parameter
-    init(id: String? = nil, name: String, rank: String, imageName: String, age: String, server: String, answers: [String: String], hasAnsweredQuestions: Bool, mediaItems: [MediaItem]? = nil, createdAt: Timestamp? = nil) {
+    // Updated initializer with `hasSeenTutorial` as an optional parameter
+    init(id: String? = nil, name: String, rank: String, imageName: String, age: String, server: String, answers: [String: String], hasAnsweredQuestions: Bool, mediaItems: [MediaItem]? = nil, createdAt: Timestamp? = nil, hasSeenTutorial: Bool = false) {
         self.id = id
         self.name = name
         self.rank = rank
@@ -33,5 +34,6 @@ struct UserProfile: Identifiable, Codable, Equatable {
         self.hasAnsweredQuestions = hasAnsweredQuestions
         self.mediaItems = mediaItems ?? [] // Initialize with an empty array if `mediaItems` is nil
         self.createdAt = createdAt ?? Timestamp() // Set createdAt to current timestamp if nil
+        self.hasSeenTutorial = hasSeenTutorial // Default to `false` if not provided
     }
 }

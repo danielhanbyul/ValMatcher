@@ -6,12 +6,14 @@
 //
 
 import SwiftUI
+import FirebaseFirestore
+import FirebaseAuth
 
 struct TutorialView: View {
     @Binding var isTutorialSeen: Bool
     @State private var currentCardIndex = 0
     @State private var interactionResult: ContentView.InteractionResult? = nil
-    
+
     // Adjustable space variables
     @State private var titleToCardSpacing: CGFloat = 0.2 // Percentage of screen height
     @State private var cardToInstructionsSpacing: CGFloat = 0.19  // Percentage of screen height
@@ -24,6 +26,7 @@ struct TutorialView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
+                // Background Gradient
                 LinearGradient(
                     gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]),
                     startPoint: .top,
@@ -31,8 +34,10 @@ struct TutorialView: View {
                 )
                 .edgesIgnoringSafeArea(.all)
 
-                ScrollView {  // Added ScrollView for vertical scrolling
+                // Main ScrollView
+                ScrollView {
                     VStack(spacing: 20) {
+                        // Title
                         Text("Welcome to ValMatcher!")
                             .font(.custom("AvenirNext-Bold", size: geometry.size.width * 0.06))
                             .foregroundColor(.white)
@@ -42,10 +47,11 @@ struct TutorialView: View {
                         // Adjustable space between title and UserCard
                         Spacer().frame(height: geometry.size.height * titleToCardSpacing)
 
+                        // Card View with gestures
                         ZStack {
                             if currentCardIndex < tutorialCards.count {
                                 UserCardView(user: tutorialCards[currentCardIndex])
-                                    .frame(width: geometry.size.width * 0.65, height: geometry.size.height * 0.2)  // Smaller card size for better fit
+                                    .frame(width: geometry.size.width * 0.65, height: geometry.size.height * 0.2)
                                     .gesture(
                                         DragGesture(minimumDistance: 20)
                                             .onEnded { gesture in
@@ -67,11 +73,12 @@ struct TutorialView: View {
                                 interactionResultView(result)
                             }
                         }
-                        .frame(height: geometry.size.height * 0.2)  // Adjusted frame to match smaller card size
+                        .frame(height: geometry.size.height * 0.2)
 
-                        // Adjustable space between UserCard and "How to use the app" section
+                        // Adjustable space between UserCard and instructions
                         Spacer().frame(height: geometry.size.height * cardToInstructionsSpacing)
 
+                        // Instructions
                         VStack(alignment: .leading, spacing: 10) {
                             Text("How to use the app:")
                                 .font(.custom("AvenirNext-Bold", size: geometry.size.width * 0.04))
@@ -89,15 +96,15 @@ struct TutorialView: View {
                                 .font(.custom("AvenirNext-Regular", size: geometry.size.width * 0.03))
                                 .foregroundColor(.white)
                                 .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)  // Ensure text isn't cut off
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.horizontal, geometry.size.width * 0.1)
                         .padding(.bottom, geometry.size.height * 0.01)
 
+                        // Got It Button
                         Button(action: {
                             isTutorialSeen = true
-                            // Save tutorial completion to UserDefaults
-                            UserDefaults.standard.set(true, forKey: "isTutorialSeen")
+                            saveTutorialCompletion()
                         }) {
                             Text("Got it!")
                                 .font(.custom("AvenirNext-Bold", size: geometry.size.width * 0.05))
@@ -155,11 +162,23 @@ struct TutorialView: View {
         }
         .animation(.easeInOut, value: result)
     }
+
+    private func saveTutorialCompletion() {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        db.collection("users").document(uid).updateData(["hasSeenTutorial": true]) { err in
+            if let err = err {
+                print("Error saving tutorial completion: \(err.localizedDescription)")
+            } else {
+                print("Tutorial completion saved.")
+            }
+        }
+    }
 }
 
 struct TutorialView_Previews: PreviewProvider {
     static var previews: some View {
-        TutorialView(isTutorialSeen: .constant(false))  // Preview with constant binding
+        TutorialView(isTutorialSeen: .constant(false)) // Preview with constant binding
             .previewDevice("iPhone 13")
     }
 }

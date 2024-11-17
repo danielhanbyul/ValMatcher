@@ -9,7 +9,7 @@ import SwiftUI
 import FirebaseFirestore
 import Firebase
 
-// Define the questions globally at the top of the file
+// Define the questions globally
 let profileQuestions: [String] = [
     "Who's your favorite agent to play in Valorant?",
     "Do you prefer playing as a Duelist, Initiator, Controller, or Sentinel?",
@@ -35,6 +35,7 @@ struct QuestionsView: View {
 
     @Binding var userProfile: UserProfile
     @Binding var hasAnsweredQuestions: Bool
+    @State private var showTutorial = false
     @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
@@ -89,6 +90,7 @@ struct QuestionsView: View {
                 Button(action: {
                     userProfile.hasAnsweredQuestions = true
                     saveUserProfile()
+                    showTutorial = true // Navigate to TutorialView after finishing
                 }) {
                     Text("Finish")
                         .foregroundColor(.white)
@@ -98,6 +100,9 @@ struct QuestionsView: View {
                         .background(Color.green)
                         .cornerRadius(8)
                         .padding(.horizontal)
+                }
+                .fullScreenCover(isPresented: $showTutorial) {
+                    TutorialView(isTutorialSeen: $userProfile.hasSeenTutorial)
                 }
             }
         }
@@ -152,12 +157,10 @@ struct QuestionsView: View {
                 } else {
                     print("Profile saved successfully")
                     self.hasAnsweredQuestions = true
-                    self.presentationMode.wrappedValue.dismiss()
                 }
             }
         } catch let error {
             print("Error writing user to Firestore: \(error.localizedDescription)")
         }
     }
-
 }
