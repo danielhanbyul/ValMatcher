@@ -812,19 +812,20 @@ struct ContentView: View {
                         } else {
                             print("DEBUG: Match created successfully between \(currentUserID) and \(likedUserID)")
 
-                            // Send personalized notifications to both users
+                            // Send notifications and save them to the database
                             let currentUserName = userProfileViewModel.user.name
                             let likedUserName = likedUser.name
 
                             let currentUserMessage = "You matched with \(likedUserName)!"
                             let likedUserMessage = "You matched with \(currentUserName)!"
 
-                            // Debugging Notification Logic
-                            print("DEBUG: Sending notification to \(currentUserID): \(currentUserMessage)")
-                            print("DEBUG: Sending notification to \(likedUserID): \(likedUserMessage)")
-
+                            // Send banners
                             self.sendNotification(to: currentUserID, message: currentUserMessage)
                             self.sendNotification(to: likedUserID, message: likedUserMessage)
+
+                            // Save to Notifications Tab
+                            self.saveNotification(for: currentUserID, message: currentUserMessage)
+                            self.saveNotification(for: likedUserID, message: likedUserMessage)
 
                             // Create the DM chat between both users
                             self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
@@ -835,7 +836,24 @@ struct ContentView: View {
                 }
             }
     }
- 
+    
+    private func saveNotification(for userID: String, message: String) {
+        let db = Firestore.firestore()
+        let notificationData: [String: Any] = [
+            "message": message,
+            "timestamp": Timestamp()
+        ]
+        
+        db.collection("users").document(userID).collection("notifications").addDocument(data: notificationData) { error in
+            if let error = error {
+                print("DEBUG: Error saving notification for user \(userID): \(error.localizedDescription)")
+            } else {
+                print("DEBUG: Notification saved for user \(userID): \(message)")
+            }
+        }
+    }
+
+
     
 
     private func createDMChat(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
@@ -890,6 +908,7 @@ struct ContentView: View {
             }
         }
     }
+
 
 
 
@@ -1005,39 +1024,67 @@ struct NotificationsView: View {
     @Binding var notifications: [String]
     @Binding var notificationCount: Int
 
+    @State private var isLoading = true
+
     var body: some View {
         ZStack {
             LinearGradient(gradient: Gradient(colors: [Color.black, Color.gray]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
 
-            VStack {
-                if notifications.isEmpty {
-                    Text("No notifications")
-                        .foregroundColor(.white)
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(notifications, id: \.self) { notification in
-                                Text(notification)
-                                    .foregroundColor(.black)
-                                    .padding()
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color(.systemGray5))
-                                    .cornerRadius(10)
-                                    .padding(.horizontal)
-                            }
+            if isLoading {
+                ProgressView("Loading notifications...")
+                    .foregroundColor(.white)
+            } else if notifications.isEmpty {
+                Text("No notifications")
+                    .foregroundColor(.white)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(notifications, id: \.self) { notification in
+                            Text(notification)
+                                .foregroundColor(.black)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color(.systemGray5))
+                                .cornerRadius(10)
+                                .padding(.horizontal)
                         }
                     }
-                    .padding(.top)
                 }
+                .padding(.top)
             }
-            .onAppear {
-                notificationCount = 0
-            }
-            .navigationBarTitle("Notifications", displayMode: .inline)
+        }
+        .onAppear {
+            loadNotifications()
+        }
+        .navigationBarTitle("Notifications", displayMode: .inline)
+    }
+    
+    private func loadNotifications() {
+            guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+            let db = Firestore.firestore()
+
+            db.collection("users").document(currentUserID).collection("notifications")
+                .order(by: "timestamp", descending: true)
+                .getDocuments { snapshot, error in
+                    if let error = error {
+                        print("Error fetching notifications: \(error.localizedDescription)")
+                        return
+                    }
+                    
+                    let fetchedNotifications = snapshot?.documents.compactMap { doc in
+                        doc.data()["message"] as? String
+                    } ?? []
+                    
+                    DispatchQueue.main.async {
+                        self.notifications = fetchedNotifications
+                        self.notificationCount = 0  // Reset the badge count
+                        self.isLoading = false
+                    }
+                }
         }
     }
-}
+
 
 import SwiftUI
 import AVKit
