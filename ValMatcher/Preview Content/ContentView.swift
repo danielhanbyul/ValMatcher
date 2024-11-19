@@ -795,55 +795,71 @@ struct ContentView: View {
             "timestamp": Timestamp()
         ]
 
+        // Check if a match already exists between the two users
         db.collection("matches")
-            .whereField("user1", isEqualTo: currentUserID)
-            .whereField("user2", isEqualTo: likedUserID)
+            .whereField("user1", in: [currentUserID, likedUserID])
+            .whereField("user2", in: [currentUserID, likedUserID])
             .getDocuments { querySnapshot, error in
                 if let error = error {
                     print("Error checking existing match: \(error.localizedDescription)")
                     return
                 }
 
+                // If no existing match, create the match and notify both users
                 if querySnapshot?.documents.isEmpty == true {
                     db.collection("matches").addDocument(data: matchData) { error in
                         if let error = error {
                             print("Error creating match: \(error.localizedDescription)")
                         } else {
-                            // Send notifications to both users
-                            let currentUserName = userProfileViewModel.user.name
-                            let likedUserName = likedUser.name
+                            print("Match created successfully between \(currentUserID) and \(likedUserID)")
 
-                            let currentUserMessage = "You matched with \(likedUserName)!"
-                            let likedUserMessage = "You matched with \(currentUserName)!"
+                            // Notify both users
+                            self.sendMatchNotification(
+                                to: currentUserID,
+                                matchedUserName: likedUser.name
+                            )
+                            self.sendMatchNotification(
+                                to: likedUserID,
+                                matchedUserName: self.userProfileViewModel.user.name
+                            )
 
-                            // Send notifications and show alerts for both users
-                            DispatchQueue.main.async {
-                                // Notification for the current user
-                                self.notifications.append(currentUserMessage)
-                                self.alertMessage = currentUserMessage
-                                self.showAlert = true
-                                self.notificationCount += 1
-
-                                // Send notification for the other user
-                                self.sendNotification(to: likedUserID, message: likedUserMessage)
-
-                                // Update Firestore notifications for the other user
-                                self.showAlertForOtherUser(likedUserMessage)
-                            }
-
-                            // Create the DM chat between both users
-                            self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
+                            // Create the chat between the two users
+                            self.createDMChat(
+                                currentUserID: currentUserID,
+                                likedUserID: likedUserID,
+                                likedUser: likedUser
+                            )
                         }
                     }
                 }
             }
     }
 
-    // Show notification for the other user
-    private func showAlertForOtherUser(_ message: String) {
-        DispatchQueue.main.async {
-            self.alertMessage = message
-            self.showAlert = true
+    private func sendMatchNotification(to userID: String, matchedUserName: String) {
+        // Send the notification to Firestore
+        let db = Firestore.firestore()
+        let notificationMessage = "You matched with \(matchedUserName)!"
+
+        let notificationData: [String: Any] = [
+            "userID": userID,
+            "message": notificationMessage,
+            "timestamp": Timestamp()
+        ]
+
+        db.collection("notifications").addDocument(data: notificationData) { error in
+            if let error = error {
+                print("Error sending notification: \(error.localizedDescription)")
+            } else {
+                print("Notification sent successfully to userID: \(userID)")
+            }
+        }
+
+        // If the notification is for the currently logged-in user, display it immediately
+        if Auth.auth().currentUser?.uid == userID {
+            DispatchQueue.main.async {
+                self.alertMessage = notificationMessage
+                self.showAlert = true
+            }
         }
     }
 
