@@ -97,6 +97,9 @@ struct ContentView: View {
     @State private var showInAppNotification = false
     @State private var inAppNotificationTitle = ""
     @State private var inAppNotificationMessage = ""
+    @State private var showMatchNotification = false
+    @State private var matchedUser: UserProfile?
+    
 
 
 
@@ -129,11 +132,11 @@ struct ContentView: View {
                 }
             }
             
-            InAppNotificationView(
-                isVisible: $showInAppNotification,
-                title: inAppNotificationTitle,
-                message: inAppNotificationMessage
-            )
+            if showMatchNotification, let matchedUser = matchedUser {
+                    MatchNotificationView(matchedUser: matchedUser)
+                        .transition(.scale)
+                        .zIndex(1) // Ensure it appears above other UI elements
+                }
 
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -156,6 +159,7 @@ struct ContentView: View {
                                     .offset(x: 12, y: -12)
                             )
                     }
+
                     NavigationLink(destination: DMHomeView(totalUnreadMessages: $unreadMessagesCount)) {
                         Image(systemName: "message.fill")
                             .foregroundColor(.white)
@@ -855,42 +859,12 @@ struct ContentView: View {
                         } else {
                             print("DEBUG: Match created successfully between \(currentUserID) and \(likedUserID)")
 
-                            // Send match notifications separately to both users
-                            let currentUserName = userProfileViewModel.user.name
-                            let likedUserName = likedUser.name
-
-                            // Notification for current user
-                            if UIApplication.shared.applicationState == .active {
-                                // In-app notification for current user
-                                self.showInAppNotification(
-                                    title: "You matched!",
-                                    message: "You matched with \(likedUserName)!"
-                                )
-                            } else {
-                                // System notification for current user
-                                self.sendNotification(
-                                    to: currentUserID,
-                                    message: "You matched with \(likedUserName)!"
-                                )
-                            }
-
-                            // Notification for liked user
-                            if UIApplication.shared.applicationState == .active {
-                                // In-app notification for liked user
-                                self.showInAppNotification(
-                                    title: "You matched!",
-                                    message: "You matched with \(currentUserName)!"
-                                )
-                            } else {
-                                // System notification for liked user
-                                self.sendNotification(
-                                    to: likedUserID,
-                                    message: "You matched with \(currentUserName)!"
-                                )
-                            }
-
-                            // Create the DM chat between both users
-                            self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
+                            // Notify both users about the match
+                            self.notifyUserAboutMatch(
+                                currentUserID: currentUserID,
+                                likedUserID: likedUserID,
+                                likedUser: likedUser
+                            )
                         }
                     }
                 } else {
@@ -898,6 +872,60 @@ struct ContentView: View {
                 }
             }
     }
+
+        
+    private func notifyUserAboutMatch(
+        currentUserID: String,
+        likedUserID: String,
+        likedUser: UserProfile
+    ) {
+        let currentUserName = userProfileViewModel.user.name
+        let currentUserImage = userProfileViewModel.user.imageName
+
+        // Notify current user
+        if UIApplication.shared.applicationState == .active {
+            // In-app notification for current user
+            showInAppNotificationForMatch(matchedUser: likedUser)
+            notificationCount += 1 // Update bell icon count
+        } else {
+            // System notification for current user
+            sendNotification(to: currentUserID, message: "You matched with \(likedUser.name)!")
+        }
+
+        // Notify liked user
+        if UIApplication.shared.applicationState == .active {
+            // In-app notification for liked user
+            showInAppNotificationForMatch(matchedUser: UserProfile(
+                name: currentUserName,
+                rank: userProfileViewModel.user.rank,
+                imageName: currentUserImage,
+                age: userProfileViewModel.user.age,
+                server: userProfileViewModel.user.server,
+                answers: userProfileViewModel.user.answers,
+                hasAnsweredQuestions: true,
+                mediaItems: userProfileViewModel.user.mediaItems
+            ))
+            notificationCount += 1 // Update bell icon count for the matched user
+        } else {
+            // System notification for liked user
+            sendNotification(to: likedUserID, message: "You matched with \(currentUserName)!")
+        }
+    }
+
+
+    private func showInAppNotificationForMatch(matchedUser: UserProfile) {
+        self.matchedUser = matchedUser
+        self.notifications.append("You matched with \(matchedUser.name)!")
+        self.notificationCount += 1 // Increment notification bell count
+        self.showMatchNotification = true
+
+        // Hide the notification after 5 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            self.showMatchNotification = false
+        }
+    }
+
+
 
     
     private func saveNotification(for userID: String, message: String) {
