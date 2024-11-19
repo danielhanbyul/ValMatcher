@@ -29,39 +29,6 @@ struct MessageListener {
     }
 }
 
-struct InAppNotificationView: View {
-    @Binding var isVisible: Bool
-    let title: String
-    let message: String
-
-    var body: some View {
-        VStack {
-            if isVisible {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(title)
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        Text(message)
-                            .font(.subheadline)
-                            .foregroundColor(.white)
-                    }
-                    Spacer()
-                }
-                .padding()
-                .background(Color.green)
-                .cornerRadius(10)
-                .shadow(radius: 10)
-                .transition(.move(edge: .top))
-                .animation(.easeInOut)
-            }
-            Spacer()
-        }
-        .padding()
-    }
-}
-
-
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState  // Access the shared app state]
@@ -92,15 +59,7 @@ struct ContentView: View {
     @State private var unreadCountUser1 = 0
     @State private var unreadCountUser2 = 0
     @State private var isUnreadMessagesListenerActive = false
-    @State private var shouldShowProfileQuestions = false
-    @State private var shouldShowTutorial = false
-    @State private var showInAppNotification = false
-    @State private var inAppNotificationTitle = ""
-    @State private var inAppNotificationMessage = ""
-    @State private var showMatchNotification = false
-    @State private var matchedUser: UserProfile?
     
-
 
 
 
@@ -131,13 +90,6 @@ struct ContentView: View {
                     }
                 }
             }
-            
-            if showMatchNotification, let matchedUser = matchedUser {
-                    MatchNotificationView(matchedUser: matchedUser)
-                        .transition(.scale)
-                        .zIndex(1) // Ensure it appears above other UI elements
-                }
-
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -159,7 +111,6 @@ struct ContentView: View {
                                     .offset(x: 12, y: -12)
                             )
                     }
-
                     NavigationLink(destination: DMHomeView(totalUnreadMessages: $unreadMessagesCount)) {
                         Image(systemName: "message.fill")
                             .foregroundColor(.white)
@@ -747,17 +698,18 @@ struct ContentView: View {
     }
 
 
-    private func showInAppNotification(title: String, message: String) {
-        inAppNotificationTitle = title
-        inAppNotificationMessage = message
-        showInAppNotification = true
-
-        // Hide the notification after 3 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            showInAppNotification = false
+    private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
+        guard UIApplication.shared.applicationState == .active else {
+            return // Prevent in-app notification if the app is not in the foreground
         }
-    }
+        
+        guard let senderName = latestMessage.data()["senderName"] as? String,
+              let messageText = latestMessage.data()["text"] as? String else { return }
 
+        let alertMessage = "\(senderName): \(messageText)"
+        self.bannerMessage = alertMessage
+        self.showNotificationBanner = true
+    }
 
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
         guard UIApplication.shared.applicationState != .active else {
@@ -848,103 +800,42 @@ struct ContentView: View {
             .whereField("user2", isEqualTo: likedUserID)
             .getDocuments { querySnapshot, error in
                 if let error = error {
-                    print("DEBUG: Error checking existing match: \(error.localizedDescription)")
+                    print("Error checking existing match: \(error.localizedDescription)")
                     return
                 }
-
+                
                 if querySnapshot?.documents.isEmpty == true {
                     db.collection("matches").addDocument(data: matchData) { error in
                         if let error = error {
-                            print("DEBUG: Error creating match: \(error.localizedDescription)")
+                            print("Error creating match: \(error.localizedDescription)")
                         } else {
-                            print("DEBUG: Match created successfully between \(currentUserID) and \(likedUserID)")
+                            // Send personalized notifications to both users
+                            let currentUserName = userProfileViewModel.user.name
+                            let likedUserName = likedUser.name
 
-                            // Notify both users about the match
-                            self.notifyUserAboutMatch(
-                                currentUserID: currentUserID,
-                                likedUserID: likedUserID,
-                                likedUser: likedUser
-                            )
+                            let currentUserMessage = "You matched with \(likedUserName)!"
+                            let likedUserMessage = "You matched with \(currentUserName)!"
+
+                            // Send notifications to both users
+                            if !self.notifications.contains(currentUserMessage) && !self.acknowledgedNotifications.contains(currentUserMessage) {
+                                self.notifications.append(currentUserMessage)
+                                self.alertMessage = currentUserMessage
+                                self.showAlert = true
+                                self.notificationCount += 1
+                                self.sendNotification(to: currentUserID, message: currentUserMessage)
+                            }
+
+                            if !self.notifications.contains(likedUserMessage) && !self.acknowledgedNotifications.contains(likedUserMessage) {
+                                self.sendNotification(to: likedUserID, message: likedUserMessage)
+                            }
+
+                            // Create the DM chat between both users
+                            self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
                         }
                     }
-                } else {
-                    print("DEBUG: Match already exists between \(currentUserID) and \(likedUserID)")
                 }
             }
     }
-
-        
-    private func notifyUserAboutMatch(
-        currentUserID: String,
-        likedUserID: String,
-        likedUser: UserProfile
-    ) {
-        let currentUserName = userProfileViewModel.user.name
-        let currentUserImage = userProfileViewModel.user.imageName
-
-        // Notify current user
-        if UIApplication.shared.applicationState == .active {
-            // In-app notification for current user
-            showInAppNotificationForMatch(matchedUser: likedUser)
-            notificationCount += 1 // Update bell icon count
-        } else {
-            // System notification for current user
-            sendNotification(to: currentUserID, message: "You matched with \(likedUser.name)!")
-        }
-
-        // Notify liked user
-        if UIApplication.shared.applicationState == .active {
-            // In-app notification for liked user
-            showInAppNotificationForMatch(matchedUser: UserProfile(
-                name: currentUserName,
-                rank: userProfileViewModel.user.rank,
-                imageName: currentUserImage,
-                age: userProfileViewModel.user.age,
-                server: userProfileViewModel.user.server,
-                answers: userProfileViewModel.user.answers,
-                hasAnsweredQuestions: true,
-                mediaItems: userProfileViewModel.user.mediaItems
-            ))
-            notificationCount += 1 // Update bell icon count for the matched user
-        } else {
-            // System notification for liked user
-            sendNotification(to: likedUserID, message: "You matched with \(currentUserName)!")
-        }
-    }
-
-
-    private func showInAppNotificationForMatch(matchedUser: UserProfile) {
-        self.matchedUser = matchedUser
-        self.notifications.append("You matched with \(matchedUser.name)!")
-        self.notificationCount += 1 // Increment notification bell count
-        self.showMatchNotification = true
-
-        // Hide the notification after 5 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-            self.showMatchNotification = false
-        }
-    }
-
-
-
-    
-    private func saveNotification(for userID: String, message: String) {
-        let db = Firestore.firestore()
-        let notificationData: [String: Any] = [
-            "message": message,
-            "timestamp": Timestamp()
-        ]
-        
-        db.collection("users").document(userID).collection("notifications").addDocument(data: notificationData) { error in
-            if let error = error {
-                print("DEBUG: Error saving notification for user \(userID): \(error.localizedDescription)")
-            } else {
-                print("DEBUG: Notification saved for user \(userID): \(message)")
-            }
-        }
-    }
-
-
     
 
     private func createDMChat(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
@@ -983,24 +874,21 @@ struct ContentView: View {
     }
 
     private func sendNotification(to userID: String, message: String) {
-        print("DEBUG: Preparing to send local notification.")
-        let content = UNMutableNotificationContent()
-        content.title = "New Match"
-        content.body = message
-        content.sound = .default
+        let db = Firestore.firestore()
+        let notificationData: [String: Any] = [
+            "userID": userID,
+            "message": message,
+            "timestamp": Timestamp()
+        ]
 
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-
-        UNUserNotificationCenter.current().add(request) { error in
+        db.collection("notifications").addDocument(data: notificationData) { error in
             if let error = error {
-                print("DEBUG: Failed to deliver local notification: \(error.localizedDescription)")
+                print("Error sending notification: \(error.localizedDescription)")
             } else {
-                print("DEBUG: Local notification delivered successfully.")
+                print("Notification sent successfully to userID: \(userID)")
             }
         }
     }
-
-
 
 
     private func passAction() {
@@ -1115,67 +1003,39 @@ struct NotificationsView: View {
     @Binding var notifications: [String]
     @Binding var notificationCount: Int
 
-    @State private var isLoading = true
-
     var body: some View {
         ZStack {
             LinearGradient(gradient: Gradient(colors: [Color.black, Color.gray]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all)
 
-            if isLoading {
-                ProgressView("Loading notifications...")
-                    .foregroundColor(.white)
-            } else if notifications.isEmpty {
-                Text("No notifications")
-                    .foregroundColor(.white)
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(notifications, id: \.self) { notification in
-                            Text(notification)
-                                .foregroundColor(.black)
-                                .padding()
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color(.systemGray5))
-                                .cornerRadius(10)
-                                .padding(.horizontal)
+            VStack {
+                if notifications.isEmpty {
+                    Text("No notifications")
+                        .foregroundColor(.white)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(notifications, id: \.self) { notification in
+                                Text(notification)
+                                    .foregroundColor(.black)
+                                    .padding()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color(.systemGray5))
+                                    .cornerRadius(10)
+                                    .padding(.horizontal)
+                            }
                         }
                     }
+                    .padding(.top)
                 }
-                .padding(.top)
             }
-        }
-        .onAppear {
-            loadNotifications()
-        }
-        .navigationBarTitle("Notifications", displayMode: .inline)
-    }
-    
-    private func loadNotifications() {
-            guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-            let db = Firestore.firestore()
-
-            db.collection("users").document(currentUserID).collection("notifications")
-                .order(by: "timestamp", descending: true)
-                .getDocuments { snapshot, error in
-                    if let error = error {
-                        print("Error fetching notifications: \(error.localizedDescription)")
-                        return
-                    }
-                    
-                    let fetchedNotifications = snapshot?.documents.compactMap { doc in
-                        doc.data()["message"] as? String
-                    } ?? []
-                    
-                    DispatchQueue.main.async {
-                        self.notifications = fetchedNotifications
-                        self.notificationCount = 0  // Reset the badge count
-                        self.isLoading = false
-                    }
-                }
+            .onAppear {
+                notificationCount = 0
+            }
+            .navigationBarTitle("Notifications", displayMode: .inline)
         }
     }
-
+}
 
 import SwiftUI
 import AVKit
