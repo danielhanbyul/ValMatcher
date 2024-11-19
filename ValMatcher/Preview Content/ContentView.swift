@@ -29,6 +29,39 @@ struct MessageListener {
     }
 }
 
+struct InAppNotificationView: View {
+    @Binding var isVisible: Bool
+    let title: String
+    let message: String
+
+    var body: some View {
+        VStack {
+            if isVisible {
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(title)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        Text(message)
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                    }
+                    Spacer()
+                }
+                .padding()
+                .background(Color.green)
+                .cornerRadius(10)
+                .shadow(radius: 10)
+                .transition(.move(edge: .top))
+                .animation(.easeInOut)
+            }
+            Spacer()
+        }
+        .padding()
+    }
+}
+
+
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState  // Access the shared app state]
@@ -60,7 +93,11 @@ struct ContentView: View {
     @State private var unreadCountUser2 = 0
     @State private var isUnreadMessagesListenerActive = false
     @State private var shouldShowProfileQuestions = false
-        @State private var shouldShowTutorial = false
+    @State private var shouldShowTutorial = false
+    @State private var showInAppNotification = false
+    @State private var inAppNotificationTitle = ""
+    @State private var inAppNotificationMessage = ""
+
 
 
 
@@ -91,6 +128,13 @@ struct ContentView: View {
                     }
                 }
             }
+            
+            InAppNotificationView(
+                isVisible: $showInAppNotification,
+                title: inAppNotificationTitle,
+                message: inAppNotificationMessage
+            )
+
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -699,18 +743,17 @@ struct ContentView: View {
     }
 
 
-    private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
-        guard UIApplication.shared.applicationState == .active else {
-            return // Prevent in-app notification if the app is not in the foreground
-        }
-        
-        guard let senderName = latestMessage.data()["senderName"] as? String,
-              let messageText = latestMessage.data()["text"] as? String else { return }
+    private func showInAppNotification(title: String, message: String) {
+        inAppNotificationTitle = title
+        inAppNotificationMessage = message
+        showInAppNotification = true
 
-        let alertMessage = "\(senderName): \(messageText)"
-        self.bannerMessage = alertMessage
-        self.showNotificationBanner = true
+        // Hide the notification after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            showInAppNotification = false
+        }
     }
+
 
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
         guard UIApplication.shared.applicationState != .active else {
@@ -812,20 +855,39 @@ struct ContentView: View {
                         } else {
                             print("DEBUG: Match created successfully between \(currentUserID) and \(likedUserID)")
 
-                            // Send notifications and save them to the database
+                            // Send match notifications separately to both users
                             let currentUserName = userProfileViewModel.user.name
                             let likedUserName = likedUser.name
 
-                            let currentUserMessage = "You matched with \(likedUserName)!"
-                            let likedUserMessage = "You matched with \(currentUserName)!"
+                            // Notification for current user
+                            if UIApplication.shared.applicationState == .active {
+                                // In-app notification for current user
+                                self.showInAppNotification(
+                                    title: "You matched!",
+                                    message: "You matched with \(likedUserName)!"
+                                )
+                            } else {
+                                // System notification for current user
+                                self.sendNotification(
+                                    to: currentUserID,
+                                    message: "You matched with \(likedUserName)!"
+                                )
+                            }
 
-                            // Send banners
-                            self.sendNotification(to: currentUserID, message: currentUserMessage)
-                            self.sendNotification(to: likedUserID, message: likedUserMessage)
-
-                            // Save to Notifications Tab
-                            self.saveNotification(for: currentUserID, message: currentUserMessage)
-                            self.saveNotification(for: likedUserID, message: likedUserMessage)
+                            // Notification for liked user
+                            if UIApplication.shared.applicationState == .active {
+                                // In-app notification for liked user
+                                self.showInAppNotification(
+                                    title: "You matched!",
+                                    message: "You matched with \(currentUserName)!"
+                                )
+                            } else {
+                                // System notification for liked user
+                                self.sendNotification(
+                                    to: likedUserID,
+                                    message: "You matched with \(currentUserName)!"
+                                )
+                            }
 
                             // Create the DM chat between both users
                             self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
@@ -836,6 +898,7 @@ struct ContentView: View {
                 }
             }
     }
+
     
     private func saveNotification(for userID: String, message: String) {
         let db = Firestore.firestore()
