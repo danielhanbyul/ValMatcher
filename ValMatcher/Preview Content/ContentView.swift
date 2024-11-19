@@ -803,30 +803,32 @@ struct ContentView: View {
                     print("Error checking existing match: \(error.localizedDescription)")
                     return
                 }
-                
+
                 if querySnapshot?.documents.isEmpty == true {
                     db.collection("matches").addDocument(data: matchData) { error in
                         if let error = error {
                             print("Error creating match: \(error.localizedDescription)")
                         } else {
-                            // Send personalized notifications to both users
+                            // Send notifications to both users
                             let currentUserName = userProfileViewModel.user.name
                             let likedUserName = likedUser.name
 
                             let currentUserMessage = "You matched with \(likedUserName)!"
                             let likedUserMessage = "You matched with \(currentUserName)!"
 
-                            // Send notifications to both users
-                            if !self.notifications.contains(currentUserMessage) && !self.acknowledgedNotifications.contains(currentUserMessage) {
+                            // Send notifications and show alerts for both users
+                            DispatchQueue.main.async {
+                                // Notification for the current user
                                 self.notifications.append(currentUserMessage)
                                 self.alertMessage = currentUserMessage
                                 self.showAlert = true
                                 self.notificationCount += 1
-                                self.sendNotification(to: currentUserID, message: currentUserMessage)
-                            }
 
-                            if !self.notifications.contains(likedUserMessage) && !self.acknowledgedNotifications.contains(likedUserMessage) {
+                                // Send notification for the other user
                                 self.sendNotification(to: likedUserID, message: likedUserMessage)
+
+                                // Update Firestore notifications for the other user
+                                self.showAlertForOtherUser(likedUserMessage)
                             }
 
                             // Create the DM chat between both users
@@ -836,6 +838,15 @@ struct ContentView: View {
                 }
             }
     }
+
+    // Show notification for the other user
+    private func showAlertForOtherUser(_ message: String) {
+        DispatchQueue.main.async {
+            self.alertMessage = message
+            self.showAlert = true
+        }
+    }
+
     
 
     private func createDMChat(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
