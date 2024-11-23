@@ -795,6 +795,11 @@ struct ContentView: View {
             "timestamp": Timestamp()
         ]
 
+        // DEBUG: Log current user and liked user information
+        print("DEBUG: Attempting to create match")
+        print("DEBUG: CurrentUserID: \(currentUserID), CurrentUserName: \(self.userProfileViewModel.user.name)")
+        print("DEBUG: LikedUserID: \(likedUserID), LikedUserName: \(likedUser.name)")
+
         // Check if a match already exists between the two users
         db.collection("matches")
             .whereField("user1", in: [currentUserID, likedUserID])
@@ -812,6 +817,18 @@ struct ContentView: View {
                             print("Error creating match: \(error.localizedDescription)")
                         } else {
                             print("Match created successfully between \(currentUserID) and \(likedUserID)")
+
+                            // Validate that userProfileViewModel.user.name is not empty
+                            guard !self.userProfileViewModel.user.name.isEmpty else {
+                                print("DEBUG: Current user's name is empty. Notification will not be sent.")
+                                return
+                            }
+
+                            // Validate that likedUserID is not empty
+                            guard !likedUserID.isEmpty else {
+                                print("DEBUG: likedUserID is empty. Notification will not be sent.")
+                                return
+                            }
 
                             // Notify both users
                             self.sendMatchNotification(
@@ -831,9 +848,12 @@ struct ContentView: View {
                             )
                         }
                     }
+                } else {
+                    print("DEBUG: Match already exists between \(currentUserID) and \(likedUserID)")
                 }
             }
     }
+
 
     private func sendMatchNotification(to userID: String, matchedUserName: String) {
         // Send the notification to Firestore
