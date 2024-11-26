@@ -438,16 +438,7 @@ struct ContentView: View {
                                     }
 
                                     if matchQuerySnapshot?.isEmpty == false {
-                                        let matchMessage = "You matched with \(likedUser.name)!"
-                                        if !self.notifications.contains(matchMessage) && !self.acknowledgedNotifications.contains(matchMessage) {
-                                            self.alertMessage = matchMessage
-                                            self.notifications.append(matchMessage)
-                                            notificationCount += 1
-                                            self.showAlert = true
-                                            self.sendNotification(to: currentUserID, message: matchMessage)
-                                            self.sendNotification(to: likingUserID, message: matchMessage)
-                                            self.createDMChat(currentUserID: currentUserID, likedUserID: likingUserID, likedUser: likedUser)
-                                        }
+                                        self.createMatch(currentUserID: currentUserID, likedUserID: likingUserID, likedUser: likedUser)
                                     }
                                 }
                         }
@@ -795,11 +786,6 @@ struct ContentView: View {
             "timestamp": Timestamp()
         ]
 
-        // DEBUG: Log current user and liked user information
-        print("DEBUG: Attempting to create match")
-        print("DEBUG: CurrentUserID: \(currentUserID), CurrentUserName: \(self.userProfileViewModel.user.name)")
-        print("DEBUG: LikedUserID: \(likedUserID), LikedUserName: \(likedUser.name)")
-
         // Check if a match already exists between the two users
         db.collection("matches")
             .whereField("user1", in: [currentUserID, likedUserID])
@@ -818,34 +804,12 @@ struct ContentView: View {
                         } else {
                             print("Match created successfully between \(currentUserID) and \(likedUserID)")
 
-                            // Validate that userProfileViewModel.user.name is not empty
-                            guard !self.userProfileViewModel.user.name.isEmpty else {
-                                print("DEBUG: Current user's name is empty. Notification will not be sent.")
-                                return
-                            }
-
-                            // Validate that likedUserID is not empty
-                            guard !likedUserID.isEmpty else {
-                                print("DEBUG: likedUserID is empty. Notification will not be sent.")
-                                return
-                            }
-
                             // Notify both users
-                            self.sendMatchNotification(
-                                to: currentUserID,
-                                matchedUserName: likedUser.name
-                            )
-                            self.sendMatchNotification(
-                                to: likedUserID,
-                                matchedUserName: self.userProfileViewModel.user.name
-                            )
+                            self.sendMatchNotification(to: currentUserID, matchedUserName: likedUser.name)
+                            self.sendMatchNotification(to: likedUserID, matchedUserName: self.userProfileViewModel.user.name)
 
                             // Create the chat between the two users
-                            self.createDMChat(
-                                currentUserID: currentUserID,
-                                likedUserID: likedUserID,
-                                likedUser: likedUser
-                            )
+                            self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
                         }
                     }
                 } else {
@@ -856,7 +820,6 @@ struct ContentView: View {
 
 
     private func sendMatchNotification(to userID: String, matchedUserName: String) {
-        // Send the notification to Firestore
         let db = Firestore.firestore()
         let notificationMessage = "You matched with \(matchedUserName)!"
 
