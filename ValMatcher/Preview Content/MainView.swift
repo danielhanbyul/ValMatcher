@@ -105,6 +105,9 @@ struct MainView: View {
                             } else if !self.isTutorialSeen {
                                 self.isShowingLoginView = false
                             }
+
+                            // Start listening for matches when user is authenticated
+                            appState.listenForMatches()
                         }
                     }
                     self.isLoading = false

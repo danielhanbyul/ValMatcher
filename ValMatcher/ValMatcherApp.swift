@@ -203,11 +203,13 @@ class AppState: ObservableObject {
 
     private var chatListeners: [String: ListenerRegistration] = [:]
 
+    // Add a chat listener for a specific chat ID
     func addChatListener(for chatID: String, listener: ListenerRegistration) {
         print("DEBUG: Adding chat listener for chatID: \(chatID)")
         chatListeners[chatID] = listener
     }
 
+    // Remove a specific chat listener by chat ID
     func removeChatListener(for chatID: String) {
         if let listener = chatListeners[chatID] {
             listener.remove()
@@ -218,6 +220,7 @@ class AppState: ObservableObject {
         }
     }
 
+    // Remove all chat listeners
     func removeAllChatListeners() {
         print("DEBUG: Removing all chat listeners.")
         for (chatID, listener) in chatListeners {
@@ -227,6 +230,7 @@ class AppState: ObservableObject {
         chatListeners.removeAll()
     }
 
+    // Listen for new matches involving the current user
     func listenForMatches() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("DEBUG: User not authenticated.")
@@ -234,6 +238,8 @@ class AppState: ObservableObject {
         }
 
         let db = Firestore.firestore()
+
+        // Listen for matches where the current user is `user1`
         db.collection("matches")
             .whereField("user1", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
@@ -241,10 +247,10 @@ class AppState: ObservableObject {
                     print("DEBUG: Error listening for matches (user1): \(error.localizedDescription)")
                     return
                 }
-
                 self.processMatchChanges(snapshot: snapshot, currentUserID: currentUserID)
             }
 
+        // Listen for matches where the current user is `user2`
         db.collection("matches")
             .whereField("user2", isEqualTo: currentUserID)
             .addSnapshotListener { snapshot, error in
@@ -252,11 +258,11 @@ class AppState: ObservableObject {
                     print("DEBUG: Error listening for matches (user2): \(error.localizedDescription)")
                     return
                 }
-
                 self.processMatchChanges(snapshot: snapshot, currentUserID: currentUserID)
             }
     }
 
+    // Process changes in the matches collection
     private func processMatchChanges(snapshot: QuerySnapshot?, currentUserID: String) {
         guard let documents = snapshot?.documents else { return }
 
@@ -268,8 +274,11 @@ class AppState: ObservableObject {
 
                 if user1 == currentUserID || user2 == currentUserID {
                     print("DEBUG: New match found involving user \(currentUserID)")
-                    // Fetch user names for notification
+
+                    // Determine the other user's ID
                     let otherUserID = user1 == currentUserID ? user2 : user1
+
+                    // Fetch the name of the other user and display a notification
                     fetchUserName(userID: otherUserID) { userName in
                         let message = "You matched with \(userName)!"
                         self.showMatchNotification(message: message)
@@ -279,6 +288,7 @@ class AppState: ObservableObject {
         }
     }
 
+    // Fetch the user's name from Firestore by user ID
     private func fetchUserName(userID: String, completion: @escaping (String) -> Void) {
         let db = Firestore.firestore()
         db.collection("users").document(userID).getDocument { document, error in
@@ -292,7 +302,9 @@ class AppState: ObservableObject {
         }
     }
 
-    private func showMatchNotification(message: String) {
+    // Show a match notification with the given message
+    func showMatchNotification(message: String) { // Changed from `private` to `internal`
+        print("DEBUG: Preparing to show notification: \(message)")
         DispatchQueue.main.async {
             self.alertMessage = message
             self.showAlert = true

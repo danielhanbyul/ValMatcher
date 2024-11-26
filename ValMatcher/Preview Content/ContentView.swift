@@ -795,7 +795,6 @@ struct ContentView: View {
             "timestamp": Timestamp()
         ]
 
-        // Check if a match already exists between the two users
         db.collection("matches")
             .whereField("user1", in: [currentUserID, likedUserID])
             .whereField("user2", in: [currentUserID, likedUserID])
@@ -805,7 +804,6 @@ struct ContentView: View {
                     return
                 }
 
-                // If no existing match, create the match and notify both users
                 if querySnapshot?.documents.isEmpty == true {
                     db.collection("matches").addDocument(data: matchData) { error in
                         if let error = error {
@@ -823,6 +821,11 @@ struct ContentView: View {
                                 matchedUserName: self.userProfileViewModel.user.name
                             )
 
+                            // Force notification for the current user
+                            self.appState.showMatchNotification(
+                                message: "You matched with \(likedUser.name)!"
+                            )
+
                             // Create the chat between the two users
                             self.createDMChat(
                                 currentUserID: currentUserID,
@@ -834,6 +837,7 @@ struct ContentView: View {
                 }
             }
     }
+
 
     private func sendMatchNotification(to userID: String, matchedUserName: String) {
         // Send the notification to Firestore
