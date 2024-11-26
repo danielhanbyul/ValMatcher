@@ -30,28 +30,36 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     var orientationLock = UIInterfaceOrientationMask.portrait  // Default orientation is portrait
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        print("DEBUG: Application didFinishLaunchingWithOptions started.")
+
         // Configure Firebase
         FirebaseApp.configure()
+        print("DEBUG: Firebase configured successfully.")
 
         // Set the delegate for UNUserNotificationCenter
         UNUserNotificationCenter.current().delegate = self
+        print("DEBUG: UNUserNotificationCenter delegate set.")
 
         // Check and request notification permissions
         checkNotificationPermissions()
 
         // Register for remote notifications
         application.registerForRemoteNotifications()
+        print("DEBUG: Registering for remote notifications.")
 
         // Set the delegate for Firebase Messaging
         Messaging.messaging().delegate = self
+        print("DEBUG: Firebase Messaging delegate set.")
 
         // Get the current FCM token if already available
         Messaging.messaging().token { token, error in
             if let error = error {
-                print("Error fetching FCM registration token: \(error.localizedDescription)")
+                print("ERROR: Failed to fetch FCM registration token: \(error.localizedDescription)")
             } else if let token = token {
-                print("FCM registration token: \(token)")
-                // Send token to your server if needed
+                print("DEBUG: FCM registration token fetched: \(token)")
+                self.updateFCMTokenInFirestore(fcmToken: token)
+            } else {
+                print("ERROR: FCM token fetch returned nil.")
             }
         }
 
@@ -60,6 +68,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
     // Check notification permissions and request them if not determined
     private func checkNotificationPermissions() {
+        print("DEBUG: Checking notification permissions.")
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             switch settings.authorizationStatus {
             case .notDetermined:
@@ -70,89 +79,110 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             case .authorized, .provisional:
                 print("DEBUG: Notifications are authorized.")
             @unknown default:
-                print("DEBUG: Unknown notification settings state.")
+                print("DEBUG: Unknown notification permissions state.")
             }
         }
     }
 
     // Request notification permissions
     private func requestNotificationPermission() {
+        print("DEBUG: Requesting notification permissions.")
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            if granted {
+            if let error = error {
+                print("ERROR: Failed to request notification permissions: \(error.localizedDescription)")
+            } else if granted {
                 print("DEBUG: Notifications permission granted.")
                 DispatchQueue.main.async {
                     UIApplication.shared.registerForRemoteNotifications()
                 }
             } else {
-                print("DEBUG: Notifications permission denied.")
+                print("DEBUG: Notifications permission denied by the user.")
             }
         }
     }
 
     // Handle successful registration for remote notifications
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        // Pass the device token to Firebase to link it with the FCM
+        print("DEBUG: Successfully registered for remote notifications.")
         Messaging.messaging().apnsToken = deviceToken
-        print("Successfully registered for remote notifications with APNs token.")
+        print("DEBUG: APNs token passed to Firebase.")
     }
 
     // Handle failure to register for remote notifications
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("Failed to register for remote notifications: \(error.localizedDescription)")
+        print("ERROR: Failed to register for remote notifications: \(error.localizedDescription)")
     }
 
     // Handle foreground notifications
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        // Display the notification as a banner with sound and badge, even if the app is in the foreground
+        print("DEBUG: Received notification in foreground: \(notification.request.content.userInfo)")
         completionHandler([.banner, .sound, .badge])
     }
 
     // Handle notification tap actions
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let userInfo = response.notification.request.content.userInfo
+        print("DEBUG: Notification tapped. UserInfo: \(userInfo)")
 
-        // Extract relevant information from the notification payload
         if let messageId = userInfo["messageId"] as? String {
+            print("DEBUG: Extracted messageId: \(messageId)")
             navigateToChat(withMessageId: messageId)
         }
-        
-        print("Notification tapped with userInfo: \(userInfo)")
         completionHandler()
     }
 
     // Handle token refresh for FCM
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        print("Firebase registration token: \(fcmToken ?? "")")
-        // If necessary, send the token to your server to associate with the user's account
+        guard let fcmToken = fcmToken else {
+            print("ERROR: FCM token is nil.")
+            return
+        }
+        print("DEBUG: FCM token received: \(fcmToken)")
+        updateFCMTokenInFirestore(fcmToken: fcmToken)
+    }
+
+    // Update FCM token in Firestore
+    private func updateFCMTokenInFirestore(fcmToken: String) {
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("DEBUG: No authenticated user to update FCM token.")
+            return
+        }
+
+        let db = Firestore.firestore()
+        print("DEBUG: Updating FCM token in Firestore for user: \(currentUserID). Token: \(fcmToken)")
+        db.collection("users").document(currentUserID).setData(["fcmToken": fcmToken], merge: true) { error in
+            if let error = error {
+                print("ERROR: Error updating FCM token in Firestore: \(error.localizedDescription)")
+            } else {
+                print("DEBUG: Successfully updated FCM token in Firestore for user \(currentUserID).")
+            }
+        }
     }
 
     // Custom function to navigate to a specific chat/message when a notification is tapped
     private func navigateToChat(withMessageId messageId: String) {
-        // Implement navigation logic here (deep linking or navigating within the app)
-        // For example, trigger a deep link or send a notification within the app to open the chat screen
-        // Example: If using AppState, you could update it to reflect the current chat:
-        if let rootView = window?.rootViewController as? UIHostingController<MainView> {
-            // Use rootView to access your SwiftUI environment and handle navigation
-        }
+        print("DEBUG: Navigating to chat with message ID: \(messageId)")
+        // Implement navigation logic here.
     }
 
     // Handle silent notifications for background fetches or data updates
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
-        // Check if this is a silent notification
+        print("DEBUG: Remote notification received with userInfo: \(userInfo)")
+
         if let contentAvailable = userInfo["content-available"] as? Int, contentAvailable == 1 {
-            // Fetch data silently and update the app
+            print("DEBUG: Silent notification detected. Fetching new data.")
             fetchNewData { result in
                 completionHandler(result)
             }
         } else {
-            // Otherwise, handle it like a regular notification
-            print("Regular notification received: \(userInfo)")
+            print("DEBUG: Regular notification received.")
             completionHandler(.noData)
         }
     }
     
     private func fetchNewData(completion: @escaping (UIBackgroundFetchResult) -> Void) {
-        // Implement data fetching logic
+        print("DEBUG: Fetching new data for silent notification.")
+        // Add data-fetching logic here.
         completion(.newData)
     }
 
@@ -169,6 +199,7 @@ class AppState: ObservableObject {
     private var chatListeners: [String: ListenerRegistration] = [:]
 
     func addChatListener(for chatID: String, listener: ListenerRegistration) {
+        print("DEBUG: Adding chat listener for chatID: \(chatID)")
         chatListeners[chatID] = listener
     }
 
@@ -176,11 +207,14 @@ class AppState: ObservableObject {
         if let listener = chatListeners[chatID] {
             listener.remove()
             chatListeners.removeValue(forKey: chatID)
-            print("DEBUG: Listener removed for matchID: \(chatID)")
+            print("DEBUG: Listener removed for chatID: \(chatID)")
+        } else {
+            print("DEBUG: No listener found for chatID: \(chatID)")
         }
     }
 
     func removeAllChatListeners() {
+        print("DEBUG: Removing all chat listeners.")
         for (chatID, listener) in chatListeners {
             listener.remove()
             print("DEBUG: Removed listener for chatID: \(chatID)")

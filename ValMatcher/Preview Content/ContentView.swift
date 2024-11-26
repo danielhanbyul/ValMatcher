@@ -438,7 +438,16 @@ struct ContentView: View {
                                     }
 
                                     if matchQuerySnapshot?.isEmpty == false {
-                                        self.createMatch(currentUserID: currentUserID, likedUserID: likingUserID, likedUser: likedUser)
+                                        let matchMessage = "You matched with \(likedUser.name)!"
+                                        if !self.notifications.contains(matchMessage) && !self.acknowledgedNotifications.contains(matchMessage) {
+                                            self.alertMessage = matchMessage
+                                            self.notifications.append(matchMessage)
+                                            notificationCount += 1
+                                            self.showAlert = true
+                                            self.sendNotification(to: currentUserID, message: matchMessage)
+                                            self.sendNotification(to: likingUserID, message: matchMessage)
+                                            self.createDMChat(currentUserID: currentUserID, likedUserID: likingUserID, likedUser: likedUser)
+                                        }
                                     }
                                 }
                         }
@@ -805,21 +814,29 @@ struct ContentView: View {
                             print("Match created successfully between \(currentUserID) and \(likedUserID)")
 
                             // Notify both users
-                            self.sendMatchNotification(to: currentUserID, matchedUserName: likedUser.name)
-                            self.sendMatchNotification(to: likedUserID, matchedUserName: self.userProfileViewModel.user.name)
+                            self.sendMatchNotification(
+                                to: currentUserID,
+                                matchedUserName: likedUser.name
+                            )
+                            self.sendMatchNotification(
+                                to: likedUserID,
+                                matchedUserName: self.userProfileViewModel.user.name
+                            )
 
                             // Create the chat between the two users
-                            self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
+                            self.createDMChat(
+                                currentUserID: currentUserID,
+                                likedUserID: likedUserID,
+                                likedUser: likedUser
+                            )
                         }
                     }
-                } else {
-                    print("DEBUG: Match already exists between \(currentUserID) and \(likedUserID)")
                 }
             }
     }
 
-
     private func sendMatchNotification(to userID: String, matchedUserName: String) {
+        // Send the notification to Firestore
         let db = Firestore.firestore()
         let notificationMessage = "You matched with \(matchedUserName)!"
 
