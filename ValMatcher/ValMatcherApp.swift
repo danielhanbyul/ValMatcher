@@ -24,7 +24,6 @@ struct ValMatcherApp: App {
     }
 }
 
-
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
 
     var window: UIWindow?
@@ -37,20 +36,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Set the delegate for UNUserNotificationCenter
         UNUserNotificationCenter.current().delegate = self
 
-        // Request notification permissions at app startup
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if let error = error {
-                print("Error requesting notification permissions: \(error.localizedDescription)")
-            } else {
-                print("Notification permission granted: \(granted)")
-                if granted {
-                    DispatchQueue.main.async {
-                        UIApplication.shared.registerForRemoteNotifications()
-                    }
-                }
-            }
-        }
-
+        // Check and request notification permissions
+        checkNotificationPermissions()
 
         // Register for remote notifications
         application.registerForRemoteNotifications()
@@ -69,6 +56,37 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         }
 
         return true
+    }
+
+    // Check notification permissions and request them if not determined
+    private func checkNotificationPermissions() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                print("DEBUG: Notifications not determined. Requesting permissions.")
+                self.requestNotificationPermission()
+            case .denied:
+                print("DEBUG: Notifications are denied.")
+            case .authorized, .provisional:
+                print("DEBUG: Notifications are authorized.")
+            @unknown default:
+                print("DEBUG: Unknown notification settings state.")
+            }
+        }
+    }
+
+    // Request notification permissions
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if granted {
+                print("DEBUG: Notifications permission granted.")
+                DispatchQueue.main.async {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
+            } else {
+                print("DEBUG: Notifications permission denied.")
+            }
+        }
     }
 
     // Handle successful registration for remote notifications
@@ -143,8 +161,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return self.orientationLock
     }
 }
-
-
 
 class AppState: ObservableObject {
     @Published var isInChatView: Bool = false
