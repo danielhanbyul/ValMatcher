@@ -35,12 +35,10 @@ struct MainView: View {
                                         }
                                     }
                             } else {
-                                // Adjusting the ContentView call, removing 'isFirstTimeUser' if it doesn't exist in ContentView
                                 ContentView(userProfileViewModel: UserProfileViewModel(user: user), isSignedIn: $isSignedIn)
                                     .environmentObject(appState)
                             }
                         } else {
-                            // Navigate to QuestionsView if user hasn't answered profile questions yet
                             QuestionsView(userProfile: Binding(
                                 get: { self.currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, mediaItems: []) },
                                 set: { self.currentUser = $0 }
