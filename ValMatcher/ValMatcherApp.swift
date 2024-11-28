@@ -28,6 +28,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
     var window: UIWindow?
     var orientationLock = UIInterfaceOrientationMask.portrait  // Default orientation is portrait
+    var cachedFCMToken: String?  // Cache FCM token until user is authenticated
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         print("DEBUG: Application didFinishLaunchingWithOptions started.")
@@ -51,15 +52,28 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         Messaging.messaging().delegate = self
         print("DEBUG: Firebase Messaging delegate set.")
 
-        // Get the current FCM token if already available
-        Messaging.messaging().token { token, error in
-            if let error = error {
-                print("ERROR: Failed to fetch FCM registration token: \(error.localizedDescription)")
-            } else if let token = token {
-                print("DEBUG: FCM registration token fetched: \(token)")
-                self.updateFCMTokenInFirestore(fcmToken: token)
+        // Observe authentication state changes
+        Auth.auth().addStateDidChangeListener { auth, user in
+            if let user = user {
+                print("DEBUG: User authenticated with UID: \(user.uid)")
+                // Now that the user is authenticated, update the FCM token
+                if let cachedToken = self.cachedFCMToken {
+                    print("DEBUG: Updating FCM token from cache: \(cachedToken)")
+                    self.updateFCMTokenInFirestore(fcmToken: cachedToken)
+                } else {
+                    Messaging.messaging().token { token, error in
+                        if let error = error {
+                            print("ERROR: Failed to fetch FCM registration token: \(error.localizedDescription)")
+                        } else if let token = token {
+                            print("DEBUG: FCM registration token fetched after user auth: \(token)")
+                            self.updateFCMTokenInFirestore(fcmToken: token)
+                        } else {
+                            print("ERROR: FCM token fetch returned nil.")
+                        }
+                    }
+                }
             } else {
-                print("ERROR: FCM token fetch returned nil.")
+                print("DEBUG: No user is authenticated.")
             }
         }
 
@@ -114,13 +128,15 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 
     // Handle foreground notifications
-    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         print("DEBUG: Received notification in foreground: \(notification.request.content.userInfo)")
         completionHandler([.banner, .sound, .badge])
     }
 
     // Handle notification tap actions
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void) {
         let userInfo = response.notification.request.content.userInfo
         print("DEBUG: Notification tapped. UserInfo: \(userInfo)")
 
@@ -138,13 +154,15 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             return
         }
         print("DEBUG: FCM token received: \(fcmToken)")
+        self.cachedFCMToken = fcmToken
         updateFCMTokenInFirestore(fcmToken: fcmToken)
     }
 
     // Update FCM token in Firestore
     private func updateFCMTokenInFirestore(fcmToken: String) {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
-            print("DEBUG: No authenticated user to update FCM token.")
+            print("DEBUG: No authenticated user to update FCM token. Caching token.")
+            self.cachedFCMToken = fcmToken
             return
         }
 
@@ -155,6 +173,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 print("ERROR: Error updating FCM token in Firestore: \(error.localizedDescription)")
             } else {
                 print("DEBUG: Successfully updated FCM token in Firestore for user \(currentUserID).")
+                self.cachedFCMToken = nil  // Clear cached token after successful update
             }
         }
     }
@@ -166,7 +185,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 
     // Handle silent notifications for background fetches or data updates
-    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         print("DEBUG: Remote notification received with userInfo: \(userInfo)")
 
         if let contentAvailable = userInfo["content-available"] as? Int, contentAvailable == 1 {
@@ -192,6 +212,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 }
 
+
+
 import SwiftUI
 import Firebase
 
@@ -202,6 +224,8 @@ class AppState: ObservableObject {
     @Published var showAlert: Bool = false  // Show alert property
 
     private var chatListeners: [String: ListenerRegistration] = [:]
+    private var hasStartedListeningForMatches = false  // Prevent multiple listeners
+    private var processedMatchIDs: Set<String> = []  // To avoid duplicate notifications
 
     // Add a chat listener for a specific chat ID
     func addChatListener(for chatID: String, listener: ListenerRegistration) {
@@ -232,6 +256,9 @@ class AppState: ObservableObject {
 
     // Listen for new matches involving the current user
     func listenForMatches() {
+        guard !hasStartedListeningForMatches else { return }  // Prevent multiple listeners
+        hasStartedListeningForMatches = true
+
         guard let currentUserID = Auth.auth().currentUser?.uid else {
             print("DEBUG: User not authenticated.")
             return
@@ -264,25 +291,27 @@ class AppState: ObservableObject {
 
     // Process changes in the matches collection
     private func processMatchChanges(snapshot: QuerySnapshot?, currentUserID: String) {
-        guard let documents = snapshot?.documents else { return }
+        guard let snapshot = snapshot else { return }
 
-        for change in snapshot?.documentChanges ?? [] {
+        for change in snapshot.documentChanges {
             if change.type == .added {
+                let matchID = change.document.documentID
+                if processedMatchIDs.contains(matchID) {
+                    continue  // Skip already processed matches
+                }
+                processedMatchIDs.insert(matchID)
+
                 let matchData = change.document.data()
                 let user1 = matchData["user1"] as? String ?? ""
                 let user2 = matchData["user2"] as? String ?? ""
 
-                if user1 == currentUserID || user2 == currentUserID {
-                    print("DEBUG: New match found involving user \(currentUserID)")
+                // Determine the other user's ID
+                let otherUserID = user1 == currentUserID ? user2 : user1
 
-                    // Determine the other user's ID
-                    let otherUserID = user1 == currentUserID ? user2 : user1
-
-                    // Fetch the name of the other user and display a notification
-                    fetchUserName(userID: otherUserID) { userName in
-                        let message = "You matched with \(userName)!"
-                        self.showMatchNotification(message: message)
-                    }
+                // Fetch the name of the other user and display a notification
+                fetchUserName(userID: otherUserID) { userName in
+                    let message = "You matched with \(userName)!"
+                    self.showMatchNotification(message: message)
                 }
             }
         }
@@ -303,7 +332,7 @@ class AppState: ObservableObject {
     }
 
     // Show a match notification with the given message
-    func showMatchNotification(message: String) { // Changed from `private` to `internal`
+    func showMatchNotification(message: String) {
         print("DEBUG: Preparing to show notification: \(message)")
         DispatchQueue.main.async {
             self.alertMessage = message

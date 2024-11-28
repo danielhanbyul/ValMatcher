@@ -31,7 +31,7 @@ struct MessageListener {
 
 
 struct ContentView: View {
-    @EnvironmentObject var appState: AppState  // Access the shared app state]
+    @EnvironmentObject var appState: AppState  // Access the shared app state
     @StateObject var userProfileViewModel: UserProfileViewModel
     @Binding var isSignedIn: Bool
     @StateObject private var firestoreManager = FirestoreManager()
@@ -49,7 +49,7 @@ struct ContentView: View {
     @State private var unreadMessagesCount = 0
     @State private var messageListeners: [String: MessageListener] = [:]
     @State private var isInChatView = false
-     
+
     // Added States
     @State private var interactedUsers: Set<String> = []
     @State private var lastRefreshDate: Date? = nil
@@ -59,12 +59,6 @@ struct ContentView: View {
     @State private var unreadCountUser1 = 0
     @State private var unreadCountUser2 = 0
     @State private var isUnreadMessagesListenerActive = false
-    
-
-
-
-
-
 
     enum InteractionResult {
         case liked
@@ -130,9 +124,13 @@ struct ContentView: View {
             }
         }
         .alert(isPresented: $showAlert) {
-            Alert(title: Text("Notification"), message: Text(alertMessage), dismissButton: .default(Text("OK")) {
-                acknowledgedNotifications.insert(alertMessage)
-            })
+            Alert(
+                title: Text("Match Found!"),
+                message: Text(alertMessage),
+                dismissButton: .default(Text("OK")) {
+                    acknowledgedNotifications.insert(alertMessage)
+                }
+            )
         }
         .onAppear {
             if isSignedIn {
@@ -161,8 +159,18 @@ struct ContentView: View {
                 print("DEBUG: isInChatView set to false, currentChatID reset to nil")
             }
         }
-
     }
+
+    private func listenForMatchNotifications() {
+        NotificationCenter.default.addObserver(forName: Notification.Name("MatchCreated"), object: nil, queue: .main) { notification in
+            if let message = notification.object as? String {
+                self.alertMessage = message
+                self.showAlert = true
+            }
+        }
+    }
+
+
     
     
     // Listen for deletions in Firestore and remove the corresponding user from `users`
@@ -346,8 +354,8 @@ struct ContentView: View {
         // Define the cutoff date as October 29, 2024, at 12:00 PM UTC
         var dateComponents = DateComponents()
         dateComponents.year = 2024
-        dateComponents.month = 10
-        dateComponents.day = 28
+        dateComponents.month = 11
+        dateComponents.day = 26
         dateComponents.hour = 12
         dateComponents.minute = 0
         dateComponents.timeZone = TimeZone(secondsFromGMT: 0)  // Use UTC time zone
@@ -788,82 +796,164 @@ struct ContentView: View {
     }
 
     private func createMatch(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
-        let db = Firestore.firestore()
-        let matchData: [String: Any] = [
-            "user1": currentUserID,
-            "user2": likedUserID,
-            "timestamp": Timestamp()
-        ]
+            let db = Firestore.firestore()
+            let matchData: [String: Any] = [
+                "user1": currentUserID,
+                "user2": likedUserID,
+                "timestamp": Timestamp()
+            ]
 
-        db.collection("matches")
-            .whereField("user1", in: [currentUserID, likedUserID])
-            .whereField("user2", in: [currentUserID, likedUserID])
-            .getDocuments { querySnapshot, error in
-                if let error = error {
-                    print("Error checking existing match: \(error.localizedDescription)")
-                    return
-                }
+            db.collection("matches")
+                .whereField("user1", isEqualTo: currentUserID)
+                .whereField("user2", isEqualTo: likedUserID)
+                .getDocuments { querySnapshot, error in
+                    if let error = error {
+                        print("Error checking existing match: \(error.localizedDescription)")
+                        return
+                    }
+                    
+                    if querySnapshot?.documents.isEmpty == true {
+                        db.collection("matches").addDocument(data: matchData) { error in
+                            if let error = error {
+                                print("Error creating match: \(error.localizedDescription)")
+                            } else {
+                                // Send personalized notifications to both users
+                                let currentUserName = userProfileViewModel.user.name
+                                let likedUserName = likedUser.name
 
-                if querySnapshot?.documents.isEmpty == true {
-                    db.collection("matches").addDocument(data: matchData) { error in
-                        if let error = error {
-                            print("Error creating match: \(error.localizedDescription)")
-                        } else {
-                            print("Match created successfully between \(currentUserID) and \(likedUserID)")
+                                let currentUserMessage = "You matched with \(likedUserName)!"
+                                let likedUserMessage = "You matched with \(currentUserName)!"
 
-                            // Notify both users
-                            self.sendMatchNotification(
-                                to: currentUserID,
-                                matchedUserName: likedUser.name
-                            )
-                            self.sendMatchNotification(
-                                to: likedUserID,
-                                matchedUserName: self.userProfileViewModel.user.name
-                            )
+                                // Send notifications to both users
+                                if !self.notifications.contains(currentUserMessage) && !self.acknowledgedNotifications.contains(currentUserMessage) {
+                                    self.notifications.append(currentUserMessage)
+                                    self.alertMessage = currentUserMessage
+                                    self.showAlert = true
+                                    self.notificationCount += 1
+                                    self.sendNotification(to: currentUserID, message: currentUserMessage)
+                                }
 
-                            // Force notification for the current user
-                            self.appState.showMatchNotification(
-                                message: "You matched with \(likedUser.name)!"
-                            )
+                                if !self.notifications.contains(likedUserMessage) && !self.acknowledgedNotifications.contains(likedUserMessage) {
+                                    self.sendNotification(to: likedUserID, message: likedUserMessage)
+                                }
 
-                            // Create the chat between the two users
-                            self.createDMChat(
-                                currentUserID: currentUserID,
-                                likedUserID: likedUserID,
-                                likedUser: likedUser
-                            )
+                                // Create the DM chat between both users
+                                self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
+                            }
                         }
                     }
                 }
+        }
+    
+    private func showMatchNotification(message: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Match Found!"
+        content.body = message
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error showing local notification: \(error.localizedDescription)")
             }
+        }
     }
+    
+    
+
+
 
 
     private func sendMatchNotification(to userID: String, matchedUserName: String) {
-        // Send the notification to Firestore
         let db = Firestore.firestore()
-        let notificationMessage = "You matched with \(matchedUserName)!"
-
-        let notificationData: [String: Any] = [
-            "userID": userID,
-            "message": notificationMessage,
-            "timestamp": Timestamp()
-        ]
-
-        db.collection("notifications").addDocument(data: notificationData) { error in
+        db.collection("users").document(userID).getDocument { document, error in
             if let error = error {
-                print("Error sending notification: \(error.localizedDescription)")
+                print("Error fetching user data: \(error.localizedDescription)")
+                return
+            }
+
+            guard let document = document, document.exists, let data = document.data() else {
+                print("User document does not exist")
+                return
+            }
+
+            if let fcmToken = data["fcmToken"] as? String, !fcmToken.isEmpty {
+                let message = "\(matchedUserName) has matched with you!"
+                self.sendPushNotification(to: fcmToken, title: "It's a Match!", body: message)
             } else {
-                print("Notification sent successfully to userID: \(userID)")
+                print("No FCM token found for user \(userID)")
             }
         }
+    }
 
-        // If the notification is for the currently logged-in user, display it immediately
-        if Auth.auth().currentUser?.uid == userID {
-            DispatchQueue.main.async {
-                self.alertMessage = notificationMessage
-                self.showAlert = true
+
+    private func sendPushNotification(to fcmToken: String, title: String, body: String) {
+        let urlString = "https://fcm.googleapis.com/fcm/send"
+        let url = URL(string: urlString)!
+        let serverKey = "AIzaSyA-Eew48TEhrZnX80C8lyYcKkuYRx0hNME"  // Replace with your actual FCM server key
+
+        let notification: [String: Any] = [
+            "to": fcmToken,
+            "notification": [
+                "title": title,
+                "body": body,
+                "sound": "default"
+            ],
+            "data": [
+                "match": "yes"
+            ]
+        ]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("key=\(serverKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: notification, options: [])
+
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Error sending push notification: \(error.localizedDescription)")
+                return
             }
+            if let httpResponse = response as? HTTPURLResponse {
+                print("Push notification HTTP response status code: \(httpResponse.statusCode)")
+                if httpResponse.statusCode != 200 {
+                    print("Push notification failed with status code: \(httpResponse.statusCode)")
+                    if let data = data, let responseString = String(data: data, encoding: .utf8) {
+                        print("Response data: \(responseString)")
+                    }
+                } else {
+                    print("Push notification sent successfully to token: \(fcmToken)")
+                }
+            }
+        }
+        task.resume()
+    }
+    
+    
+
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        let userInfo = response.notification.request.content.userInfo
+        print("DEBUG: Notification tapped. UserInfo: \(userInfo)")
+
+        if let match = userInfo["match"] as? String, match == "yes" {
+            // Handle match notification tap
+            print("DEBUG: Match notification tapped.")
+            // You can navigate to a specific view or perform an action here
+        }
+
+        completionHandler()
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        print("DEBUG: Received notification in foreground: \(notification.request.content.userInfo)")
+
+        if let match = notification.request.content.userInfo["match"] as? String, match == "yes" {
+            // Handle match notification received while app is in foreground
+            completionHandler([.banner, .sound])
+        } else {
+            completionHandler([.badge, .sound, .banner])
         }
     }
 

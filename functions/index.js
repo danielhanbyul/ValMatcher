@@ -5,70 +5,68 @@
  * and initialize the Firebase Admin SDK to interact with Firestore.
  */
 
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
 admin.initializeApp();
 
-/**
- * Cloud Function to send a notification when a new message is created.
- * This function triggers whenever a new document is added to the
- * "messages" collection in Firestore.
- */
-exports.sendNewMessageNotification = functions.firestore
-    .document("messages/{messageId}")
-    .onCreate(async (snapshot, context) => {
-    // Get the message data from the snapshot
-      const messageData = snapshot.data();
-      const senderId = messageData.senderId;
-      const recipientToken = messageData.recipientFcmToken;
+exports.sendMatchNotification = functions.firestore
+    .document('matches/{matchId}')
+    .onCreate(async (snap, context) => {
+        const matchData = snap.data();
+        const user1Id = matchData.user1;
+        const user2Id = matchData.user2;
 
-      // Default sender's name
-      let senderName = "Someone";
+        // Fetch user details
+        const [user1Doc, user2Doc] = await Promise.all([
+            admin.firestore().collection('users').doc(user1Id).get(),
+            admin.firestore().collection('users').doc(user2Id).get()
+        ]);
 
-      try {
-      // Fetch the sender's name from the Firestore "users" collection
-        const senderDoc = await admin.firestore()
-            .collection("users")
-            .doc(senderId)
-            .get();
-
-        if (senderDoc.exists) {
-        // Set the sender's name to the user's name in Firestore
-          senderName = senderDoc.data().name || "Someone";
+        if (!user1Doc.exists || !user2Doc.exists) {
+            console.log('One of the user documents does not exist.');
+            return null;
         }
-      } catch (error) {
-        console.error("Error fetching sender's name:", error);
-      }
 
-      // Define the notification payload
-      const payload = {
-        notification: {
-          title: `New Message from ${senderName}`, // Title of the notification
-          body: messageData.text || "You have a new message!", // Message body
-          sound: "default", // Notification sound
-        },
-        data: {
-          senderName: senderName, // Sender's name for data processing
-          message: messageData.text || "", // The actual message
-          type: "chat_message", // Type of notification
-        },
-      };
+        const user1Data = user1Doc.data();
+        const user2Data = user2Doc.data();
 
-      try {
-      // Send the notification using the recipient's FCM token
-        await admin.messaging().sendToDevice(recipientToken, payload);
-        console.log("Notification sent successfully");
-      } catch (error) {
-        console.error("Error sending notification:", error);
-      }
+        const user1FcmToken = user1Data.fcmToken;
+        const user2FcmToken = user2Data.fcmToken;
+
+        const user1Name = user1Data.name || 'Someone';
+        const user2Name = user2Data.name || 'Someone';
+
+        // Create notification payloads
+        const payload1 = {
+            notification: {
+                title: "It's a Match!",
+                body: `You matched with ${user2Name}!`,
+                sound: 'default'
+            }
+        };
+
+        const payload2 = {
+            notification: {
+                title: "It's a Match!",
+                body: `You matched with ${user1Name}!`,
+                sound: 'default'
+            }
+        };
+
+        // Send notifications
+        const promises = [];
+
+        if (user1FcmToken) {
+            promises.push(admin.messaging().sendToDevice(user1FcmToken, payload1));
+        } else {
+            console.log(`No FCM token for user ${user1Id}`);
+        }
+
+        if (user2FcmToken) {
+            promises.push(admin.messaging().sendToDevice(user2FcmToken, payload2));
+        } else {
+            console.log(`No FCM token for user ${user2Id}`);
+        }
+
+        return Promise.all(promises);
     });
-
-
-// const {onRequest} = require("firebase-functions/v2/https");
-// const logger = require("firebase-functions/logger");
-
-// Example of an HTTP-triggered function
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });

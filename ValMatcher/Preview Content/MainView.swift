@@ -62,6 +62,9 @@ struct MainView: View {
         .onAppear {
             checkUserStatus()
         }
+        .alert(isPresented: $appState.showAlert) {
+            Alert(title: Text("Match Found!"), message: Text(appState.alertMessage), dismissButton: .default(Text("OK")))
+        }
     }
 
     // Function to check user status and navigate accordingly
@@ -77,12 +80,15 @@ struct MainView: View {
                 } else if let document = document, document.exists {
                     if let data = document.data() {
                         let mediaItemsData = data["mediaItems"] as? [String] ?? []
-                        let mediaItems = mediaItemsData.map { urlString -> MediaItem in
-                            if urlString.hasSuffix(".mp4") {
-                                return MediaItem(type: .video, url: URL(string: urlString)!)
-                            } else {
-                                return MediaItem(type: .image, url: URL(string: urlString)!)
+                        let mediaItems = mediaItemsData.compactMap { urlString -> MediaItem? in
+                            if let url = URL(string: urlString) {
+                                if urlString.hasSuffix(".mp4") {
+                                    return MediaItem(type: .video, url: url)
+                                } else {
+                                    return MediaItem(type: .image, url: url)
+                                }
                             }
+                            return nil
                         }
 
                         self.currentUser = UserProfile(
