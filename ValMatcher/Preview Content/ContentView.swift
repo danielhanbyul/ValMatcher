@@ -134,6 +134,7 @@ struct ContentView: View {
         }
         .onAppear {
             if isSignedIn {
+                listenForNewMatches(currentUserID: Auth.auth().currentUser?.uid ?? "")
                 listenForUnreadMessages()
                 self.interactedUsers.removeAll()
                 loadInteractedUsers { success in
@@ -159,6 +160,7 @@ struct ContentView: View {
                 print("DEBUG: isInChatView set to false, currentChatID reset to nil")
             }
         }
+
     }
 
     private func listenForMatchNotifications() {
@@ -844,6 +846,81 @@ struct ContentView: View {
                     }
                 }
         }
+    
+    private func listenForNewMatches(currentUserID: String) {
+        let db = Firestore.firestore()
+        
+        // Listener for matches where the user is user1
+        db.collection("matches")
+            .whereField("user1", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("DEBUG: Error listening for matches (user1): \(error.localizedDescription)")
+                    return
+                }
+                self.handleMatchChanges(snapshot: snapshot, currentUserID: currentUserID)
+            }
+
+        // Listener for matches where the user is user2
+        db.collection("matches")
+            .whereField("user2", isEqualTo: currentUserID)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("DEBUG: Error listening for matches (user2): \(error.localizedDescription)")
+                    return
+                }
+                self.handleMatchChanges(snapshot: snapshot, currentUserID: currentUserID)
+            }
+    }
+
+    private func handleMatchChanges(snapshot: QuerySnapshot?, currentUserID: String) {
+        guard let snapshot = snapshot else { return }
+        
+        for change in snapshot.documentChanges {
+            if change.type == .added {
+                let matchData = change.document.data()
+                let user1 = matchData["user1"] as? String ?? ""
+                let user2 = matchData["user2"] as? String ?? ""
+                let otherUserID = user1 == currentUserID ? user2 : user1
+                
+                fetchUserName(userID: otherUserID) { userName in
+                    let message = "You matched with \(userName)!"
+                    if !self.notifications.contains(message) && !self.acknowledgedNotifications.contains(message) {
+                        self.notifications.append(message)
+                        self.alertMessage = message
+                        self.showAlert = true
+                        
+                        // Send local notification
+                        self.showMatchNotification(message: message)
+                    }
+                }
+            }
+        }
+    }
+
+    private func fetchUserName(userID: String, completion: @escaping (String) -> Void) {
+        let db = Firestore.firestore()
+        
+        // Fetch the user's document from Firestore
+        db.collection("users").document(userID).getDocument { document, error in
+            if let error = error {
+                print("Error fetching user name: \(error.localizedDescription)")
+                completion("Unknown")
+                return
+            }
+            
+            guard let document = document, document.exists, let data = document.data() else {
+                print("User document not found for userID: \(userID)")
+                completion("Unknown")
+                return
+            }
+            
+            // Extract the user's name from the document data
+            let userName = data["name"] as? String ?? "Unknown"
+            completion(userName)
+        }
+    }
+
     
     private func showMatchNotification(message: String) {
         let content = UNMutableNotificationContent()
