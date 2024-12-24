@@ -6,49 +6,57 @@
 //
 
 import SwiftUI
-import Kingfisher
 
 struct MatchNotificationView: View {
-    let message: String
-    let imageURL: URL?
-    let dismissAction: () -> Void
+    var matchedUser: UserProfile
 
     var body: some View {
-        VStack(spacing: 15) {
-            Text("It's a Match!")
-                .font(.headline)
+        VStack(spacing: 20) {
+            Text("You have matched with \(matchedUser.name)!")
+                .font(.title)
                 .foregroundColor(.white)
-                .padding(.top, 10)
+                .padding()
 
-            if let imageURL = imageURL {
-                KFImage(imageURL)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 80, height: 80)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                    .shadow(radius: 5)
-            }
+            Image(matchedUser.imageName)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 100, height: 100)
+                .clipShape(Circle())
+                .shadow(radius: 10)
 
-            Text(message)
-                .font(.body)
-                .foregroundColor(.white.opacity(0.9))
-                .multilineTextAlignment(.center)
-
-            Button(action: dismissAction) {
+            Button(action: {
+                // Add action to dismiss notification
+            }) {
                 Text("OK")
-                    .font(.headline)
                     .foregroundColor(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    .padding()
                     .background(Color.blue)
-                    .cornerRadius(10)
+                    .cornerRadius(8)
             }
         }
-        .padding()
-        .background(Color.black.opacity(0.85))
-        .cornerRadius(15)
-        .shadow(radius: 10)
-        .frame(width: UIScreen.main.bounds.width * 0.85)
+        .frame(width: 300, height: 300)
+        .background(Color.black.opacity(0.8))
+        .cornerRadius(20)
+        .shadow(radius: 20)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white, lineWidth: 2)
+        )
+    }
+}
+
+struct MatchNotificationView_Previews: PreviewProvider {
+    static var previews: some View {
+        MatchNotificationView(matchedUser: UserProfile(
+            name: "Alice",
+            rank: "Bronze 1",
+            imageName: "alice",
+            age: "21",
+            server: "NA",
+            answers: [:],
+            hasAnsweredQuestions: true,
+            mediaItems: [] // Only provide `mediaItems` if that's the correct structure
+        ))
+        .preferredColorScheme(.dark)
     }
 }
