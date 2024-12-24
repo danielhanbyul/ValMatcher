@@ -826,25 +826,42 @@ struct ContentView: View {
                 }
 
                 if !matchExists {
-                    let matchData: [String: Any] = [
-                        "user1": currentUserID,
-                        "user2": likedUserID,
-                        "notificationsSent": [
-                            currentUserID: false,
-                            likedUserID: false
-                        ],
-                        "timestamp": Timestamp()
-                    ]
+                    // Initiator notification design/message
+                    fetchUserName(userID: likedUserID) { likedUserName in
+                        let matchMessage = "You matched with \(likedUserName)!"
+                        
+                        let matchData: [String: Any] = [
+                            "user1": currentUserID,
+                            "user2": likedUserID,
+                            "initiatorMessage": matchMessage, // Store the initiator's message
+                            "notificationsSent": [
+                                currentUserID: false,
+                                likedUserID: false
+                            ],
+                            "timestamp": Timestamp()
+                        ]
 
-                    matchesRef.addDocument(data: matchData) { error in
-                        if let error = error {
-                            print("Error creating match: \(error.localizedDescription)")
-                        } else {
-                            print("Match document created successfully.")
+                        matchesRef.addDocument(data: matchData) { error in
+                            if let error = error {
+                                print("Error creating match: \(error.localizedDescription)")
+                            } else {
+                                print("Match document created successfully.")
+                                
+                                // Notify the initiator with their design/message
+                                self.showMatchNotification(message: matchMessage, forInApp: true)
+                            }
                         }
                     }
                 } else {
-                    print("DEBUG: Match already exists between \(currentUserID) and \(likedUserID).")
+                    // Match already exists, send the initiator's notification to both users
+                    guard let existingMatch = snapshot?.documents.first else { return }
+                    let matchData = existingMatch.data()
+                    
+                    let initiatorMessage = matchData["initiatorMessage"] as? String ?? "You matched!"
+                    
+                    // Notify both users with the initiator's message
+                    self.showMatchNotification(message: initiatorMessage, forInApp: true) // For the second user
+                    self.sendNotification(to: likedUserID, message: initiatorMessage) // Push for the second user
                 }
             }
     }
@@ -996,19 +1013,53 @@ struct ContentView: View {
 
 
     
-    private func showMatchNotification(message: String) {
-        let content = UNMutableNotificationContent()
-        content.title = "Match Found!"
-        content.body = message
-        content.sound = .default
+    private func showMatchNotification(message: String, forInApp: Bool = true) {
+        if forInApp {
+            // In-App Notification for both users
+            self.inAppNotificationMessage = message
+            self.showInAppMatchNotification = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                self.showInAppMatchNotification = false
+            }
+        } else {
+            // Push Notification Design
+            let content = UNMutableNotificationContent()
+            content.title = "Match Found!"
+            content.body = message
+            content.sound = .default
 
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("Error showing local notification: \(error.localizedDescription)")
+            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    print("Error sending match notification: \(error.localizedDescription)")
+                }
             }
         }
     }
+
+    
+    private func handleMatchCompletion(matchID: String, currentUserID: String, likedUserID: String) {
+        let db = Firestore.firestore()
+        let matchRef = db.collection("matches").document(matchID)
+
+        matchRef.getDocument { document, error in
+            if let error = error {
+                print("Error fetching match details: \(error.localizedDescription)")
+                return
+            }
+
+            guard let data = document?.data(),
+                  let initiatorMessage = data["initiatorMessage"] as? String else {
+                print("Match data missing initiator message.")
+                return
+            }
+
+            // Send the same notification to both users
+            self.showMatchNotification(message: initiatorMessage, forInApp: true)
+            self.sendNotification(to: likedUserID, message: initiatorMessage) // Push for second user
+        }
+    }
+
     
     
 
