@@ -91,16 +91,15 @@ struct ContentView: View {
             if showNotificationBanner {
                 VStack {
                     Spacer()
-
-                    // Notification Card
-                    VStack(spacing: 12) {
+                    
+                    VStack(spacing: 16) {
                         Image(systemName: "heart.fill")
                             .foregroundColor(.red)
-                            .font(.system(size: 50)) // Larger icon for emphasis
+                            .font(.system(size: 60)) // Larger icon for emphasis
 
                         VStack(alignment: .center, spacing: 8) {
                             Text("You have a new match!")
-                                .font(.title2) // Larger, modal-like text
+                                .font(.title) // Larger, modal-like text
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
 
@@ -123,17 +122,18 @@ struct ContentView: View {
                     }
                     .padding()
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: 20)
                             .fill(Color.pink)
                             .shadow(radius: 10)
                     )
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 30)
 
                     Spacer()
                 }
-                .transition(.opacity)
+                .transition(.opacity) // Smooth fade-in/out animation
                 .animation(.easeInOut, value: showNotificationBanner)
             }
+
 
 
         
