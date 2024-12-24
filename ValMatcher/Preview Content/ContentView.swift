@@ -90,33 +90,51 @@ struct ContentView: View {
 
             // In-App Notification Overlay
             if showInAppMatchNotification {
-                    VStack {
-                        Text(inAppNotificationMessage)
-                            .font(.headline)
-                            .padding()
-                            .background(Color.green)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                            .shadow(radius: 5)
+                VStack {
+                    Spacer()
+                    
+                    // Notification Card
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.system(size: 40))
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Match Found!")
+                                .font(.headline)
+                                .foregroundColor(.white)
+
+                            Text(inAppNotificationMessage)
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                        }
                         
-                        // OK Button to dismiss the notification
+                        Spacer()
+                        
                         Button(action: {
                             self.showInAppMatchNotification = false // Dismiss the notification
                         }) {
                             Text("OK")
                                 .font(.subheadline)
                                 .foregroundColor(.white)
-                                .padding()
+                                .padding(.vertical, 4)
+                                .padding(.horizontal, 12)
                                 .background(Color.blue)
                                 .cornerRadius(8)
-                                .shadow(radius: 3)
                         }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black.opacity(0.5).edgesIgnoringSafeArea(.all))
-                    .transition(.opacity)
-                    .animation(.easeInOut, value: showInAppMatchNotification)
+                    .padding()
+                    .background(Color.gray.opacity(0.9))
+                    .cornerRadius(15)
+                    .shadow(radius: 5)
+                    .padding(.horizontal)
+                    .padding(.bottom, 20)
                 }
+                .transition(.opacity)
+                .animation(.easeInOut, value: showInAppMatchNotification)
+            }
+        
+
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
