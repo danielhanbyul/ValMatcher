@@ -88,40 +88,51 @@ struct ContentView: View {
                 }
             }
 
+            // In-App Notification Overlay
             if showInAppMatchNotification {
                 VStack {
                     Spacer()
                     
-                    HStack {
+                    // Notification Card
+                    HStack(spacing: 10) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
-                            .font(.title)
-                            .padding(.trailing, 10)
-                        
-                        Text(inAppNotificationMessage)
-                            .font(.headline)
-                            .foregroundColor(.white)
+                            .font(.system(size: 40))
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Match Found!")
+                                .font(.headline)
+                                .foregroundColor(.white)
+
+                            Text(inAppNotificationMessage)
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                        }
                         
                         Spacer()
+                        
+                        Button(action: {
+                            self.showInAppMatchNotification = false // Dismiss the notification
+                        }) {
+                            Text("OK")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                                .padding(.vertical, 4)
+                                .padding(.horizontal, 12)
+                                .background(Color.blue)
+                                .cornerRadius(8)
+                        }
                     }
                     .padding()
-                    .background(Color(.systemGray5).opacity(0.95))
-                    .cornerRadius(12)
-                    .shadow(radius: 4)
-                    .padding(.horizontal, 20)
-                    .transition(.opacity)
-                    .animation(.easeInOut, value: showInAppMatchNotification)
-                    
-                    Spacer()
-                        .frame(height: 100) // Push the notification slightly above the bottom
+                    .background(Color.gray.opacity(0.9))
+                    .cornerRadius(15)
+                    .shadow(radius: 5)
+                    .padding(.horizontal)
+                    .padding(.bottom, 20)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.black.opacity(0.4).edgesIgnoringSafeArea(.all))
-                .onTapGesture {
-                    self.showInAppMatchNotification = false // Dismiss the notification when tapped
-                }
+                .transition(.opacity)
+                .animation(.easeInOut, value: showInAppMatchNotification)
             }
-
         
 
         }
@@ -988,22 +999,44 @@ struct ContentView: View {
             }
         }
     }
-
-
     
-    private func showMatchNotification(message: String) {
+    private func showSystemMatchNotification(message: String) {
         let content = UNMutableNotificationContent()
         content.title = "Match Found!"
         content.body = message
         content.sound = .default
 
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request) { error in
+        // Create a notification request
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil // No trigger means it will be displayed immediately
+        )
+
+        // Add the notification request to the notification center
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if let error = error {
-                print("Error showing local notification: \(error.localizedDescription)")
+                print("Error requesting notification permissions: \(error.localizedDescription)")
+            }
+            if granted {
+                print("Notification permissions granted.")
+            } else {
+                print("Notification permissions not granted.")
             }
         }
+
     }
+
+
+
+    
+    private func showMatchNotification(message: String) {
+        if UIApplication.shared.applicationState == .active {
+            // Use the default Apple notification
+            showSystemMatchNotification(message: message)
+        }
+    }
+
     
     
 
