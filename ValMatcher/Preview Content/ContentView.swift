@@ -88,51 +88,40 @@ struct ContentView: View {
                 }
             }
 
-            // In-App Notification Overlay
             if showInAppMatchNotification {
                 VStack {
                     Spacer()
                     
-                    // Notification Card
-                    HStack(spacing: 10) {
+                    HStack {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
-                            .font(.system(size: 40))
-
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("Match Found!")
-                                .font(.headline)
-                                .foregroundColor(.white)
-
-                            Text(inAppNotificationMessage)
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                        }
+                            .font(.title)
+                            .padding(.trailing, 10)
+                        
+                        Text(inAppNotificationMessage)
+                            .font(.headline)
+                            .foregroundColor(.white)
                         
                         Spacer()
-                        
-                        Button(action: {
-                            self.showInAppMatchNotification = false // Dismiss the notification
-                        }) {
-                            Text("OK")
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                                .padding(.vertical, 4)
-                                .padding(.horizontal, 12)
-                                .background(Color.blue)
-                                .cornerRadius(8)
-                        }
                     }
                     .padding()
-                    .background(Color.gray.opacity(0.9))
-                    .cornerRadius(15)
-                    .shadow(radius: 5)
-                    .padding(.horizontal)
-                    .padding(.bottom, 20)
+                    .background(Color(.systemGray5).opacity(0.95))
+                    .cornerRadius(12)
+                    .shadow(radius: 4)
+                    .padding(.horizontal, 20)
+                    .transition(.opacity)
+                    .animation(.easeInOut, value: showInAppMatchNotification)
+                    
+                    Spacer()
+                        .frame(height: 100) // Push the notification slightly above the bottom
                 }
-                .transition(.opacity)
-                .animation(.easeInOut, value: showInAppMatchNotification)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black.opacity(0.4).edgesIgnoringSafeArea(.all))
+                .onTapGesture {
+                    self.showInAppMatchNotification = false // Dismiss the notification when tapped
+                }
             }
+
         
 
         }
@@ -717,7 +706,12 @@ struct ContentView: View {
 
     private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
         guard UIApplication.shared.applicationState == .active else {
-            return // Prevent in-app notification if the app is not in the foreground
+            return
+        }
+        
+        // Exclude matches
+        if let messageType = latestMessage.data()["type"] as? String, messageType == "match" {
+            return
         }
         
         guard let senderName = latestMessage.data()["senderName"] as? String,
@@ -727,6 +721,7 @@ struct ContentView: View {
         self.bannerMessage = alertMessage
         self.showNotificationBanner = true
     }
+
 
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
         guard UIApplication.shared.applicationState != .active else {
