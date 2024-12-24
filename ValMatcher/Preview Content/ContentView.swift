@@ -411,7 +411,7 @@ struct ContentView: View {
     }
 
 
-
+    
     
 
     private func fetchUnreadMessagesCount() {
@@ -845,7 +845,6 @@ struct ContentView: View {
                 // Check notificationsSent status
                 if let notificationsSent = matchData["notificationsSent"] as? [String: Bool],
                    notificationsSent[currentUserID] == true {
-                    print("DEBUG: Notification already sent for match \(matchID). Skipping.")
                     continue  // Skip if the current user was already notified
                 }
 
@@ -857,19 +856,47 @@ struct ContentView: View {
                 db.collection("matches").document(matchID).updateData(["notificationsSent": updatedNotificationsSent]) { error in
                     if let error = error {
                         print("ERROR: Failed to update notificationsSent for match \(matchID): \(error.localizedDescription)")
-                    } else {
-                        print("DEBUG: notificationsSent updated for match \(matchID).")
                     }
                 }
 
-                // Fetch the name of the other user and display a notification
+                // Fetch the name of the other user and record the match in notifications
                 fetchUserName(userID: otherUserID) { userName in
                     let message = "You matched with \(userName)!"
-                    self.showMatchNotification(message: message)
+                    self.recordMatchNotification(message: message)
                 }
             }
         }
     }
+
+    private func recordMatchNotification(message: String) {
+        // Record the match in notifications
+        DispatchQueue.main.async {
+            self.notifications.append(message)
+            self.notificationCount += 1
+            print("DEBUG: Match notification recorded: \(message)")
+        }
+
+        // Show in-app notification if the user is active
+        if UIApplication.shared.applicationState == .active {
+            self.bannerMessage = message
+            self.showNotificationBanner = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                self.showNotificationBanner = false
+            }
+        }
+    }
+
+
+    private func showInAppNotification(message: String) {
+        self.bannerMessage = message
+        self.showNotificationBanner = true
+        
+        // Automatically hide the banner after a few seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            self.showNotificationBanner = false
+        }
+    }
+
 
 
     /// Example function to fetch the other user's name and show the local match notification
