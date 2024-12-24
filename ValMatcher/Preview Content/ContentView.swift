@@ -88,55 +88,55 @@ struct ContentView: View {
                 }
             }
 
-            if showNotificationBanner {
+            // In-App Notification Overlay
+            if showInAppMatchNotification {
                 VStack {
                     Spacer()
                     
-                    VStack(spacing: 16) {
-                        Image(systemName: "heart.fill")
-                            .foregroundColor(.red)
-                            .font(.system(size: 60)) // Larger icon for emphasis
-
-                        VStack(alignment: .center, spacing: 8) {
-                            Text("You have a new match!")
-                                .font(.title) // Larger, modal-like text
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-
-                            Text(bannerMessage)
-                                .font(.body)
-                                .foregroundColor(.white.opacity(0.9))
+                    VStack(spacing: 15) {
+                        HStack(spacing: 15) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(Color.green.opacity(0.85)) // More vibrant green
+                                .font(.system(size: 44)) // Slightly larger icon
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Match Found!")
+                                    .font(.title3) // Larger and more prominent title
+                                    .bold()
+                                    .foregroundColor(Color.white) // Bright white for visibility
+                                
+                                Text(inAppNotificationMessage)
+                                    .font(.body)
+                                    .foregroundColor(Color.white.opacity(0.85)) // Bright text with opacity for readability
+                            }
+                            
+                            Spacer()
                         }
-
+                        
                         Button(action: {
-                            self.showNotificationBanner = false // Dismiss notification
+                            self.showInAppMatchNotification = false // Dismiss the notification
                         }) {
                             Text("OK")
-                                .font(.headline)
-                                .foregroundColor(.white)
+                                .font(.headline) // Slightly larger text for the button
+                                .foregroundColor(Color.white)
                                 .padding(.vertical, 10)
                                 .padding(.horizontal, 20)
-                                .background(Color.red)
-                                .cornerRadius(8)
+                                .background(Color.blue) // Vibrant blue for better contrast
+                                .cornerRadius(10)
                         }
                     }
                     .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(Color.pink)
-                            .shadow(radius: 10)
-                    )
-                    .padding(.horizontal, 30)
-
+                    .background(Color.black.opacity(0.8)) // Darker background for stronger contrast
+                    .cornerRadius(20)
+                    .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 5) // Subtle shadow for depth
+                    .padding(.horizontal, 40)
+                    .frame(maxWidth: .infinity) // Center horizontally
+                    
                     Spacer()
                 }
-                .transition(.opacity) // Smooth fade-in/out animation
-                .animation(.easeInOut, value: showNotificationBanner)
+                .transition(.opacity)
+                .animation(.easeInOut, value: showInAppMatchNotification)
             }
-
-
-
-        
 
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -231,7 +231,7 @@ struct ContentView: View {
 
     
     
-    // Listen for deletions in Firestore and remove the corresponding user from `users`
+    // Listen for deletions in Firestore and remove the corresponding user from users
         private func listenForUserDeletions() {
             let db = Firestore.firestore()
             
@@ -922,10 +922,13 @@ struct ContentView: View {
         }
     }
 
-    // Updated In-App Notification Logic (does not auto-dismiss)
+    // In-App Notification Logic (Centralized)
     private func showInAppMatchNotification(message: String) {
         self.inAppNotificationMessage = message
         self.showInAppMatchNotification = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            self.showInAppMatchNotification = false
+        }
     }
 
     private func recordMatchNotification(message: String) {
