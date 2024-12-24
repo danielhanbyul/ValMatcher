@@ -60,7 +60,8 @@ struct ContentView: View {
     @State private var unreadCountUser2 = 0
     @State private var isUnreadMessagesListenerActive = false
     @State private var processedMatchIDs: Set<String> = []
-
+    @State private var showInAppMatchNotification = false
+    @State private var inAppNotificationMessage = ""
 
     enum InteractionResult {
         case liked
@@ -86,6 +87,36 @@ struct ContentView: View {
                     }
                 }
             }
+
+            // In-App Notification Overlay
+            if showInAppMatchNotification {
+                    VStack {
+                        Text(inAppNotificationMessage)
+                            .font(.headline)
+                            .padding()
+                            .background(Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                            .shadow(radius: 5)
+                        
+                        // OK Button to dismiss the notification
+                        Button(action: {
+                            self.showInAppMatchNotification = false // Dismiss the notification
+                        }) {
+                            Text("OK")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.blue)
+                                .cornerRadius(8)
+                                .shadow(radius: 3)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black.opacity(0.5).edgesIgnoringSafeArea(.all))
+                    .transition(.opacity)
+                    .animation(.easeInOut, value: showInAppMatchNotification)
+                }
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -162,8 +193,16 @@ struct ContentView: View {
                 print("DEBUG: isInChatView set to false, currentChatID reset to nil")
             }
         }
-
     }
+    private func showInAppMatchNotification(message: String) {
+            self.inAppNotificationMessage = message
+            self.showInAppMatchNotification = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                self.showInAppMatchNotification = false
+            }
+        }
+    
+    
 
     private func listenForMatchNotifications() {
         NotificationCenter.default.addObserver(forName: Notification.Name("MatchCreated"), object: nil, queue: .main) { notification in
@@ -172,6 +211,8 @@ struct ContentView: View {
                 self.showAlert = true
             }
         }
+        
+    
     }
 
 
@@ -862,8 +903,12 @@ struct ContentView: View {
                 // Fetch the name of the other user and record the match in notifications
                 fetchUserName(userID: otherUserID) { userName in
                     let message = "You matched with \(userName)!"
-                    self.recordMatchNotification(message: message)
+                    self.inAppNotificationMessage = message
+                    self.showInAppMatchNotification = true // Trigger in-app notification
+                    self.notifications.append(message) // Add to notification bell
+                    self.notificationCount += 1 // Increment notification count
                 }
+
             }
         }
     }
