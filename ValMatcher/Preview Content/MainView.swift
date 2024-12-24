@@ -27,33 +27,56 @@ struct MainView: View {
                 if isSignedIn {
                     if let user = currentUser {
                         if user.hasAnsweredQuestions {
+                            // Show the tutorial only if NOT seen
                             if !isTutorialSeen {
                                 TutorialView(isTutorialSeen: $isTutorialSeen)
                                     .onChange(of: isTutorialSeen) { newValue in
+                                        // If tutorial has just been seen, persist locally
                                         if newValue {
                                             UserDefaults.standard.set(true, forKey: "isTutorialSeen")
                                         }
                                     }
                             } else {
-                                ContentView(userProfileViewModel: UserProfileViewModel(user: user), isSignedIn: $isSignedIn)
+                                // Already seen the tutorial, go to ContentView
+                                ContentView(userProfileViewModel: UserProfileViewModel(user: user),
+                                            isSignedIn: $isSignedIn)
                                     .environmentObject(appState)
                             }
                         } else {
-                            QuestionsView(userProfile: Binding(
-                                get: { self.currentUser ?? UserProfile(id: "", name: "", rank: "", imageName: "", age: "", server: "", answers: [:], hasAnsweredQuestions: false, mediaItems: []) },
-                                set: { self.currentUser = $0 }
-                            ), hasAnsweredQuestions: $hasAnsweredQuestions)
-                                .environmentObject(appState)
+                            // If user hasn't answered questions, show QuestionsView
+                            QuestionsView(
+                                userProfile: Binding(
+                                    get: {
+                                        self.currentUser ?? UserProfile(id: "",
+                                                                        name: "",
+                                                                        rank: "",
+                                                                        imageName: "",
+                                                                        age: "",
+                                                                        server: "",
+                                                                        answers: [:],
+                                                                        hasAnsweredQuestions: false,
+                                                                        mediaItems: [])
+                                    },
+                                    set: { self.currentUser = $0 }
+                                ),
+                                hasAnsweredQuestions: $hasAnsweredQuestions
+                            )
+                            .environmentObject(appState)
                         }
                     } else {
                         Text("Loading user data...")
                     }
                 } else {
+                    // Not signed in yet -> Show login or signup
                     if isShowingLoginView {
-                        LoginView(isSignedIn: $isSignedIn, currentUser: $currentUser, isShowingLoginView: $isShowingLoginView)
+                        LoginView(isSignedIn: $isSignedIn,
+                                  currentUser: $currentUser,
+                                  isShowingLoginView: $isShowingLoginView)
                             .environmentObject(appState)
                     } else {
-                        SignUpView(currentUser: $currentUser, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
+                        SignUpView(currentUser: $currentUser,
+                                   isSignedIn: $isSignedIn,
+                                   isShowingLoginView: $isShowingLoginView)
                             .environmentObject(appState)
                     }
                 }
@@ -62,8 +85,11 @@ struct MainView: View {
         .onAppear {
             checkUserStatus()
         }
+        // Any match alert from appState
         .alert(isPresented: $appState.showAlert) {
-            Alert(title: Text("Match Found!"), message: Text(appState.alertMessage), dismissButton: .default(Text("OK")))
+            Alert(title: Text("Match Found!"),
+                  message: Text(appState.alertMessage),
+                  dismissButton: .default(Text("OK")))
         }
     }
 
@@ -79,6 +105,13 @@ struct MainView: View {
                     self.isLoading = false
                 } else if let document = document, document.exists {
                     if let data = document.data() {
+                        // 1) Read 'hasSeenTutorial' from Firestore
+                        let hasSeenTutorialFromFirestore = data["hasSeenTutorial"] as? Bool ?? false
+                        // 2) Overwrite local isTutorialSeen
+                        self.isTutorialSeen = hasSeenTutorialFromFirestore
+                        // 3) Also update UserDefaults
+                        UserDefaults.standard.set(hasSeenTutorialFromFirestore, forKey: "isTutorialSeen")
+
                         let mediaItemsData = data["mediaItems"] as? [String] ?? []
                         let mediaItems = mediaItemsData.compactMap { urlString -> MediaItem? in
                             if let url = URL(string: urlString) {
@@ -106,9 +139,12 @@ struct MainView: View {
                         self.hasAnsweredQuestions = self.currentUser?.hasAnsweredQuestions ?? false
 
                         DispatchQueue.main.async {
+                            // If user hasn't answered questions, jump to Q's
                             if !self.hasAnsweredQuestions {
                                 self.isShowingLoginView = false
-                            } else if !self.isTutorialSeen {
+                            }
+                            // Else if tutorial not seen, show tutorial
+                            else if !self.isTutorialSeen {
                                 self.isShowingLoginView = false
                             }
 
@@ -118,11 +154,13 @@ struct MainView: View {
                     }
                     self.isLoading = false
                 } else {
+                    // Document doesn't exist or no data
                     self.isSignedIn = false
                     self.isLoading = false
                 }
             }
         } else {
+            // Not signed in at all
             self.isSignedIn = false
             self.isLoading = false
         }

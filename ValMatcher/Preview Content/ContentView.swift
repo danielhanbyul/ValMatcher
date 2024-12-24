@@ -59,6 +59,8 @@ struct ContentView: View {
     @State private var unreadCountUser1 = 0
     @State private var unreadCountUser2 = 0
     @State private var isUnreadMessagesListenerActive = false
+    @State private var processedMatchIDs: Set<String> = []
+
 
     enum InteractionResult {
         case liked
@@ -410,61 +412,7 @@ struct ContentView: View {
 
 
 
-    private func fetchIncomingLikes() {
-        guard let currentUserID = Auth.auth().currentUser?.uid else {
-            print("Error: User not authenticated")
-            return
-        }
-
-        let db = Firestore.firestore()
-        db.collection("likes")
-            .whereField("likedUserID", isEqualTo: currentUserID)
-            .addSnapshotListener { (querySnapshot, error) in
-                if let error = error {
-                    print("Error fetching incoming likes: \(error.localizedDescription)")
-                    return
-                }
-
-                for document in querySnapshot?.documents ?? [] {
-                    let likeData = document.data()
-                    let likingUserID = likeData["likingUserID"] as? String ?? ""
-
-                    guard likingUserID != currentUserID else { continue }
-
-                    db.collection("users").document(likingUserID).getDocument { (userDocument, error) in
-                        if let error = error {
-                            print("Error fetching liking user: \(error.localizedDescription)")
-                            return
-                        }
-
-                        if let userDocument = userDocument, let likedUser = try? userDocument.data(as: UserProfile.self) {
-                            db.collection("likes")
-                                .whereField("likedUserID", isEqualTo: likingUserID)
-                                .whereField("likingUserID", isEqualTo: currentUserID)
-                                .getDocuments { (matchQuerySnapshot, matchError) in
-                                    if let matchError = matchError {
-                                        print("Error checking match: \(matchError.localizedDescription)")
-                                        return
-                                    }
-
-                                    if matchQuerySnapshot?.isEmpty == false {
-                                        let matchMessage = "You matched with \(likedUser.name)!"
-                                        if !self.notifications.contains(matchMessage) && !self.acknowledgedNotifications.contains(matchMessage) {
-                                            self.alertMessage = matchMessage
-                                            self.notifications.append(matchMessage)
-                                            notificationCount += 1
-                                            self.showAlert = true
-                                            self.sendNotification(to: currentUserID, message: matchMessage)
-                                            self.sendNotification(to: likingUserID, message: matchMessage)
-                                            self.createDMChat(currentUserID: currentUserID, likedUserID: likingUserID, likedUser: likedUser)
-                                        }
-                                    }
-                                }
-                        }
-                    }
-                }
-            }
-    }
+    
 
     private func fetchUnreadMessagesCount() {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
@@ -798,128 +746,164 @@ struct ContentView: View {
     }
 
     private func createMatch(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
-            let db = Firestore.firestore()
-            let matchData: [String: Any] = [
-                "user1": currentUserID,
-                "user2": likedUserID,
-                "timestamp": Timestamp()
-            ]
+        let db = Firestore.firestore()
+        let matchesRef = db.collection("matches")
 
-            db.collection("matches")
-                .whereField("user1", isEqualTo: currentUserID)
-                .whereField("user2", isEqualTo: likedUserID)
-                .getDocuments { querySnapshot, error in
-                    if let error = error {
-                        print("Error checking existing match: \(error.localizedDescription)")
-                        return
-                    }
-                    
-                    if querySnapshot?.documents.isEmpty == true {
-                        db.collection("matches").addDocument(data: matchData) { error in
-                            if let error = error {
-                                print("Error creating match: \(error.localizedDescription)")
-                            } else {
-                                // Send personalized notifications to both users
-                                let currentUserName = userProfileViewModel.user.name
-                                let likedUserName = likedUser.name
+        let userPair = [currentUserID, likedUserID]
 
-                                let currentUserMessage = "You matched with \(likedUserName)!"
-                                let likedUserMessage = "You matched with \(currentUserName)!"
+        matchesRef
+            .whereField("user1", in: userPair)
+            .whereField("user2", in: userPair)
+            .getDocuments { (snapshot, error) in
+                if let error = error {
+                    print("Error checking existing match: \(error.localizedDescription)")
+                    return
+                }
 
-                                // Send notifications to both users
-                                if !self.notifications.contains(currentUserMessage) && !self.acknowledgedNotifications.contains(currentUserMessage) {
-                                    self.notifications.append(currentUserMessage)
-                                    self.alertMessage = currentUserMessage
-                                    self.showAlert = true
-                                    self.notificationCount += 1
-                                    self.sendNotification(to: currentUserID, message: currentUserMessage)
-                                }
-
-                                if !self.notifications.contains(likedUserMessage) && !self.acknowledgedNotifications.contains(likedUserMessage) {
-                                    self.sendNotification(to: likedUserID, message: likedUserMessage)
-                                }
-
-                                // Create the DM chat between both users
-                                self.createDMChat(currentUserID: currentUserID, likedUserID: likedUserID, likedUser: likedUser)
-                            }
-                        }
+                var matchExists = false
+                snapshot?.documents.forEach { doc in
+                    let data = doc.data()
+                    let user1 = data["user1"] as? String ?? ""
+                    let user2 = data["user2"] as? String ?? ""
+                    if (user1 == currentUserID && user2 == likedUserID) ||
+                       (user1 == likedUserID && user2 == currentUserID) {
+                        matchExists = true
                     }
                 }
-        }
+
+                if !matchExists {
+                    let matchData: [String: Any] = [
+                        "user1": currentUserID,
+                        "user2": likedUserID,
+                        "notificationsSent": [
+                            currentUserID: false,
+                            likedUserID: false
+                        ],
+                        "timestamp": Timestamp()
+                    ]
+
+                    matchesRef.addDocument(data: matchData) { error in
+                        if let error = error {
+                            print("Error creating match: \(error.localizedDescription)")
+                        } else {
+                            print("Match document created successfully.")
+                        }
+                    }
+                } else {
+                    print("DEBUG: Match already exists between \(currentUserID) and \(likedUserID).")
+                }
+            }
+    }
+
+
+
     
     private func listenForNewMatches(currentUserID: String) {
         let db = Firestore.firestore()
-        
-        // Listener for matches where the user is user1
-        db.collection("matches")
-            .whereField("user1", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("DEBUG: Error listening for matches (user1): \(error.localizedDescription)")
-                    return
-                }
-                self.handleMatchChanges(snapshot: snapshot, currentUserID: currentUserID)
-            }
 
-        // Listener for matches where the user is user2
+        // Listen for matches where the current user is user1
         db.collection("matches")
-            .whereField("user2", isEqualTo: currentUserID)
-            .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("DEBUG: Error listening for matches (user2): \(error.localizedDescription)")
-                    return
-                }
-                self.handleMatchChanges(snapshot: snapshot, currentUserID: currentUserID)
-            }
+          .whereField("user1", isEqualTo: currentUserID)
+          .addSnapshotListener { snapshot, error in
+              if let error = error {
+                  print("Error listening for matches (user1): \(error.localizedDescription)")
+                  return
+              }
+              self.handleMatchChanges(snapshot: snapshot, currentUserID: currentUserID)
+          }
+        
+        // Listen for matches where the current user is user2
+        db.collection("matches")
+          .whereField("user2", isEqualTo: currentUserID)
+          .addSnapshotListener { snapshot, error in
+              if let error = error {
+                  print("Error listening for matches (user2): \(error.localizedDescription)")
+                  return
+              }
+              self.handleMatchChanges(snapshot: snapshot, currentUserID: currentUserID)
+          }
     }
 
     private func handleMatchChanges(snapshot: QuerySnapshot?, currentUserID: String) {
         guard let snapshot = snapshot else { return }
-        
+
         for change in snapshot.documentChanges {
             if change.type == .added {
+                let matchID = change.document.documentID
+                if processedMatchIDs.contains(matchID) {
+                    continue  // Skip already processed matches
+                }
+                processedMatchIDs.insert(matchID)
+
                 let matchData = change.document.data()
                 let user1 = matchData["user1"] as? String ?? ""
                 let user2 = matchData["user2"] as? String ?? ""
+
+                // Determine the other user's ID
                 let otherUserID = user1 == currentUserID ? user2 : user1
-                
-                fetchUserName(userID: otherUserID) { userName in
-                    let message = "You matched with \(userName)!"
-                    if !self.notifications.contains(message) && !self.acknowledgedNotifications.contains(message) {
-                        self.notifications.append(message)
-                        self.alertMessage = message
-                        self.showAlert = true
-                        
-                        // Send local notification
-                        self.showMatchNotification(message: message)
+
+                // Check notificationsSent status
+                if let notificationsSent = matchData["notificationsSent"] as? [String: Bool],
+                   notificationsSent[currentUserID] == true {
+                    print("DEBUG: Notification already sent for match \(matchID). Skipping.")
+                    continue  // Skip if the current user was already notified
+                }
+
+                // Update notificationsSent field in Firestore to avoid duplicate notifications
+                var updatedNotificationsSent = matchData["notificationsSent"] as? [String: Bool] ?? [:]
+                updatedNotificationsSent[currentUserID] = true
+
+                let db = Firestore.firestore()
+                db.collection("matches").document(matchID).updateData(["notificationsSent": updatedNotificationsSent]) { error in
+                    if let error = error {
+                        print("ERROR: Failed to update notificationsSent for match \(matchID): \(error.localizedDescription)")
+                    } else {
+                        print("DEBUG: notificationsSent updated for match \(matchID).")
                     }
                 }
+
+                // Fetch the name of the other user and display a notification
+                fetchUserName(userID: otherUserID) { userName in
+                    let message = "You matched with \(userName)!"
+                    self.showMatchNotification(message: message)
+                }
             }
+        }
+    }
+
+
+    /// Example function to fetch the other user's name and show the local match notification
+    private func fetchUserNameAndNotify(matchData: [String: Any], currentUserID: String) {
+        let user1 = matchData["user1"] as? String ?? ""
+        let user2 = matchData["user2"] as? String ?? ""
+        let otherUserID = (user1 == currentUserID) ? user2 : user1
+        
+        fetchUserName(userID: otherUserID) { userName in
+            let message = "You matched with \(userName)!"
+            // Show local UI alert or push notification here
+            self.appState.alertMessage = message
+            self.appState.showAlert = true
+            print("DEBUG: Match notification shown: \(message)")
         }
     }
 
     private func fetchUserName(userID: String, completion: @escaping (String) -> Void) {
         let db = Firestore.firestore()
-        
-        // Fetch the user's document from Firestore
         db.collection("users").document(userID).getDocument { document, error in
             if let error = error {
                 print("Error fetching user name: \(error.localizedDescription)")
                 completion("Unknown")
                 return
             }
-            
-            guard let document = document, document.exists, let data = document.data() else {
-                print("User document not found for userID: \(userID)")
+            if let data = document?.data() {
+                let name = data["name"] as? String ?? "Unknown"
+                completion(name)
+            } else {
                 completion("Unknown")
-                return
             }
-            
-            // Extract the user's name from the document data
-            let userName = data["name"] as? String ?? "Unknown"
-            completion(userName)
         }
     }
+
 
     
     private func showMatchNotification(message: String) {

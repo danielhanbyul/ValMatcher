@@ -171,9 +171,13 @@ struct TutorialView: View {
                 print("Error saving tutorial completion: \(err.localizedDescription)")
             } else {
                 print("Tutorial completion saved.")
+                // Also set local state so we skip tutorial on next app launch
+                isTutorialSeen = true
+                UserDefaults.standard.set(true, forKey: "isTutorialSeen")
             }
         }
     }
+
 }
 
 struct TutorialView_Previews: PreviewProvider {

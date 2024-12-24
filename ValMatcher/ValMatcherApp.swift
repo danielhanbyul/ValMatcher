@@ -15,14 +15,18 @@ import UIKit
 struct ValMatcherApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject var appState = AppState()
-    
+
     var body: some Scene {
         WindowGroup {
             MainView()
                 .environmentObject(appState)
+                .onAppear {
+                    appState.listenForMatches()
+                }
         }
     }
 }
+
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
 
@@ -52,11 +56,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         Messaging.messaging().delegate = self
         print("DEBUG: Firebase Messaging delegate set.")
 
+        // Add notificationsSent field to existing matches
+        addNotificationsSentToMatches()  // Call this function during app launch (temporary)
+
         // Observe authentication state changes
         Auth.auth().addStateDidChangeListener { auth, user in
             if let user = user {
                 print("DEBUG: User authenticated with UID: \(user.uid)")
-                // Now that the user is authenticated, update the FCM token
                 if let cachedToken = self.cachedFCMToken {
                     print("DEBUG: Updating FCM token from cache: \(cachedToken)")
                     self.updateFCMTokenInFirestore(fcmToken: cachedToken)
@@ -220,12 +226,21 @@ import Firebase
 class AppState: ObservableObject {
     @Published var isInChatView: Bool = false
     @Published var currentChatID: String?
-    @Published var alertMessage: String = "" // Alert message property
-    @Published var showAlert: Bool = false  // Show alert property
+    @Published var alertMessage: String = ""
+    @Published var showAlert: Bool = false
 
     private var chatListeners: [String: ListenerRegistration] = [:]
-    private var hasStartedListeningForMatches = false  // Prevent multiple listeners
+    private var hasStartedListeningForMatches = false
     private var processedMatchIDs: Set<String> = []  // To avoid duplicate notifications
+
+    // Public accessor for processedMatchIDs
+    func isMatchProcessed(_ matchID: String) -> Bool {
+        return processedMatchIDs.contains(matchID)
+    }
+
+    func markMatchAsProcessed(_ matchID: String) {
+        processedMatchIDs.insert(matchID)
+    }
 
     // Add a chat listener for a specific chat ID
     func addChatListener(for chatID: String, listener: ListenerRegistration) {
@@ -289,33 +304,60 @@ class AppState: ObservableObject {
             }
     }
 
-    // Process changes in the matches collection
     private func processMatchChanges(snapshot: QuerySnapshot?, currentUserID: String) {
         guard let snapshot = snapshot else { return }
 
         for change in snapshot.documentChanges {
             if change.type == .added {
                 let matchID = change.document.documentID
+                let matchData = change.document.data()
+
+                // Skip if already processed
                 if processedMatchIDs.contains(matchID) {
-                    continue  // Skip already processed matches
+                    print("DEBUG: Skipping already processed match \(matchID)")
+                    continue
                 }
+
+                // Skip if notificationsSent is already true for the current user
+                if let notificationsSent = matchData["notificationsSent"] as? [String: Bool],
+                   notificationsSent[currentUserID] == true {
+                    print("DEBUG: Notifications already sent for match \(matchID)")
+                    continue
+                }
+
+                // Mark this match as processed
                 processedMatchIDs.insert(matchID)
 
-                let matchData = change.document.data()
+                // Extract user1 and user2 from matchData
                 let user1 = matchData["user1"] as? String ?? ""
                 let user2 = matchData["user2"] as? String ?? ""
 
                 // Determine the other user's ID
                 let otherUserID = user1 == currentUserID ? user2 : user1
 
-                // Fetch the name of the other user and display a notification
+                // Fetch the other user's name and display a notification
                 fetchUserName(userID: otherUserID) { userName in
                     let message = "You matched with \(userName)!"
                     self.showMatchNotification(message: message)
+
+                    // Update Firestore to mark notification as sent
+                    var updatedNotificationsSent = matchData["notificationsSent"] as? [String: Bool] ?? [:]
+                    updatedNotificationsSent[currentUserID] = true
+
+                    Firestore.firestore().collection("matches").document(matchID).updateData([
+                        "notificationsSent": updatedNotificationsSent
+                    ]) { error in
+                        if let error = error {
+                            print("DEBUG: Error updating notificationsSent for match \(matchID): \(error.localizedDescription)")
+                        } else {
+                            print("DEBUG: Updated notificationsSent for match \(matchID)")
+                        }
+                    }
                 }
             }
         }
     }
+
 
     // Fetch the user's name from Firestore by user ID
     private func fetchUserName(userID: String, completion: @escaping (String) -> Void) {
