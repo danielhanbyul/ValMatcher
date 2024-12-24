@@ -584,40 +584,119 @@ struct ContentView: View {
         self.unreadMessagesListener = ListenerRegistrationGroup(listeners: listeners)
     }
     
-    private func sendPushNotification(for matchID: String) {
-        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-
-        // Fetch the most recent message from Firestore for this chat
+    private func sendMatchPushNotification(to userID: String, body: String) {
         let db = Firestore.firestore()
-        db.collection("matches").document(matchID).collection("messages")
-            .order(by: "timestamp", descending: true)
-            .limit(to: 1)
-            .getDocuments { snapshot, error in
-                if let error = error {
-                    print("Error fetching latest message: \(error.localizedDescription)")
+        db.collection("users").document(userID).getDocument { document, error in
+            if let error = error {
+                print("Error fetching user data: \(error.localizedDescription)")
+                return
+            }
+
+            guard let document = document, document.exists,
+                  let data = document.data(),
+                  let fcmToken = data["fcmToken"] as? String, !fcmToken.isEmpty else {
+                print("No FCM token found for user \(userID)")
+                return
+            }
+
+            let title = "Match Found!"
+            self.sendPushNotification(to: fcmToken, title: title, body: body)
+        }
+    }
+
+    private func sendPushNotification(for matchID: String) {
+        let db = Firestore.firestore()
+        
+        // Fetch the match document to determine the recipient
+        db.collection("matches").document(matchID).getDocument { document, error in
+            if let error = error {
+                print("Error fetching match \(matchID): \(error.localizedDescription)")
+                return
+            }
+            
+            guard let data = document?.data() else {
+                print("No match data found for \(matchID)")
+                return
+            }
+
+            // Get the IDs of the two users in the match
+            let currentUserID = Auth.auth().currentUser?.uid ?? ""
+            let user1 = data["user1"] as? String ?? ""
+            let user2 = data["user2"] as? String ?? ""
+
+            // Determine the recipient (the other user)
+            let recipientID = (user1 == currentUserID) ? user2 : user1
+
+            // Fetch the FCM token for the recipient
+            db.collection("users").document(recipientID).getDocument { userDoc, userError in
+                if let userError = userError {
+                    print("Error fetching user document: \(userError.localizedDescription)")
                     return
                 }
-
-                guard let document = snapshot?.documents.first else { return }
-                let data = document.data()
-                let messageText = data["content"] as? String ?? "New message"
-                let senderName = data["senderName"] as? String ?? "Someone"
-
-                // Trigger a push notification
-                let title = "New Message from \(senderName)"
-                let body = messageText
-
-                // Create the notification content
-                let content = UNMutableNotificationContent()
-                content.title = title
-                content.body = body
-                content.sound = .default
-
-                // Send the notification via APNs
-                let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-                UNUserNotificationCenter.current().add(request)
+                guard let userData = userDoc?.data(),
+                      let fcmToken = userData["fcmToken"] as? String,
+                      !fcmToken.isEmpty else {
+                    print("No valid FCM token for user \(recipientID)")
+                    return
+                }
+                
+                // Call the actual push notification function
+                self.sendPushNotification(
+                    to: fcmToken,
+                    title: "New Match!",
+                    body: "You have a new match. Start chatting now!"
+                )
             }
+        }
     }
+
+    private func sendPushNotification(to fcmToken: String, title: String, body: String) {
+        let urlString = "https://fcm.googleapis.com/fcm/send"
+        guard let url = URL(string: urlString) else { return }
+        let serverKey = "AIzaSyA-Eew48TEhrZnX80C8lyYcKkuYRx0hNME"  
+
+        // Create the notification payload
+        let notification: [String: Any] = [
+            "to": fcmToken,
+            "notification": [
+                "title": title,
+                "body": body,
+                "sound": "default"
+            ],
+            "data": [
+                "match": "yes"
+            ]
+        ]
+
+        // Prepare the HTTP request
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("key=\(serverKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: notification, options: [])
+
+        // Send the request
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Error sending push notification: \(error.localizedDescription)")
+                return
+            }
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 200 {
+                    print("Push notification sent successfully to token: \(fcmToken)")
+                } else {
+                    print("Push notification failed with status: \(httpResponse.statusCode)")
+                    if let data = data,
+                       let responseString = String(data: data, encoding: .utf8) {
+                        print("Response: \(responseString)")
+                    }
+                }
+            }
+        }
+        task.resume()
+    }
+
+
 
 
 
@@ -884,8 +963,10 @@ struct ContentView: View {
         for change in snapshot.documentChanges {
             if change.type == .added {
                 let matchID = change.document.documentID
+
+                // Only handle each match once
                 if processedMatchIDs.contains(matchID) {
-                    continue  // Skip already processed matches
+                    continue
                 }
                 processedMatchIDs.insert(matchID)
 
@@ -893,34 +974,37 @@ struct ContentView: View {
                 let user1 = matchData["user1"] as? String ?? ""
                 let user2 = matchData["user2"] as? String ?? ""
 
-                // Determine the other user's ID
-                let otherUserID = user1 == currentUserID ? user2 : user1
+                // Determine the other user
+                let otherUserID = (user1 == currentUserID) ? user2 : user1
 
-                // Check notificationsSent status
-                if let notificationsSent = matchData["notificationsSent"] as? [String: Bool],
-                   notificationsSent[currentUserID] == true {
-                    continue  // Skip if the current user was already notified
-                }
-
-                // Update notificationsSent field in Firestore to avoid duplicate notifications
+                // Mark notificationsSent so we don't double-notify
                 var updatedNotificationsSent = matchData["notificationsSent"] as? [String: Bool] ?? [:]
+                if updatedNotificationsSent[currentUserID] == true {
+                    continue
+                }
                 updatedNotificationsSent[currentUserID] = true
 
                 let db = Firestore.firestore()
-                db.collection("matches").document(matchID).updateData(["notificationsSent": updatedNotificationsSent]) { error in
+                db.collection("matches").document(matchID).updateData([
+                    "notificationsSent": updatedNotificationsSent
+                ]) { error in
                     if let error = error {
-                        print("ERROR: Failed to update notificationsSent for match \(matchID): \(error.localizedDescription)")
+                        print("ERROR: Failed to update notificationsSent: \(error.localizedDescription)")
                     }
                 }
 
-                // Fetch the name of the other user and show a single in-app notification
-                fetchUserName(userID: otherUserID) { userName in
+                // Fetch the other user's name to personalize the push
+                self.fetchUserName(userID: otherUserID) { userName in
                     let message = "You matched with \(userName)!"
-                    self.showInAppMatchNotification(message: message) // Use the in-app notification
+                    
+                    // Send push notifications to BOTH users
+                    self.sendMatchPushNotification(to: currentUserID, body: message)
+                    self.sendMatchPushNotification(to: otherUserID, body: message)
                 }
             }
         }
     }
+
 
     // In-App Notification Logic (Centralized)
     private func showInAppMatchNotification(message: String) {
@@ -1037,49 +1121,6 @@ struct ContentView: View {
         }
     }
 
-
-    private func sendPushNotification(to fcmToken: String, title: String, body: String) {
-        let urlString = "https://fcm.googleapis.com/fcm/send"
-        let url = URL(string: urlString)!
-        let serverKey = "AIzaSyA-Eew48TEhrZnX80C8lyYcKkuYRx0hNME"  // Replace with your actual FCM server key
-
-        let notification: [String: Any] = [
-            "to": fcmToken,
-            "notification": [
-                "title": title,
-                "body": body,
-                "sound": "default"
-            ],
-            "data": [
-                "match": "yes"
-            ]
-        ]
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("key=\(serverKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: notification, options: [])
-
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("Error sending push notification: \(error.localizedDescription)")
-                return
-            }
-            if let httpResponse = response as? HTTPURLResponse {
-                print("Push notification HTTP response status code: \(httpResponse.statusCode)")
-                if httpResponse.statusCode != 200 {
-                    print("Push notification failed with status code: \(httpResponse.statusCode)")
-                    if let data = data, let responseString = String(data: data, encoding: .utf8) {
-                        print("Response data: \(responseString)")
-                    }
-                } else {
-                    print("Push notification sent successfully to token: \(fcmToken)")
-                }
-            }
-        }
-        task.resume()
-    }
     
     
 
