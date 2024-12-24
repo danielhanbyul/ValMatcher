@@ -88,24 +88,25 @@ struct ContentView: View {
                 }
             }
 
-            // In-App Notification Overlay
             if showInAppMatchNotification {
                 VStack {
                     Spacer()
-                    // Notification Card
-                    HStack(spacing: 10) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                            .font(.system(size: 40))
 
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("Match Found!")
+                    HStack(spacing: 12) {
+                        Image(systemName: "heart.fill")
+                            .foregroundColor(.red)
+                            .font(.system(size: 40))
+                            .padding(.leading, 10)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("You have a new match!")
                                 .font(.headline)
                                 .foregroundColor(.white)
+                                .bold()
 
                             Text(inAppNotificationMessage)
                                 .font(.subheadline)
-                                .foregroundColor(.white)
+                                .foregroundColor(.white.opacity(0.8))
                         }
 
                         Spacer()
@@ -113,25 +114,30 @@ struct ContentView: View {
                         Button(action: {
                             self.showInAppMatchNotification = false // Dismiss the notification
                         }) {
-                            Text("OK")
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                                .padding(.vertical, 4)
-                                .padding(.horizontal, 12)
-                                .background(Color.blue)
-                                .cornerRadius(8)
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.white.opacity(0.8))
+                                .font(.system(size: 24))
                         }
+                        .padding(.trailing, 10)
                     }
                     .padding()
-                    .background(Color.gray.opacity(0.9))
-                    .cornerRadius(15)
-                    .shadow(radius: 5)
-                    .padding(.horizontal)
-                    .padding(.bottom, 20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(LinearGradient(
+                                gradient: Gradient(colors: [Color(red: 0.4, green: 0.0, blue: 0.4), Color(red: 0.7, green: 0.2, blue: 0.6)]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ))
+                    )
+                    .shadow(radius: 8)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
                 }
                 .transition(.opacity)
                 .animation(.easeInOut, value: showInAppMatchNotification)
             }
+
+
         
 
         }
@@ -918,13 +924,10 @@ struct ContentView: View {
         }
     }
 
-    // In-App Notification Logic (Centralized)
+    // Updated In-App Notification Logic (does not auto-dismiss)
     private func showInAppMatchNotification(message: String) {
         self.inAppNotificationMessage = message
         self.showInAppMatchNotification = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            self.showInAppMatchNotification = false
-        }
     }
 
     private func recordMatchNotification(message: String) {
