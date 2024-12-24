@@ -62,6 +62,10 @@ struct ContentView: View {
     @State private var processedMatchIDs: Set<String> = []
     @State private var showInAppMatchNotification = false
     @State private var inAppNotificationMessage = ""
+    @State private var showMatchNotification = false
+    @State private var matchNotificationMessage = ""
+    @State private var matchNotificationImageURL: URL? = nil
+
 
     enum InteractionResult {
         case liked
@@ -89,54 +93,20 @@ struct ContentView: View {
             }
 
             // In-App Notification Overlay
-            if showInAppMatchNotification {
+            if showMatchNotification {
                 VStack {
                     Spacer()
-                    
-                    VStack(spacing: 15) {
-                        HStack(spacing: 15) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(Color.green.opacity(0.85)) // More vibrant green
-                                .font(.system(size: 44)) // Slightly larger icon
-                            
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Match Found!")
-                                    .font(.title3) // Larger and more prominent title
-                                    .bold()
-                                    .foregroundColor(Color.white) // Bright white for visibility
-                                
-                                Text(inAppNotificationMessage)
-                                    .font(.body)
-                                    .foregroundColor(Color.white.opacity(0.85)) // Bright text with opacity for readability
-                            }
-                            
-                            Spacer()
-                        }
-                        
-                        Button(action: {
-                            self.showInAppMatchNotification = false // Dismiss the notification
-                        }) {
-                            Text("OK")
-                                .font(.headline) // Slightly larger text for the button
-                                .foregroundColor(Color.white)
-                                .padding(.vertical, 10)
-                                .padding(.horizontal, 20)
-                                .background(Color.blue) // Vibrant blue for better contrast
-                                .cornerRadius(10)
-                        }
-                    }
-                    .padding()
-                    .background(Color.black.opacity(0.8)) // Darker background for stronger contrast
-                    .cornerRadius(20)
-                    .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 5) // Subtle shadow for depth
-                    .padding(.horizontal, 40)
-                    .frame(maxWidth: .infinity) // Center horizontally
-                    
-                    Spacer()
+                    MatchNotificationView(
+                        message: matchNotificationMessage,
+                        imageURL: matchNotificationImageURL,
+                        dismissAction: { showMatchNotification = false }
+                    )
+                    Spacer().frame(height: 50)
                 }
                 .transition(.opacity)
-                .animation(.easeInOut, value: showInAppMatchNotification)
+                .animation(.easeInOut, value: showMatchNotification)
             }
+
 
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -584,119 +554,40 @@ struct ContentView: View {
         self.unreadMessagesListener = ListenerRegistrationGroup(listeners: listeners)
     }
     
-    private func sendMatchPushNotification(to userID: String, body: String) {
-        let db = Firestore.firestore()
-        db.collection("users").document(userID).getDocument { document, error in
-            if let error = error {
-                print("Error fetching user data: \(error.localizedDescription)")
-                return
-            }
-
-            guard let document = document, document.exists,
-                  let data = document.data(),
-                  let fcmToken = data["fcmToken"] as? String, !fcmToken.isEmpty else {
-                print("No FCM token found for user \(userID)")
-                return
-            }
-
-            let title = "Match Found!"
-            self.sendPushNotification(to: fcmToken, title: title, body: body)
-        }
-    }
-
     private func sendPushNotification(for matchID: String) {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+
+        // Fetch the most recent message from Firestore for this chat
         let db = Firestore.firestore()
-        
-        // Fetch the match document to determine the recipient
-        db.collection("matches").document(matchID).getDocument { document, error in
-            if let error = error {
-                print("Error fetching match \(matchID): \(error.localizedDescription)")
-                return
-            }
-            
-            guard let data = document?.data() else {
-                print("No match data found for \(matchID)")
-                return
-            }
-
-            // Get the IDs of the two users in the match
-            let currentUserID = Auth.auth().currentUser?.uid ?? ""
-            let user1 = data["user1"] as? String ?? ""
-            let user2 = data["user2"] as? String ?? ""
-
-            // Determine the recipient (the other user)
-            let recipientID = (user1 == currentUserID) ? user2 : user1
-
-            // Fetch the FCM token for the recipient
-            db.collection("users").document(recipientID).getDocument { userDoc, userError in
-                if let userError = userError {
-                    print("Error fetching user document: \(userError.localizedDescription)")
+        db.collection("matches").document(matchID).collection("messages")
+            .order(by: "timestamp", descending: true)
+            .limit(to: 1)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error fetching latest message: \(error.localizedDescription)")
                     return
                 }
-                guard let userData = userDoc?.data(),
-                      let fcmToken = userData["fcmToken"] as? String,
-                      !fcmToken.isEmpty else {
-                    print("No valid FCM token for user \(recipientID)")
-                    return
-                }
-                
-                // Call the actual push notification function
-                self.sendPushNotification(
-                    to: fcmToken,
-                    title: "New Match!",
-                    body: "You have a new match. Start chatting now!"
-                )
+
+                guard let document = snapshot?.documents.first else { return }
+                let data = document.data()
+                let messageText = data["content"] as? String ?? "New message"
+                let senderName = data["senderName"] as? String ?? "Someone"
+
+                // Trigger a push notification
+                let title = "New Message from \(senderName)"
+                let body = messageText
+
+                // Create the notification content
+                let content = UNMutableNotificationContent()
+                content.title = title
+                content.body = body
+                content.sound = .default
+
+                // Send the notification via APNs
+                let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+                UNUserNotificationCenter.current().add(request)
             }
-        }
     }
-
-    private func sendPushNotification(to fcmToken: String, title: String, body: String) {
-        let urlString = "https://fcm.googleapis.com/fcm/send"
-        guard let url = URL(string: urlString) else { return }
-        let serverKey = "AIzaSyA-Eew48TEhrZnX80C8lyYcKkuYRx0hNME"  
-
-        // Create the notification payload
-        let notification: [String: Any] = [
-            "to": fcmToken,
-            "notification": [
-                "title": title,
-                "body": body,
-                "sound": "default"
-            ],
-            "data": [
-                "match": "yes"
-            ]
-        ]
-
-        // Prepare the HTTP request
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("key=\(serverKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: notification, options: [])
-
-        // Send the request
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("Error sending push notification: \(error.localizedDescription)")
-                return
-            }
-            if let httpResponse = response as? HTTPURLResponse {
-                if httpResponse.statusCode == 200 {
-                    print("Push notification sent successfully to token: \(fcmToken)")
-                } else {
-                    print("Push notification failed with status: \(httpResponse.statusCode)")
-                    if let data = data,
-                       let responseString = String(data: data, encoding: .utf8) {
-                        print("Response: \(responseString)")
-                    }
-                }
-            }
-        }
-        task.resume()
-    }
-
-
 
 
 
@@ -789,18 +680,12 @@ struct ContentView: View {
     }
 
 
-    private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
-        guard UIApplication.shared.applicationState == .active else {
-            return // Prevent in-app notification if the app is not in the foreground
-        }
-        
-        guard let senderName = latestMessage.data()["senderName"] as? String,
-              let messageText = latestMessage.data()["text"] as? String else { return }
-
-        let alertMessage = "\(senderName): \(messageText)"
-        self.bannerMessage = alertMessage
-        self.showNotificationBanner = true
+    private func showInAppMatchNotification(message: String, imageURL: URL?) {
+        matchNotificationMessage = message
+        matchNotificationImageURL = imageURL
+        showMatchNotification = true
     }
+
 
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
         guard UIApplication.shared.applicationState != .active else {
@@ -963,44 +848,62 @@ struct ContentView: View {
         for change in snapshot.documentChanges {
             if change.type == .added {
                 let matchID = change.document.documentID
+                guard !processedMatchIDs.contains(matchID) else { continue }
 
-                // Only handle each match once
-                if processedMatchIDs.contains(matchID) {
-                    continue
-                }
                 processedMatchIDs.insert(matchID)
 
                 let matchData = change.document.data()
                 let user1 = matchData["user1"] as? String ?? ""
                 let user2 = matchData["user2"] as? String ?? ""
-
-                // Determine the other user
                 let otherUserID = (user1 == currentUserID) ? user2 : user1
 
-                // Mark notificationsSent so we don't double-notify
-                var updatedNotificationsSent = matchData["notificationsSent"] as? [String: Bool] ?? [:]
-                if updatedNotificationsSent[currentUserID] == true {
-                    continue
-                }
-                updatedNotificationsSent[currentUserID] = true
-
-                let db = Firestore.firestore()
-                db.collection("matches").document(matchID).updateData([
-                    "notificationsSent": updatedNotificationsSent
-                ]) { error in
-                    if let error = error {
-                        print("ERROR: Failed to update notificationsSent: \(error.localizedDescription)")
+                fetchUserName(userID: otherUserID) { userName in
+                    fetchUserImageURL(userID: otherUserID) { imageURL in
+                        let message = "You matched with \(userName)!"
+                        
+                        if UIApplication.shared.applicationState == .active {
+                            // Show in-app notification
+                            showInAppMatchNotification(message: message, imageURL: imageURL)
+                        } else {
+                            // Send system notification
+                            sendPushNotification(
+                                to: currentUserID,
+                                title: "It's a Match!",
+                                body: message
+                            )
+                        }
                     }
                 }
+            }
+        }
+    }
 
-                // Fetch the other user's name to personalize the push
-                self.fetchUserName(userID: otherUserID) { userName in
-                    let message = "You matched with \(userName)!"
-                    
-                    // Send push notifications to BOTH users
-                    self.sendMatchPushNotification(to: currentUserID, body: message)
-                    self.sendMatchPushNotification(to: otherUserID, body: message)
-                }
+    private func fetchUserName(userID: String, completion: @escaping (String) -> Void) {
+        let db = Firestore.firestore()
+        db.collection("users").document(userID).getDocument { document, error in
+            if let error = error {
+                print("Error fetching user name: \(error.localizedDescription)")
+                completion("Unknown")
+                return
+            }
+            let name = document?.data()?["name"] as? String ?? "Unknown"
+            completion(name)
+        }
+    }
+
+    private func fetchUserImageURL(userID: String, completion: @escaping (URL?) -> Void) {
+        let db = Firestore.firestore()
+        db.collection("users").document(userID).getDocument { document, error in
+            if let error = error {
+                print("Error fetching user image: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+            if let imageURLString = document?.data()?["imageURL"] as? String,
+               let imageURL = URL(string: imageURLString) {
+                completion(imageURL)
+            } else {
+                completion(nil)
             }
         }
     }
@@ -1046,37 +949,26 @@ struct ContentView: View {
 
 
 
-    /// Example function to fetch the other user's name and show the local match notification
     private func fetchUserNameAndNotify(matchData: [String: Any], currentUserID: String) {
         let user1 = matchData["user1"] as? String ?? ""
         let user2 = matchData["user2"] as? String ?? ""
         let otherUserID = (user1 == currentUserID) ? user2 : user1
-        
+
         fetchUserName(userID: otherUserID) { userName in
             let message = "You matched with \(userName)!"
-            // Show local UI alert or push notification here
-            self.appState.alertMessage = message
-            self.appState.showAlert = true
-            print("DEBUG: Match notification shown: \(message)")
+            
+            if UIApplication.shared.applicationState == .active {
+                // In-app notification
+                showInAppMatchNotification(message: message, imageURL: nil) // Fetch image if needed
+            } else {
+                // System notification
+                sendPushNotification(to: currentUserID, title: "It's a Match!", body: message)
+            }
         }
     }
 
-    private func fetchUserName(userID: String, completion: @escaping (String) -> Void) {
-        let db = Firestore.firestore()
-        db.collection("users").document(userID).getDocument { document, error in
-            if let error = error {
-                print("Error fetching user name: \(error.localizedDescription)")
-                completion("Unknown")
-                return
-            }
-            if let data = document?.data() {
-                let name = data["name"] as? String ?? "Unknown"
-                completion(name)
-            } else {
-                completion("Unknown")
-            }
-        }
-    }
+
+    
 
 
     
@@ -1117,6 +1009,25 @@ struct ContentView: View {
                 self.sendPushNotification(to: fcmToken, title: "It's a Match!", body: message)
             } else {
                 print("No FCM token found for user \(userID)")
+            }
+        }
+    }
+
+
+    private func sendPushNotification(to userID: String, title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error sending push notification: \(error.localizedDescription)")
             }
         }
     }
