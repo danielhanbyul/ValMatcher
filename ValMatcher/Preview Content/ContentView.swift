@@ -92,7 +92,6 @@ struct ContentView: View {
             if showInAppMatchNotification {
                 VStack {
                     Spacer()
-                    
                     // Notification Card
                     HStack(spacing: 10) {
                         Image(systemName: "checkmark.circle.fill")
@@ -108,9 +107,9 @@ struct ContentView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.white)
                         }
-                        
+
                         Spacer()
-                        
+
                         Button(action: {
                             self.showInAppMatchNotification = false // Dismiss the notification
                         }) {
@@ -212,14 +211,6 @@ struct ContentView: View {
             }
         }
     }
-    private func showInAppMatchNotification(message: String) {
-            self.inAppNotificationMessage = message
-            self.showInAppMatchNotification = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                self.showInAppMatchNotification = false
-            }
-        }
-    
     
 
     private func listenForMatchNotifications() {
@@ -717,12 +708,7 @@ struct ContentView: View {
 
     private func showInAppNotification(for latestMessage: QueryDocumentSnapshot) {
         guard UIApplication.shared.applicationState == .active else {
-            return
-        }
-        
-        // Exclude matches
-        if let messageType = latestMessage.data()["type"] as? String, messageType == "match" {
-            return
+            return // Prevent in-app notification if the app is not in the foreground
         }
         
         guard let senderName = latestMessage.data()["senderName"] as? String,
@@ -732,7 +718,6 @@ struct ContentView: View {
         self.bannerMessage = alertMessage
         self.showNotificationBanner = true
     }
-
 
     private func notifyUserOfNewMessages(senderName: String, messageText: String) {
         guard UIApplication.shared.applicationState != .active else {
@@ -924,16 +909,21 @@ struct ContentView: View {
                     }
                 }
 
-                // Fetch the name of the other user and record the match in notifications
+                // Fetch the name of the other user and show a single in-app notification
                 fetchUserName(userID: otherUserID) { userName in
                     let message = "You matched with \(userName)!"
-                    self.inAppNotificationMessage = message
-                    self.showInAppMatchNotification = true // Trigger in-app notification
-                    self.notifications.append(message) // Add to notification bell
-                    self.notificationCount += 1 // Increment notification count
+                    self.showInAppMatchNotification(message: message) // Use the in-app notification
                 }
-
             }
+        }
+    }
+
+    // In-App Notification Logic (Centralized)
+    private func showInAppMatchNotification(message: String) {
+        self.inAppNotificationMessage = message
+        self.showInAppMatchNotification = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            self.showInAppMatchNotification = false
         }
     }
 
@@ -999,44 +989,22 @@ struct ContentView: View {
             }
         }
     }
+
+
     
-    private func showSystemMatchNotification(message: String) {
+    private func showMatchNotification(message: String) {
         let content = UNMutableNotificationContent()
         content.title = "Match Found!"
         content.body = message
         content.sound = .default
 
-        // Create a notification request
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: nil // No trigger means it will be displayed immediately
-        )
-
-        // Add the notification request to the notification center
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("Error requesting notification permissions: \(error.localizedDescription)")
-            }
-            if granted {
-                print("Notification permissions granted.")
-            } else {
-                print("Notification permissions not granted.")
+                print("Error showing local notification: \(error.localizedDescription)")
             }
         }
-
     }
-
-
-
-    
-    private func showMatchNotification(message: String) {
-        if UIApplication.shared.applicationState == .active {
-            // Use the default Apple notification
-            showSystemMatchNotification(message: message)
-        }
-    }
-
     
     
 
