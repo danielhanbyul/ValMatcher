@@ -88,53 +88,51 @@ struct ContentView: View {
                 }
             }
 
-            if showInAppMatchNotification {
+            if showNotificationBanner {
                 VStack {
                     Spacer()
 
-                    HStack(spacing: 12) {
+                    // Notification Card
+                    VStack(spacing: 12) {
                         Image(systemName: "heart.fill")
                             .foregroundColor(.red)
-                            .font(.system(size: 40))
-                            .padding(.leading, 10)
+                            .font(.system(size: 50)) // Larger icon for emphasis
 
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .center, spacing: 8) {
                             Text("You have a new match!")
-                                .font(.headline)
+                                .font(.title2) // Larger, modal-like text
+                                .fontWeight(.bold)
                                 .foregroundColor(.white)
-                                .bold()
 
-                            Text(inAppNotificationMessage)
-                                .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.8))
+                            Text(bannerMessage)
+                                .font(.body)
+                                .foregroundColor(.white.opacity(0.9))
                         }
-
-                        Spacer()
 
                         Button(action: {
-                            self.showInAppMatchNotification = false // Dismiss the notification
+                            self.showNotificationBanner = false // Dismiss notification
                         }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.white.opacity(0.8))
-                                .font(.system(size: 24))
+                            Text("OK")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding(.vertical, 10)
+                                .padding(.horizontal, 20)
+                                .background(Color.red)
+                                .cornerRadius(8)
                         }
-                        .padding(.trailing, 10)
                     }
                     .padding()
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(LinearGradient(
-                                gradient: Gradient(colors: [Color(red: 0.4, green: 0.0, blue: 0.4), Color(red: 0.7, green: 0.2, blue: 0.6)]),
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ))
+                            .fill(Color.pink)
+                            .shadow(radius: 10)
                     )
-                    .shadow(radius: 8)
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
+
+                    Spacer()
                 }
                 .transition(.opacity)
-                .animation(.easeInOut, value: showInAppMatchNotification)
+                .animation(.easeInOut, value: showNotificationBanner)
             }
 
 
