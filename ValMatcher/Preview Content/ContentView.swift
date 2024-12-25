@@ -88,67 +88,73 @@ struct ContentView: View {
                 }
             }
 
-            // In-App Notification Overlay
             if showInAppMatchNotification {
-                            VStack {
-                                Spacer()
-                                
-                                VStack(spacing: 15) {
-                                    HStack(spacing: 10) {
-                                        Image(systemName: "heart.fill")
-                                            .foregroundColor(.green) // Aesthetic green icon
-                                            .font(.system(size: 40)) // Larger icon for emphasis
-                                        
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            Text("It's a Match!")
-                                                .font(.headline)
-                                                .bold()
-                                                .foregroundColor(.white)
-                                            
-                                            Text(inAppNotificationMessage)
-                                                .font(.subheadline)
-                                                .foregroundColor(.white.opacity(0.9))
-                                                .multilineTextAlignment(.leading)
-                                        }
-                                        
-                                        Spacer()
-                                    }
-                                    
-                                    Divider()
-                                        .background(Color.white.opacity(0.5))
-                                    
-                                    Button(action: {
-                                        withAnimation {
-                                            self.showInAppMatchNotification = false // Dismiss the notification
-                                        }
-                                    }) {
-                                        Text("Dismiss")
-                                            .font(.subheadline)
-                                            .bold()
-                                            .foregroundColor(.white)
-                                            .padding()
-                                            .frame(maxWidth: .infinity)
-                                            .background(Color.green)
-                                            .cornerRadius(10)
-                                    }
-                                }
-                                .padding()
-                                .background(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .cornerRadius(15)
-                                .shadow(color: Color.black.opacity(0.2), radius: 6, x: 0, y: 4)
-                                .padding(.horizontal, 20)
-                                
-                                Spacer()
-                            }
-                            .transition(.opacity)
-                            .animation(.easeInOut, value: showInAppMatchNotification)
+                ZStack {
+                    // Dimmed background to prevent interaction with the app
+                    Color.black.opacity(0.7)
+                        .edgesIgnoringSafeArea(.all)
+                        .onTapGesture {
+                            // Prevent dismissing by tapping outside
                         }
+
+                    VStack(spacing: 20) {
+                        // Icon and Header
+                        HStack(spacing: 12) {
+                            Image(systemName: "heart.fill")
+                                .foregroundColor(.green)
+                                .font(.system(size: 45, weight: .medium))
+                                .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("It's a Match!")
+                                    .font(.custom("AvenirNext-DemiBold", size: 28)) // Cleaner font style
+                                    .foregroundColor(.white)
+
+                                Text(inAppNotificationMessage)
+                                    .font(.custom("AvenirNext-Regular", size: 16)) // Softer and more elegant
+                                    .foregroundColor(.white.opacity(0.9))
+                                    .multilineTextAlignment(.leading)
+                            }
+                        }
+
+                        Divider()
+                            .background(Color.white.opacity(0.5))
+
+                        // Dismiss Button
+                        Button(action: {
+                            withAnimation {
+                                self.showInAppMatchNotification = false // Dismiss the notification
+                            }
+                        }) {
+                            Text("Dismiss")
+                                .font(.custom("AvenirNext-DemiBold", size: 16)) // Consistent button styling
+                                .foregroundColor(.white)
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 40)
+                                .background(Color.green.opacity(0.9))
+                                .cornerRadius(12)
+                                .shadow(color: .black.opacity(0.4), radius: 4, x: 0, y: 2)
+                        }
+                    }
+                    .padding()
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color(red: 0.02, green: 0.18, blue: 0.15),
+                                Color(red: 0.21, green: 0.29, blue: 0.40)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(20)
+                    .shadow(color: Color.black.opacity(0.5), radius: 10, x: 0, y: 5)
+                    .padding(.horizontal, 30)
+                    .transition(.scale)
+                    .animation(.easeInOut(duration: 0.3), value: showInAppMatchNotification)
+                }
+            }
+
                     
 
 
