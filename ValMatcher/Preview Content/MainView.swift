@@ -14,7 +14,7 @@ struct MainView: View {
     @State private var isSignedIn = false
     @State private var hasAnsweredQuestions = false
     @State private var isShowingLoginView = true
-    @State private var isTutorialSeen: Bool = UserDefaults.standard.bool(forKey: "isTutorialSeen")
+    @State private var isTutorialSeen: Bool = false // Assume false until confirmed
     @State private var isLoading = true // To handle loading state
 
     var body: some View {
@@ -30,6 +30,9 @@ struct MainView: View {
                             // Show the tutorial only if NOT seen
                             if !isTutorialSeen {
                                 TutorialView(isTutorialSeen: $isTutorialSeen)
+                                    .onAppear {
+                                        saveTutorialSeenLocallyAndRemotely()
+                                    }
                                     .onChange(of: isTutorialSeen) { newValue in
                                         // If tutorial has just been seen, persist locally
                                         if newValue {
@@ -107,9 +110,8 @@ struct MainView: View {
                     if let data = document.data() {
                         // 1) Read 'hasSeenTutorial' from Firestore
                         let hasSeenTutorialFromFirestore = data["hasSeenTutorial"] as? Bool ?? false
-                        // 2) Overwrite local isTutorialSeen
+                        // 2) Overwrite local isTutorialSeen only if remote says it's true
                         self.isTutorialSeen = hasSeenTutorialFromFirestore
-                        // 3) Also update UserDefaults
                         UserDefaults.standard.set(hasSeenTutorialFromFirestore, forKey: "isTutorialSeen")
 
                         let mediaItemsData = data["mediaItems"] as? [String] ?? []
@@ -139,30 +141,35 @@ struct MainView: View {
                         self.hasAnsweredQuestions = self.currentUser?.hasAnsweredQuestions ?? false
 
                         DispatchQueue.main.async {
-                            // If user hasn't answered questions, jump to Q's
                             if !self.hasAnsweredQuestions {
                                 self.isShowingLoginView = false
                             }
-                            // Else if tutorial not seen, show tutorial
-                            else if !self.isTutorialSeen {
-                                self.isShowingLoginView = false
-                            }
-
-                            // Start listening for matches when user is authenticated
                             appState.listenForMatches()
                         }
                     }
                     self.isLoading = false
                 } else {
-                    // Document doesn't exist or no data
                     self.isSignedIn = false
                     self.isLoading = false
                 }
             }
         } else {
-            // Not signed in at all
             self.isSignedIn = false
             self.isLoading = false
+        }
+    }
+
+    // Save tutorial completion both locally and remotely
+    private func saveTutorialSeenLocallyAndRemotely() {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        db.collection("users").document(uid).updateData(["hasSeenTutorial": true]) { err in
+            if let err = err {
+                print("Error saving tutorial completion: \(err.localizedDescription)")
+            } else {
+                print("Tutorial completion saved.")
+                UserDefaults.standard.set(true, forKey: "isTutorialSeen")
+            }
         }
     }
 }

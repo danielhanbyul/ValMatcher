@@ -58,6 +58,7 @@
 		A95858302C13F66000D68763 /* SignUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A958582F2C13F66000D68763 /* SignUpView.swift */; };
 		A95858322C13F76100D68763 /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95858312C13F76100D68763 /* NetworkManager.swift */; };
 		A9634DC62D1A3A6F009ED28F /* addnotifsSentTomatches.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9634DC52D1A3A6F009ED28F /* addnotifsSentTomatches.swift */; };
+		A9634DC82D1BA45A009ED28F /* test.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9634DC72D1BA45A009ED28F /* test.swift */; };
 		A96F022F2C760E7600567DC6 /* NotificationViewBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A96F022E2C760E7600567DC6 /* NotificationViewBanner.swift */; };
 		A971C76F2C4C6C6200E9634A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A971C76E2C4C6C6200E9634A /* SettingsView.swift */; };
 		A97966452CC72514009BDD11 /* Tutorial View.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97966442CC72514009BDD11 /* Tutorial View.swift */; };
@@ -116,6 +117,7 @@
 		A958582F2C13F66000D68763 /* SignUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignUpView.swift; sourceTree = "<group>"; };
 		A95858312C13F76100D68763 /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkManager.swift; sourceTree = "<group>"; };
 		A9634DC52D1A3A6F009ED28F /* addnotifsSentTomatches.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = addnotifsSentTomatches.swift; sourceTree = "<group>"; };
+		A9634DC72D1BA45A009ED28F /* test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = test.swift; sourceTree = "<group>"; };
 		A96F022E2C760E7600567DC6 /* NotificationViewBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationViewBanner.swift; sourceTree = "<group>"; };
 		A971C76E2C4C6C6200E9634A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A97966442CC72514009BDD11 /* Tutorial View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tutorial View.swift"; sourceTree = "<group>"; };
@@ -232,6 +234,7 @@
 				A91470AD2C28076000380D39 /* FirestoreManager.swift */,
 				A9115AA72C824A7000FBAF00 /* RequestPhotoAccess.swift */,
 				A9634DC52D1A3A6F009ED28F /* addnotifsSentTomatches.swift */,
+				A9634DC72D1BA45A009ED28F /* test.swift */,
 				A9551CB62C12BAF40002AF0B /* Assets.xcassets */,
 				A9551CB82C12BAF40002AF0B /* Preview Content */,
 				2726BC6C2C12CA4A001F6885 /* profilequestion .swift */,
@@ -464,6 +467,7 @@
 				A9634DC62D1A3A6F009ED28F /* addnotifsSentTomatches.swift in Sources */,
 				A91470B02C280B3200380D39 /* Chat.swift in Sources */,
 				A984D4DF2C1A23A500BB75DB /* ProfileSetupView.swift in Sources */,
+				A9634DC82D1BA45A009ED28F /* test.swift in Sources */,
 				A932AF642C291FD40012A9D0 /* MatchNotification.swift in Sources */,
 				A956FE812C1E78B200C9A8C3 /* ProfileView.swift in Sources */,
 				A91470AE2C28076000380D39 /* FirestoreManager.swift in Sources */,
@@ -632,7 +636,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ValMatcher/Preview Content\"";
-				DEVELOPMENT_TEAM = BS733W2DRA;
+				DEVELOPMENT_TEAM = ZLKH77N9TP;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
@@ -664,7 +668,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ValMatcher/Preview Content\"";
-				DEVELOPMENT_TEAM = BS733W2DRA;
+				DEVELOPMENT_TEAM = ZLKH77N9TP;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";

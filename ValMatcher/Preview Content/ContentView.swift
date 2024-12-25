@@ -90,54 +90,66 @@ struct ContentView: View {
 
             // In-App Notification Overlay
             if showInAppMatchNotification {
-                VStack {
-                    Spacer()
-                    
-                    VStack(spacing: 15) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(Color.gray.opacity(0.7)) // Softer gray for a natural look
-                                .font(.system(size: 36)) // Subtle icon size
-                            
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Match Found!")
-                                    .font(.headline) // Simplified font style
-                                    .bold()
-                                    .foregroundColor(Color.black) // Subtle black for text
+                            VStack {
+                                Spacer()
                                 
-                                Text(inAppNotificationMessage)
-                                    .font(.subheadline)
-                                    .foregroundColor(Color.gray) // Soft gray for the message
-                                    .multilineTextAlignment(.leading)
+                                VStack(spacing: 15) {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "heart.fill")
+                                            .foregroundColor(.green) // Aesthetic green icon
+                                            .font(.system(size: 40)) // Larger icon for emphasis
+                                        
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text("It's a Match!")
+                                                .font(.headline)
+                                                .bold()
+                                                .foregroundColor(.white)
+                                            
+                                            Text(inAppNotificationMessage)
+                                                .font(.subheadline)
+                                                .foregroundColor(.white.opacity(0.9))
+                                                .multilineTextAlignment(.leading)
+                                        }
+                                        
+                                        Spacer()
+                                    }
+                                    
+                                    Divider()
+                                        .background(Color.white.opacity(0.5))
+                                    
+                                    Button(action: {
+                                        withAnimation {
+                                            self.showInAppMatchNotification = false // Dismiss the notification
+                                        }
+                                    }) {
+                                        Text("Dismiss")
+                                            .font(.subheadline)
+                                            .bold()
+                                            .foregroundColor(.white)
+                                            .padding()
+                                            .frame(maxWidth: .infinity)
+                                            .background(Color.green)
+                                            .cornerRadius(10)
+                                    }
+                                }
+                                .padding()
+                                .background(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .cornerRadius(15)
+                                .shadow(color: Color.black.opacity(0.2), radius: 6, x: 0, y: 4)
+                                .padding(.horizontal, 20)
+                                
+                                Spacer()
                             }
-                            
-                            Spacer()
+                            .transition(.opacity)
+                            .animation(.easeInOut, value: showInAppMatchNotification)
                         }
-                        
-                        Button(action: {
-                            self.showInAppMatchNotification = false // Dismiss the notification
-                        }) {
-                            Text("Dismiss")
-                                .font(.subheadline) // Smaller font size for button
-                                .foregroundColor(.white)
-                                .padding(.vertical, 8)
-                                .padding(.horizontal, 16)
-                                .background(Color.gray.opacity(0.7)) // Muted gray button background
-                                .cornerRadius(8) // Subtle rounded corners
-                        }
-                    }
-                    .padding()
-                    .background(Color.white) // Natural white background
-                    .cornerRadius(12) // Softer rounded corners
-                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2) // Subtle shadow for depth
-                    .padding(.horizontal, 20)
-                    .frame(maxWidth: .infinity)
                     
-                    Spacer()
-                }
-                .transition(.opacity)
-                .animation(.easeInOut, value: showInAppMatchNotification)
-            }
 
 
         }
@@ -928,10 +940,8 @@ struct ContentView: View {
     private func showInAppMatchNotification(message: String) {
         self.inAppNotificationMessage = message
         self.showInAppMatchNotification = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            self.showInAppMatchNotification = false
-        }
     }
+
 
     private func recordMatchNotification(message: String) {
         // Record the match in notifications
