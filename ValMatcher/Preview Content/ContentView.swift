@@ -170,15 +170,15 @@ struct ContentView: View {
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 HStack(spacing: 15) {
-                    NavigationLink(destination: NotificationsView(notifications: $notifications, notificationCount: $notificationCount)) {
-                        Image(systemName: "bell.fill")
-                            .foregroundColor(.white)
-                            .imageScale(.medium)
-                            .overlay(
-                                BadgeView(count: notificationCount)
-                                    .offset(x: 12, y: -12)
-                            )
-                    }
+//                    NavigationLink(destination: NotificationsView(notifications: $notifications, notificationCount: $notificationCount)) {
+//                        Image(systemName: "bell.fill")
+//                            .foregroundColor(.white)
+//                            .imageScale(.medium)
+//                            .overlay(
+//                                BadgeView(count: notificationCount)
+//                                    .offset(x: 12, y: -12)
+//                            )
+//                    }
                     NavigationLink(destination: DMHomeView(totalUnreadMessages: $unreadMessagesCount)) {
                         Image(systemName: "message.fill")
                             .foregroundColor(.white)
