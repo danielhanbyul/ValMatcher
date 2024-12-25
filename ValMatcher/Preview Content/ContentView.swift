@@ -94,20 +94,21 @@ struct ContentView: View {
                     Spacer()
                     
                     VStack(spacing: 15) {
-                        HStack(spacing: 15) {
+                        HStack(spacing: 10) {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(Color.green.opacity(0.85)) // More vibrant green
-                                .font(.system(size: 44)) // Slightly larger icon
+                                .foregroundColor(Color.gray.opacity(0.7)) // Softer gray for a natural look
+                                .font(.system(size: 36)) // Subtle icon size
                             
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 6) {
                                 Text("Match Found!")
-                                    .font(.title3) // Larger and more prominent title
+                                    .font(.headline) // Simplified font style
                                     .bold()
-                                    .foregroundColor(Color.white) // Bright white for visibility
+                                    .foregroundColor(Color.black) // Subtle black for text
                                 
                                 Text(inAppNotificationMessage)
-                                    .font(.body)
-                                    .foregroundColor(Color.white.opacity(0.85)) // Bright text with opacity for readability
+                                    .font(.subheadline)
+                                    .foregroundColor(Color.gray) // Soft gray for the message
+                                    .multilineTextAlignment(.leading)
                             }
                             
                             Spacer()
@@ -116,27 +117,28 @@ struct ContentView: View {
                         Button(action: {
                             self.showInAppMatchNotification = false // Dismiss the notification
                         }) {
-                            Text("OK")
-                                .font(.headline) // Slightly larger text for the button
-                                .foregroundColor(Color.white)
-                                .padding(.vertical, 10)
-                                .padding(.horizontal, 20)
-                                .background(Color.blue) // Vibrant blue for better contrast
-                                .cornerRadius(10)
+                            Text("Dismiss")
+                                .font(.subheadline) // Smaller font size for button
+                                .foregroundColor(.white)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 16)
+                                .background(Color.gray.opacity(0.7)) // Muted gray button background
+                                .cornerRadius(8) // Subtle rounded corners
                         }
                     }
                     .padding()
-                    .background(Color.black.opacity(0.8)) // Darker background for stronger contrast
-                    .cornerRadius(20)
-                    .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 5) // Subtle shadow for depth
-                    .padding(.horizontal, 40)
-                    .frame(maxWidth: .infinity) // Center horizontally
+                    .background(Color.white) // Natural white background
+                    .cornerRadius(12) // Softer rounded corners
+                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2) // Subtle shadow for depth
+                    .padding(.horizontal, 20)
+                    .frame(maxWidth: .infinity)
                     
                     Spacer()
                 }
                 .transition(.opacity)
                 .animation(.easeInOut, value: showInAppMatchNotification)
             }
+
 
         }
         .navigationBarTitleDisplayMode(.inline)
