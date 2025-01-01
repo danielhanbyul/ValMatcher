@@ -116,6 +116,7 @@ struct ContentView: View {
                                     .multilineTextAlignment(.leading)
                             }
                         }
+                        
 
                         Divider()
                             .background(Color.white.opacity(0.5))
@@ -219,6 +220,7 @@ struct ContentView: View {
                 fetchUnreadMessagesCount()
                 listenForUserDeletions()
             }
+            
             NotificationCenter.default.addObserver(forName: Notification.Name("EnterChatView"), object: nil, queue: .main) { notification in
                 if let matchID = notification.object as? String {
                     print("DEBUG: Received EnterChatView notification for matchID: \(matchID)")
@@ -235,6 +237,8 @@ struct ContentView: View {
             }
         }
     }
+       
+
     
 
     private func listenForMatchNotifications() {
@@ -602,6 +606,7 @@ struct ContentView: View {
         
         // Keep track of the listeners to remove them later if needed
         self.unreadMessagesListener = ListenerRegistrationGroup(listeners: listeners)
+        
     }
     
     private func sendPushNotification(for matchID: String) {
@@ -1221,8 +1226,9 @@ struct ContentView: View {
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(currentUserID)
 
+        // Save interacted users to Firestore
         userRef.updateData([
-            "interactedUsers": Array(interactedUsers)
+            "interactedUsers": Array(interactedUsers) // Convert Set to Array for Firestore
         ]) { error in
             if let error = error {
                 print("Error saving interacted users: \(error.localizedDescription)")
@@ -1230,9 +1236,11 @@ struct ContentView: View {
                 print("Interacted users saved successfully.")
             }
         }
-        
+
+        // Save to UserDefaults for quick local access
         UserDefaults.standard.set(Array(interactedUsers), forKey: "interactedUsers_\(currentUserID)")
     }
+
 
     private func loadInteractedUsers(completion: @escaping (Bool) -> Void) {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
@@ -1242,13 +1250,15 @@ struct ContentView: View {
         }
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(currentUserID)
-        
+
+        // Try loading from UserDefaults first for speed
         if let savedInteractedUsers = UserDefaults.standard.array(forKey: "interactedUsers_\(currentUserID)") as? [String] {
-            self.interactedUsers = Set(savedInteractedUsers)
+            self.interactedUsers = Set(savedInteractedUsers) // Convert Array back to Set
             completion(true)
             return
         }
-        
+
+        // Fallback: Load from Firestore
         userRef.getDocument { document, error in
             if let document = document, document.exists {
                 if let interacted = document.data()?["interactedUsers"] as? [String] {
@@ -1262,6 +1272,7 @@ struct ContentView: View {
             }
         }
     }
+
 
     private func deleteMedia(at index: Int) {
         guard currentIndex < users.count else { return }
