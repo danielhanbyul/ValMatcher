@@ -310,6 +310,7 @@ struct SignUpView: View {
             }
 
             let userData: [String: Any] = [
+                "id": uid,
                 "name": userName,
                 "email": email,
                 "rank": "Unranked",
@@ -319,7 +320,9 @@ struct SignUpView: View {
                 "answers": [:],
                 "hasAnsweredQuestions": false,
                 "mediaItems": [],
-                "createdAt": Timestamp() // Add timestamp
+                "createdAt": Timestamp(), // Add timestamp
+                "interactedUsers": [], // Initialize as empty
+                "hasSeenTutorial": false // Ensure tutorial step is tracked
             ]
 
             db.collection("users").document(uid).setData(userData) { error in
@@ -329,12 +332,15 @@ struct SignUpView: View {
                     return
                 }
 
-                // After the user is created, proceed to login
+                print("DEBUG: New user profile created successfully.")
+
+                // After the user is created, navigate to the login view
                 isSignedIn = false  // Force user to log in again
                 isShowingLoginView = true  // Navigate to login after sign-up
             }
         }
     }
+
 }
 
 

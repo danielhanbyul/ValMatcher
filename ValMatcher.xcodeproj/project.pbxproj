@@ -14,6 +14,7 @@
 		A924425F2C82F3E100995C76 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A924425E2C82F3E100995C76 /* LaunchScreen.storyboard */; };
 		A932AF642C291FD40012A9D0 /* MatchNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = A932AF632C291FD40012A9D0 /* MatchNotification.swift */; };
 		A94117412C84598800DD70FD /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = A94117402C84598800DD70FD /* Kingfisher */; };
+		A944EC842D2609F200EE56F0 /* UserFeedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A944EC832D2609F200EE56F0 /* UserFeedViewModel.swift */; };
 		A950C23A2C49DF21001BA6B5 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A950C2392C49DF21001BA6B5 /* ImagePicker.swift */; };
 		A950C2402C49EDB8001BA6B5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A950C23F2C49EDB8001BA6B5 /* GoogleService-Info.plist */; };
 		A9551CB32C12BAF30002AF0B /* ValMatcherApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */; };
@@ -98,6 +99,7 @@
 		A924425B2C82EE7A00995C76 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A924425E2C82F3E100995C76 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A932AF632C291FD40012A9D0 /* MatchNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchNotification.swift; sourceTree = "<group>"; };
+		A944EC832D2609F200EE56F0 /* UserFeedViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserFeedViewModel.swift; sourceTree = "<group>"; };
 		A950C2392C49DF21001BA6B5 /* ImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
 		A950C23F2C49EDB8001BA6B5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A9551CAF2C12BAF30002AF0B /* ValMatcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ValMatcher.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -235,9 +237,20 @@
 				A9115AA72C824A7000FBAF00 /* RequestPhotoAccess.swift */,
 				A9634DC52D1A3A6F009ED28F /* addnotifsSentTomatches.swift */,
 				A9634DC72D1BA45A009ED28F /* test.swift */,
+				A9A63DF82C3245EA00F6198E /* MainView.swift */,
+				A984D4E82C1A2A5600BB75DB /* DM.swift */,
+				A9FAA11F2C4F65D300048F32 /* ChatView.swift */,
+				A91470AF2C280B3200380D39 /* Chat.swift */,
+				A9FAA11D2C4F5D7700048F32 /* UserProfileView.swift */,
+				A97966442CC72514009BDD11 /* Tutorial View.swift */,
+				A956FE802C1E78B200C9A8C3 /* ProfileView.swift */,
+				A96F022E2C760E7600567DC6 /* NotificationViewBanner.swift */,
+				A984D4EA2C1A2E6300BB75DB /* DMHomeView.swift */,
+				2726BC6C2C12CA4A001F6885 /* profilequestion .swift */,
+				A9551CB42C12BAF30002AF0B /* ContentView.swift */,
+				A944EC832D2609F200EE56F0 /* UserFeedViewModel.swift */,
 				A9551CB62C12BAF40002AF0B /* Assets.xcassets */,
 				A9551CB82C12BAF40002AF0B /* Preview Content */,
-				2726BC6C2C12CA4A001F6885 /* profilequestion .swift */,
 				A924425E2C82F3E100995C76 /* LaunchScreen.storyboard */,
 			);
 			path = ValMatcher;
@@ -247,16 +260,6 @@
 			isa = PBXGroup;
 			children = (
 				A9551CB92C12BAF40002AF0B /* Preview Assets.xcassets */,
-				A9551CB42C12BAF30002AF0B /* ContentView.swift */,
-				A9A63DF82C3245EA00F6198E /* MainView.swift */,
-				A984D4E82C1A2A5600BB75DB /* DM.swift */,
-				A9FAA11F2C4F65D300048F32 /* ChatView.swift */,
-				A984D4EA2C1A2E6300BB75DB /* DMHomeView.swift */,
-				A91470AF2C280B3200380D39 /* Chat.swift */,
-				A956FE802C1E78B200C9A8C3 /* ProfileView.swift */,
-				A9FAA11D2C4F5D7700048F32 /* UserProfileView.swift */,
-				A97966442CC72514009BDD11 /* Tutorial View.swift */,
-				A96F022E2C760E7600567DC6 /* NotificationViewBanner.swift */,
 			);
 			path = "Preview Content";
 			sourceTree = "<group>";
@@ -470,6 +473,7 @@
 				A9634DC82D1BA45A009ED28F /* test.swift in Sources */,
 				A932AF642C291FD40012A9D0 /* MatchNotification.swift in Sources */,
 				A956FE812C1E78B200C9A8C3 /* ProfileView.swift in Sources */,
+				A944EC842D2609F200EE56F0 /* UserFeedViewModel.swift in Sources */,
 				A91470AE2C28076000380D39 /* FirestoreManager.swift in Sources */,
 				A9551CB32C12BAF30002AF0B /* ValMatcherApp.swift in Sources */,
 			);
