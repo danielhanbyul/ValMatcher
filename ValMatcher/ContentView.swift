@@ -432,9 +432,9 @@ struct ContentView: View {
         // Define the cutoff date as October 29, 2024, at 12:00 PM UTC
         var dateComponents = DateComponents()
         dateComponents.year = 2024
-        dateComponents.month = 11
-        dateComponents.day = 26
-        dateComponents.hour = 12
+        dateComponents.month = 1
+        dateComponents.day = 1
+        dateComponents.hour = 0
         dateComponents.minute = 0
         dateComponents.timeZone = TimeZone(secondsFromGMT: 0)  // Use UTC time zone
 
