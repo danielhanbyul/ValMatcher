@@ -251,8 +251,23 @@ struct ContentView: View {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
 
+        // Specify January 1st, 8:00 PM Pacific Time
+        var dateComponents = DateComponents()
+        dateComponents.year = 2025
+        dateComponents.month = 1
+        dateComponents.day = 1
+        dateComponents.hour = 20 // 8:00 PM
+        dateComponents.timeZone = TimeZone(abbreviation: "PST")
+
+        guard let pacificDate = Calendar.current.date(from: dateComponents) else {
+            print("DEBUG: Failed to create the specific date.")
+            return
+        }
+        let timestampFilter = Timestamp(date: pacificDate)
+
         userListener = db.collection("users")
-            .order(by: "createdAt", descending: false) // Listen for new users based on creation time
+            .order(by: "createdAt", descending: false)
+            .whereField("createdAt", isLessThan: timestampFilter) // Exclude users created after this time
             .addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("DEBUG: Error listening for user feed: \(error.localizedDescription).")
@@ -262,30 +277,46 @@ struct ContentView: View {
                 guard let snapshot = snapshot else { return }
 
                 snapshot.documentChanges.forEach { change in
+                    let data = change.document.data()
+                    print("DEBUG: Document data: \(data)")
+                    print("DEBUG: Change type: \(change.type)")
+
                     guard let newUser = try? change.document.data(as: UserProfile.self),
                           let newUserID = newUser.id else {
                         print("DEBUG: Skipping user due to invalid data.")
                         return
                     }
 
-                    // Ensure new users appear on all feeds
+                    // Only add users who completed their profile
+                    guard newUser.hasAnsweredQuestions, !newUser.name.isEmpty else {
+                        print("DEBUG: Skipping incomplete profile for user \(newUserID).")
+                        return
+                    }
+
                     if change.type == .added {
                         if !self.interactedUsers.contains(newUserID) && newUserID != currentUserID {
                             print("DEBUG: New user \(newUserID) added to feed.")
                             self.users.append(newUser)
-                            self.users.sort(by: { ($0.createdAt?.dateValue() ?? Date()) < ($1.createdAt?.dateValue() ?? Date()) })
+                            self.users.sort(by: {
+                                ($0.createdAt?.dateValue() ?? Date()) < ($1.createdAt?.dateValue() ?? Date())
+                            })
                         }
                     }
 
-                    // Handle updates to existing users
                     if change.type == .modified {
+                        // Update existing users in the feed
                         if let index = self.users.firstIndex(where: { $0.id == newUserID }) {
                             self.users[index] = newUser
-                            print("DEBUG: Modified user \(newUserID) in feed.")
+                            print("DEBUG: Modified user \(newUserID) updated in feed.")
+                        } else if !self.interactedUsers.contains(newUserID) && newUserID != currentUserID {
+                            print("DEBUG: Modified user \(newUserID) added back to feed.")
+                            self.users.append(newUser)
+                            self.users.sort(by: {
+                                ($0.createdAt?.dateValue() ?? Date()) < ($1.createdAt?.dateValue() ?? Date())
+                            })
                         }
                     }
 
-                    // Handle user deletions
                     if change.type == .removed {
                         if let index = self.users.firstIndex(where: { $0.id == newUserID }) {
                             self.users.remove(at: index)
@@ -296,7 +327,92 @@ struct ContentView: View {
             }
     }
 
+    /// Marks a user as interacted with. Ensures this is only called under valid circumstances.
+    func markUserAsInteracted(userID: String, interactionType: String) {
+        // Validate the user ID
+        guard !userID.isEmpty else {
+            print("DEBUG: Attempted to mark an invalid or empty user ID as interacted.")
+            return
+        }
 
+        // Check if the user is already marked as interacted
+        if interactedUsers.contains(userID) {
+            print("DEBUG: User \(userID) is already marked as interacted. Skipping.")
+            return
+        }
+
+        // Log the specific interaction type (e.g., "swiped left" or "liked")
+        print("DEBUG: Marking user \(userID) as interacted due to \(interactionType).")
+
+        // Add the user to the interactedUsers set
+        interactedUsers.insert(userID)
+
+        // Save the updated set locally and remotely
+        saveInteractedUsers()
+    }
+
+
+    private var filteredUsers: [UserProfile] {
+        users.filter {
+            !interactedUsers.contains($0.id ?? "") &&
+            $0.id != Auth.auth().currentUser?.uid &&
+            $0.hasAnsweredQuestions && !$0.name.isEmpty
+        }
+    }
+
+    private func loadInteractedUsers(completion: @escaping (Bool) -> Void) {
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("DEBUG: Error: User not authenticated")
+            completion(false)
+            return
+        }
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(currentUserID)
+
+        print("DEBUG: Loading interactedUsers for user \(currentUserID)")
+
+        if let savedInteractedUsers = UserDefaults.standard.array(forKey: "interactedUsers_\(currentUserID)") as? [String] {
+            self.interactedUsers = Set(savedInteractedUsers)
+            print("DEBUG: Interacted users loaded from UserDefaults: \(Array(interactedUsers))")
+            completion(true)
+            return
+        }
+
+        userRef.getDocument { document, error in
+            if let document = document, document.exists {
+                if let interacted = document.data()?["interactedUsers"] as? [String] {
+                    self.interactedUsers = Set(interacted)
+                    print("DEBUG: Interacted users loaded from Firestore: \(Array(self.interactedUsers))")
+                }
+                UserDefaults.standard.set(Array(self.interactedUsers), forKey: "interactedUsers_\(currentUserID)")
+                completion(true)
+            } else {
+                print("DEBUG: Error loading interacted users from Firestore: \(error?.localizedDescription ?? "Unknown error")")
+                completion(false)
+            }
+        }
+    }
+
+    private func saveInteractedUsers() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(currentUserID)
+
+        print("DEBUG: Saving interactedUsers: \(Array(interactedUsers))")
+
+        userRef.updateData([
+            "interactedUsers": Array(interactedUsers)
+        ]) { error in
+            if let error = error {
+                print("DEBUG: Error saving interacted users: \(error.localizedDescription)")
+            } else {
+                print("DEBUG: Interacted users saved successfully.")
+            }
+        }
+
+        UserDefaults.standard.set(Array(interactedUsers), forKey: "interactedUsers_\(currentUserID)")
+        print("DEBUG: Interacted users saved locally to UserDefaults.")
+    }
 
     /// Keeps new users sorted ascending by createdAt
     private func insertUserInAscendingOrder(_ newUser: UserProfile) {
@@ -923,52 +1039,60 @@ struct ContentView: View {
         UNUserNotificationCenter.current().add(request)
     }
 
-    // MARK: - Like/Pass & Match logic
+    // MARK: - Like/Pass & Match Logic
     private func likeAction() {
         interactionResult = .liked
         guard currentIndex < users.count else { return }
 
         let likedUser = users[currentIndex]
         guard let likedUserID = likedUser.id else {
-            print("Error: Liked user does not have an ID")
+            print("Error: Liked user does not have an ID.")
             return
         }
+
+        print("DEBUG: Liking user \(likedUserID).")
         moveToNextUser()
 
+        // Add to Firestore and handle potential match creation
         let db = Firestore.firestore()
-        DispatchQueue.global(qos: .background).async {
-            let likeData: [String: Any] = [
-                "likingUserID": Auth.auth().currentUser?.uid ?? "",
-                "likedUserID": likedUserID,
-                "timestamp": Timestamp()
-            ]
-            db.collection("likes").addDocument(data: likeData) { error in
-                if let error = error {
-                    print("Error saving like: \(error.localizedDescription)")
-                } else {
-                    print("Like saved successfully")
-                }
-                db.collection("likes")
-                    .whereField("likedUserID", isEqualTo: Auth.auth().currentUser?.uid ?? "")
-                    .whereField("likingUserID", isEqualTo: likedUserID)
-                    .getDocuments { (querySnapshot, error) in
-                        if let error = error {
-                            print("Error checking likes: \(error.localizedDescription)")
-                            return
-                        }
-                        if querySnapshot?.isEmpty == false {
-                            self.createMatch(
-                                currentUserID: Auth.auth().currentUser?.uid ?? "",
-                                likedUserID: likedUserID,
-                                likedUser: likedUser
-                            )
-                        }
-                    }
+        let currentUserID = Auth.auth().currentUser?.uid ?? ""
+
+        let likeData: [String: Any] = [
+            "likingUserID": currentUserID,
+            "likedUserID": likedUserID,
+            "timestamp": Timestamp()
+        ]
+
+        db.collection("likes").addDocument(data: likeData) { error in
+            if let error = error {
+                print("ERROR: Failed to save like for user \(likedUserID): \(error.localizedDescription)")
+                return
             }
+
+            print("DEBUG: Like saved for user \(likedUserID).")
+
+            // Check if the liked user also liked the current user
+            db.collection("likes")
+                .whereField("likedUserID", isEqualTo: currentUserID)
+                .whereField("likingUserID", isEqualTo: likedUserID)
+                .getDocuments { querySnapshot, error in
+                    if let error = error {
+                        print("ERROR: Failed to check for match: \(error.localizedDescription)")
+                        return
+                    }
+
+                    if querySnapshot?.isEmpty == false {
+                        print("DEBUG: Match found with user \(likedUserID).")
+                        self.createMatch(
+                            currentUserID: currentUserID,
+                            likedUserID: likedUserID,
+                            likedUser: likedUser
+                        )
+                    }
+                }
         }
 
-        interactedUsers.insert(likedUserID)
-        saveInteractedUsers()
+        markUserAsInteracted(userID: likedUserID, interactionType: "liked")
     }
 
     private func passAction() {
@@ -984,10 +1108,11 @@ struct ContentView: View {
         print("DEBUG: Passing user \(skippedUserID).")
         moveToNextUser()
 
-        // Safeguard: Only add to interactedUsers after explicit pass action
-        interactedUsers.insert(skippedUserID)
-        saveInteractedUsers()
+        markUserAsInteracted(userID: skippedUserID, interactionType: "swiped left")
     }
+
+    
+
 
     
     private func createMatch(currentUserID: String, likedUserID: String, likedUser: UserProfile) {
@@ -1321,63 +1446,6 @@ struct ContentView: View {
         }
     }
 
-    private func saveInteractedUsers() {
-        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
-        let db = Firestore.firestore()
-        let userRef = db.collection("users").document(currentUserID)
-
-        print("DEBUG: Saving interactedUsers: \(Array(interactedUsers))")
-
-        // Save interacted users to Firestore
-        userRef.updateData([
-            "interactedUsers": Array(interactedUsers) // Convert Set to Array for Firestore
-        ]) { error in
-            if let error = error {
-                print("DEBUG: Error saving interacted users: \(error.localizedDescription)")
-            } else {
-                print("DEBUG: Interacted users saved successfully.")
-            }
-        }
-
-        // Save to UserDefaults for quick local access
-        UserDefaults.standard.set(Array(interactedUsers), forKey: "interactedUsers_\(currentUserID)")
-        print("DEBUG: Interacted users saved locally to UserDefaults.")
-    }
-
-    private func loadInteractedUsers(completion: @escaping (Bool) -> Void) {
-        guard let currentUserID = Auth.auth().currentUser?.uid else {
-            print("DEBUG: Error: User not authenticated")
-            completion(false)
-            return
-        }
-        let db = Firestore.firestore()
-        let userRef = db.collection("users").document(currentUserID)
-
-        print("DEBUG: Loading interactedUsers for user \(currentUserID)")
-
-        // Try loading from UserDefaults first for speed
-        if let savedInteractedUsers = UserDefaults.standard.array(forKey: "interactedUsers_\(currentUserID)") as? [String] {
-            self.interactedUsers = Set(savedInteractedUsers) // Convert Array back to Set
-            print("DEBUG: Interacted users loaded from UserDefaults: \(Array(interactedUsers))")
-            completion(true)
-            return
-        }
-
-        // Fallback: Load from Firestore
-        userRef.getDocument { document, error in
-            if let document = document, document.exists {
-                if let interacted = document.data()?["interactedUsers"] as? [String] {
-                    self.interactedUsers = Set(interacted)
-                    print("DEBUG: Interacted users loaded from Firestore: \(Array(self.interactedUsers))")
-                }
-                UserDefaults.standard.set(Array(self.interactedUsers), forKey: "interactedUsers_\(currentUserID)")
-                completion(true)
-            } else {
-                print("DEBUG: Error loading interacted users from Firestore: \(error?.localizedDescription ?? "Unknown error")")
-                completion(false)
-            }
-        }
-    }
 
 
     private func deleteMedia(at index: Int) {
