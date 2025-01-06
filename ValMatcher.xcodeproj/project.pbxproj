@@ -15,6 +15,7 @@
 		A932AF642C291FD40012A9D0 /* MatchNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = A932AF632C291FD40012A9D0 /* MatchNotification.swift */; };
 		A94117412C84598800DD70FD /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = A94117402C84598800DD70FD /* Kingfisher */; };
 		A944EC842D2609F200EE56F0 /* UserFeedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A944EC832D2609F200EE56F0 /* UserFeedViewModel.swift */; };
+		A944EC882D2B7F4100EE56F0 /* MediaManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A944EC872D2B7F4100EE56F0 /* MediaManager.swift */; };
 		A950C23A2C49DF21001BA6B5 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A950C2392C49DF21001BA6B5 /* ImagePicker.swift */; };
 		A950C2402C49EDB8001BA6B5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A950C23F2C49EDB8001BA6B5 /* GoogleService-Info.plist */; };
 		A9551CB32C12BAF30002AF0B /* ValMatcherApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9551CB22C12BAF30002AF0B /* ValMatcherApp.swift */; };
@@ -100,6 +101,7 @@
 		A924425E2C82F3E100995C76 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A932AF632C291FD40012A9D0 /* MatchNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchNotification.swift; sourceTree = "<group>"; };
 		A944EC832D2609F200EE56F0 /* UserFeedViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserFeedViewModel.swift; sourceTree = "<group>"; };
+		A944EC872D2B7F4100EE56F0 /* MediaManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaManager.swift; sourceTree = "<group>"; };
 		A950C2392C49DF21001BA6B5 /* ImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
 		A950C23F2C49EDB8001BA6B5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A9551CAF2C12BAF30002AF0B /* ValMatcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ValMatcher.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -249,6 +251,7 @@
 				2726BC6C2C12CA4A001F6885 /* profilequestion .swift */,
 				A9551CB42C12BAF30002AF0B /* ContentView.swift */,
 				A944EC832D2609F200EE56F0 /* UserFeedViewModel.swift */,
+				A944EC872D2B7F4100EE56F0 /* MediaManager.swift */,
 				A9551CB62C12BAF40002AF0B /* Assets.xcassets */,
 				A9551CB82C12BAF40002AF0B /* Preview Content */,
 				A924425E2C82F3E100995C76 /* LaunchScreen.storyboard */,
@@ -448,6 +451,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A944EC882D2B7F4100EE56F0 /* MediaManager.swift in Sources */,
 				A9115AA82C824A7000FBAF00 /* RequestPhotoAccess.swift in Sources */,
 				A971C76F2C4C6C6200E9634A /* SettingsView.swift in Sources */,
 				A95858302C13F66000D68763 /* SignUpView.swift in Sources */,

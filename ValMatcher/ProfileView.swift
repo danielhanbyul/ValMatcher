@@ -45,7 +45,7 @@ struct ProfileView: View {
 
     var body: some View {
         VStack {
-    headerView
+            headerView
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -71,10 +71,10 @@ struct ProfileView: View {
                                 }
                             }
                         }
-                        
+
                         // Media list and buttons
                         editableMediaList
-                        
+
                         // Show confirm button if less than 3 media items are confirmed
                         if confirmedMediaCount < maxMediaCount {
                             addMediaAndConfirmButtons
@@ -95,7 +95,17 @@ struct ProfileView: View {
             }
         }
         .overlay(progressOverlay)
-        .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.02, green: 0.18, blue: 0.15), Color(red: 0.21, green: 0.29, blue: 0.40)]), startPoint: .top, endPoint: .bottom).edgesIgnoringSafeArea(.all))
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(red: 0.02, green: 0.18, blue: 0.15),
+                    Color(red: 0.21, green: 0.29, blue: 0.40)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .edgesIgnoringSafeArea(.all)
+        )
         .navigationBarTitle("", displayMode: .inline)
         .navigationBarHidden(true)
         .sheet(isPresented: $showingImagePicker) {
@@ -114,7 +124,7 @@ struct ProfileView: View {
             SettingsView(user: $viewModel.user, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
         }
         .fullScreenCover(item: $selectedVideoURL) { item in
-            FullScreenVideoPlayer(url: item.url)  // Fullscreen video playback
+            FullScreenVideoPlayer(url: item.url) // Fullscreen video playback
         }
         .onAppear {
             fetchMediaFromFirestore() // Fetch media from Firestore on view load
@@ -154,7 +164,7 @@ struct ProfileView: View {
                 .cornerRadius(8)
                 .shadow(radius: 3)
         }
-        .disabled(newMedia.count + confirmedMediaCount >= maxMediaCount) // Disable after selecting 3 media items
+        .disabled(newMedia.count + confirmedMediaCount >= maxMediaCount)
     }
 
     // Add Confirm button to trigger upload
@@ -167,11 +177,11 @@ struct ProfileView: View {
                 .font(.custom("AvenirNext-Bold", size: 18))
                 .padding(.vertical, 10)
                 .padding(.horizontal, 20)
-                .background(newMedia.isEmpty ? Color.gray : Color.green) // Disabled if no media selected
+                .background(newMedia.isEmpty ? Color.gray : Color.green)
                 .cornerRadius(8)
                 .shadow(radius: 3)
         }
-        .disabled(newMedia.isEmpty) // Disable if no media selected
+        .disabled(newMedia.isEmpty)
     }
 
     // New combined view for Add and Confirm buttons
@@ -188,17 +198,17 @@ struct ProfileView: View {
 
     private var headerView: some View {
         HStack {
-            backButton // Always show back button
+            backButton
             Spacer()
             if !isEditing {
-                titleText // Show profile title only if not editing
+                titleText
             }
             Spacer()
             if isEditing {
-                saveButton // Show save button in edit mode
+                saveButton
             } else {
-                editButton // Show edit button only if not editing
-                settingsButton // Hide settings button when editing
+                editButton
+                settingsButton
             }
         }
         .padding()
@@ -208,7 +218,7 @@ struct ProfileView: View {
 
     private var saveButton: some View {
         Button(action: {
-            saveProfile() // Call the save function to save user data
+            saveProfile()
         }) {
             Text("Save")
                 .foregroundColor(.white)
@@ -252,7 +262,6 @@ struct ProfileView: View {
         }
     }
     
-   
     private var settingsButton: some View {
         Button(action: {
             showingSettings.toggle()
@@ -293,30 +302,28 @@ struct ProfileView: View {
                             KFImage(media.url)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
-                                .frame(width: 100, height: 100)  // Fixed square size
+                                .frame(width: 100, height: 100)
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
                                 .shadow(radius: 5)
                         } else if media.type == .video {
                             ZStack {
-                                // Video player thumbnail (fixed square size)
                                 VideoPlayer(player: AVPlayer(url: media.url))
-                                    .frame(width: 100, height: 100)  // Fixed square size
+                                    .frame(width: 100, height: 100)
                                     .cornerRadius(10)
                                     .clipped()
-                                
-                                // Fullscreen button overlay (tap to enter fullscreen)
+
                                 Button(action: {
-                                    selectedVideoURL = IdentifiableURL(url: media.url)  // Trigger fullscreen on button press
+                                    selectedVideoURL = IdentifiableURL(url: media.url)
                                 }) {
                                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                                         .resizable()
                                         .frame(width: 24, height: 24)
                                         .padding(8)
-                                        .background(Color.black.opacity(0.7))  // Background to make the button visible
+                                        .background(Color.black.opacity(0.7))
                                         .clipShape(Circle())
                                         .foregroundColor(.white)
                                 }
-                                .position(x: 80, y: 20)  // Adjust position for top-right corner within 100x100 frame
+                                .position(x: 80, y: 20)
                             }
                             .cornerRadius(10)
                             .shadow(radius: 5)
@@ -388,9 +395,6 @@ struct ProfileView: View {
             }
         }
     }
-    
-
-   
 
     private var questionAnswersSection: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -416,61 +420,102 @@ struct ProfileView: View {
         }
         .padding(.horizontal)
     }
-    
+
     // MARK: - Functions
 
     private func initializeEditValues() {
         additionalMedia = viewModel.user.mediaItems ?? []
         updatedAnswers = viewModel.user.answers
         selectedMediaIndices.removeAll()
-        confirmedMediaCount = additionalMedia.count // Track initially confirmed media items
+        confirmedMediaCount = additionalMedia.count
     }
 
     private func saveProfile() {
-        // Save media and answers
-        saveMedia()
-        saveAnswersToFirestore()  // Add this to save answers to Firestore
-        self.isEditing.toggle()
+        guard let userID = Auth.auth().currentUser?.uid else { return }
+
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(userID)
+
+        // Prepare updated user data
+        var updatedData: [String: Any] = [
+            "name": viewModel.user.name,
+            "age": viewModel.user.age,
+            "mediaItems": viewModel.user.mediaItems?.map {
+                ["type": $0.type.rawValue, "url": $0.url.absoluteString]
+            } ?? [],
+            "profileUpdated": true
+        ]
+
+        // Update Firestore
+        userRef.updateData(updatedData) { error in
+            if let error = error {
+                print("Error updating profile: \(error.localizedDescription)")
+            } else {
+                print("Profile updated successfully.")
+
+                // Notify listeners of profile changes
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                    userRef.updateData(["profileUpdated": false]) { resetError in
+                        if let resetError = resetError {
+                            print("Error resetting profileUpdated: \(resetError.localizedDescription)")
+                        } else {
+                            print("profileUpdated reset to false.")
+                        }
+                    }
+                }
+            }
+        }
     }
+
 
     private func saveAnswersToFirestore() {
         guard let userID = viewModel.user.id else { return }
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(userID)
 
+        // PARTIAL UPDATE for answers
         userRef.updateData([
-            "answers": updatedAnswers  // Save updated answers
+            "answers": updatedAnswers
         ]) { error in
             if let error = error {
                 print("Error saving answers: \(error.localizedDescription)")
             } else {
-                print("Answers successfully updated")
-                viewModel.user.answers = updatedAnswers  // Update local user model
+                print("Answers successfully updated in Firestore.")
+                viewModel.user.answers = updatedAnswers
             }
         }
     }
     
     private func saveMedia() {
         guard !newMedia.isEmpty else { return }
-        
+
         if let user = Auth.auth().currentUser {
             isUploading = true
             Task {
                 do {
+                    // Upload new media and append to additionalMedia
                     let mediaItems = try await uploadNewMedia()
                     self.additionalMedia.append(contentsOf: mediaItems)
-                    
-                    self.viewModel.updateUserProfile(
-                        newAge: self.viewModel.user.age,
-                        newRank: self.viewModel.user.rank,
-                        newServer: self.viewModel.user.server,
-                        mediaItems: self.additionalMedia,
-                        updatedAnswers: self.updatedAnswers
-                    )
+
+                    // PARTIAL UPDATE for media
+                    let userRef = Firestore.firestore().collection("users").document(user.uid)
+                    let mediaDicts = self.additionalMedia.map { [
+                        "type": $0.type.rawValue,
+                        "url": $0.url.absoluteString
+                    ]}
+
+                    try await userRef.setData(["mediaItems": mediaDicts], merge: true)
+
+                    // Update local user
+                    self.viewModel.user.mediaItems = self.additionalMedia
                     self.newMedia.removeAll()
-                    
-                    confirmedMediaCount = additionalMedia.count // Update confirmed media count
-                    saveMediaURLsToFirestore(mediaItems)
+
+                    // Confirm the media by adding them via addMediaItem
+                    for mediaItem in mediaItems {
+                        addMediaItem(type: mediaItem.type, url: mediaItem.url)
+                    }
+
+                    confirmedMediaCount = additionalMedia.count
                 } catch {
                     print("Failed to upload media: \(error)")
                 }
@@ -481,21 +526,82 @@ struct ProfileView: View {
         }
     }
 
+    private func addMediaItem(type: MediaType, url: URL) {
+        guard let userId = viewModel.user.id else { return }
+
+        // Update local user in the viewModel
+        viewModel.user.mediaItems = (viewModel.user.mediaItems ?? []) + [MediaItem(type: type, url: url)]
+
+        // Update Firestore with the new media item and set `profileUpdated` to true
+        let db = Firestore.firestore()
+        db.collection("users").document(userId).updateData([
+            "mediaItems": viewModel.user.mediaItems?.map { ["type": $0.type.rawValue, "url": $0.url.absoluteString] } ?? [],
+            "profileUpdated": true
+        ]) { error in
+            if let error = error {
+                print("Error updating user profile with media item: \(error.localizedDescription)")
+            } else {
+                print("DEBUG: Media item added and profileUpdated set to true for user \(userId).")
+            }
+        }
+
+        // Reset `profileUpdated` to false after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            db.collection("users").document(userId).updateData([
+                "profileUpdated": false
+            ]) { error in
+                if let error = error {
+                    print("Error resetting profileUpdated flag: \(error.localizedDescription)")
+                } else {
+                    print("DEBUG: profileUpdated reset to false for user \(userId).")
+                }
+            }
+        }
+    }
+
+
+
     private func deleteMedia(at index: Int) {
+        guard index >= 0 && index < additionalMedia.count else {
+            print("Error: Index out of bounds")
+            return
+        }
+        
         let mediaItem = additionalMedia[index]
         additionalMedia.remove(at: index)
         
-        self.viewModel.updateUserProfile(
-            newAge: self.viewModel.user.age,
-            newRank: self.viewModel.user.rank,
-            newServer: self.viewModel.user.server,
-            mediaItems: self.additionalMedia,
-            updatedAnswers: self.updatedAnswers
-        )
+        // Update the Firestore document
+        removeMediaURLFromFirestore(url: mediaItem.url.absoluteString)
         
-        confirmedMediaCount = additionalMedia.count + newMedia.count // Recalculate confirmed count
-        deleteMediaFromStorageAndFirestore(mediaItem: mediaItem)
+        // Remove from Firebase Storage
+        let storageRef = Storage.storage().reference(forURL: mediaItem.url.absoluteString)
+        storageRef.delete { error in
+            if let error = error {
+                print("Error deleting media from Firebase Storage: \(error.localizedDescription)")
+            } else {
+                print("Media successfully deleted from Firebase Storage")
+            }
+        }
+        
+        confirmedMediaCount = additionalMedia.count + newMedia.count
     }
+
+    private func removeMediaURLFromFirestore(url: String) {
+        guard let userID = viewModel.user.id else { return }
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(userID)
+
+        userRef.updateData([
+            "mediaItems": FieldValue.arrayRemove([["type": "image", "url": url]])
+        ]) { error in
+            if let error = error {
+                print("Error removing media URL from Firestore: \(error.localizedDescription)")
+            } else {
+                print("Successfully removed media URL from Firestore")
+            }
+        }
+    }
+
 
     private func deleteSelectedMedia() {
         let indicesToDelete = Array(selectedMediaIndices).sorted(by: >)
@@ -507,15 +613,7 @@ struct ProfileView: View {
         
         selectedMediaIndices.removeAll()
         
-        self.viewModel.updateUserProfile(
-            newAge: self.viewModel.user.age,
-            newRank: self.viewModel.user.rank,
-            newServer: self.viewModel.user.server,
-            mediaItems: self.additionalMedia,
-            updatedAnswers: self.updatedAnswers
-        )
-        
-        confirmedMediaCount = additionalMedia.count + newMedia.count // Recalculate confirmed count
+        confirmedMediaCount = additionalMedia.count + newMedia.count
         for mediaItem in mediaItemsToDelete {
             deleteMediaFromStorageAndFirestore(mediaItem: mediaItem)
         }
@@ -533,23 +631,11 @@ struct ProfileView: View {
         }
     }
 
-    private func removeMediaURLFromFirestore(url: String) {
-        let db = Firestore.firestore()
-        let userRef = db.collection("users").document(viewModel.user.id ?? "")
-        userRef.updateData([
-            "mediaItems": FieldValue.arrayRemove([url])
-        ]) { error in
-            if let error = error {
-                print("Error removing media URL from Firestore: \(error.localizedDescription)")
-            } else {
-                print("Successfully removed media URL from Firestore")
-            }
-        }
-    }
+    
 
     private func uploadNewMedia() async throws -> [MediaItem] {
         var uploadedMedia: [MediaItem] = []
-        
+
         for media in newMedia {
             if media.type == .image, let image = UIImage(contentsOfFile: media.url.path) {
                 let url = try await uploadImageToFirebase(image: image)
@@ -559,12 +645,15 @@ struct ProfileView: View {
                 uploadedMedia.append(MediaItem(type: .video, url: url))
             }
         }
-        
+
         return uploadedMedia
     }
     
     private func uploadImageToFirebase(image: UIImage) async throws -> URL {
-        let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(UUID().uuidString).jpg")
+        guard let userId = viewModel.user.id else {
+            throw UploadError.fileNotFound
+        }
+        let storageRef = Storage.storage().reference().child("media/\(userId)/\(UUID().uuidString).jpg")
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
             throw UploadError.compressionFailed
         }
@@ -596,15 +685,16 @@ struct ProfileView: View {
         }
     }
 
-
-
     private func uploadVideoToFirebase(videoURL: URL) async throws -> URL {
-        let storageRef = Storage.storage().reference().child("media/\(viewModel.user.id!)/\(UUID().uuidString).mp4")
+        guard let userId = viewModel.user.id else {
+            throw UploadError.fileNotFound
+        }
+        let storageRef = Storage.storage().reference().child("media/\(userId)/\(UUID().uuidString).mp4")
         
         guard FileManager.default.fileExists(atPath: videoURL.path) else {
             throw UploadError.fileNotFound
         }
-        
+
         let videoData = try Data(contentsOf: videoURL)
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -697,37 +787,47 @@ struct ProfileView: View {
                 if let mediaItemsData = document.data()?["mediaItems"] as? [[String: String]] {
                     var fetchedMediaItems: [MediaItem] = []
                     for itemData in mediaItemsData {
-                        if let type = itemData["type"], let urlString = itemData["url"], let url = URL(string: urlString) {
+                        if let type = itemData["type"],
+                           let urlString = itemData["url"],
+                           let url = URL(string: urlString),
+                           url.isPublicURL { // Ensure only valid public URLs are used
                             if let mediaType = MediaType(rawValue: type) {
                                 let mediaItem = MediaItem(type: mediaType, url: url)
-                                // Ensure no duplicate entries
-                                if !fetchedMediaItems.contains(where: { $0.url == mediaItem.url }) {
-                                    fetchedMediaItems.append(mediaItem)
-                                }
+                                fetchedMediaItems.append(mediaItem)
                             }
                         }
                     }
                     self.additionalMedia = fetchedMediaItems
-                    self.viewModel.user.mediaItems = fetchedMediaItems // Update the view model's user profile
+                    self.viewModel.user.mediaItems = fetchedMediaItems // Update view model
                 }
             }
         }
     }
+
 }
 
+// MARK: - FullScreenVideoPlayer
 struct FullScreenVideoPlayer: View {
     let url: URL
     @Environment(\.presentationMode) var presentationMode
 
+    // Create the AVPlayer instance
+    private var player: AVPlayer {
+        AVPlayer(url: url)
+    }
+
     var body: some View {
         ZStack {
-            Color.black.edgesIgnoringSafeArea(.all)  // Fullscreen black background
+            Color.black.edgesIgnoringSafeArea(.all) // Fullscreen black background
 
-            VideoPlayer(player: AVPlayer(url: url))
-                .edgesIgnoringSafeArea(.all)  // Fullscreen video view
+            // Use the player initialized earlier
+            VideoPlayer(player: player)
+                .edgesIgnoringSafeArea(.all) // Fullscreen video view
                 .onAppear {
-                    let player = AVPlayer(url: url)
-                    player.play()  // Start video playback automatically
+                    player.play() // Start video playback automatically
+                }
+                .onDisappear {
+                    player.pause() // Pause playback when the view disappears
                 }
 
             // Dismiss button to close fullscreen
@@ -747,6 +847,20 @@ struct FullScreenVideoPlayer: View {
                 }
                 Spacer()
             }
+        }
+    }
+}
+
+// Example Usage in a Parent View
+struct ParentView: View {
+    @State private var selectedVideoURL: IdentifiableURL?
+
+    var body: some View {
+        Button("Play Video") {
+            selectedVideoURL = IdentifiableURL(url: URL(string: "https://example.com/video.mp4")!)
+        }
+        .fullScreenCover(item: $selectedVideoURL) { item in
+            FullScreenVideoPlayer(url: item.url) // Pass the URL to FullScreenVideoPlayer
         }
     }
 }

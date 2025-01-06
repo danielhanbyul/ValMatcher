@@ -17,12 +17,21 @@ struct MatchNotificationView: View {
                 .foregroundColor(.white)
                 .padding()
 
-            Image(matchedUser.imageName)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 100, height: 100)
-                .clipShape(Circle())
-                .shadow(radius: 10)
+            if let imageName = matchedUser.imageName {
+                Image(imageName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 100, height: 100)
+                    .clipShape(Circle())
+                    .shadow(radius: 10)
+            } else {
+                Image(systemName: "person.circle.fill") // Placeholder image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 100, height: 100)
+                    .clipShape(Circle())
+                    .shadow(radius: 10)
+            }
 
             Button(action: {
                 // Add action to dismiss notification
@@ -50,7 +59,7 @@ struct MatchNotificationView_Previews: PreviewProvider {
         MatchNotificationView(matchedUser: UserProfile(
             name: "Alice",
             rank: "Bronze 1",
-            imageName: "alice",
+            imageName: "alice", // Make sure this matches an existing image in your assets
             age: "21",
             server: "NA",
             answers: [:],

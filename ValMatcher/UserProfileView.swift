@@ -22,7 +22,9 @@ class UserProfileViewModel: ObservableObject {
         fetchChats()
     }
 
+    // -------------------------------------------
     // Fetch chats for the current user
+    // -------------------------------------------
     func fetchChats() {
         listener = db.collection("chats")
             .whereField("participants", arrayContains: user.id ?? "")
@@ -40,7 +42,9 @@ class UserProfileViewModel: ObservableObject {
             }
     }
 
+    // -------------------------------------------
     // Fetch unread message count for a specific chat
+    // -------------------------------------------
     func fetchUnreadMessagesCount(chatId: String, completion: @escaping (Int) -> Void) {
         db.collection("chats").document(chatId).collection("messages")
             .whereField("isRead", isEqualTo: false)
@@ -54,39 +58,57 @@ class UserProfileViewModel: ObservableObject {
             }
     }
 
-    // Update user profile
-    func updateUserProfile(newAge: String, newRank: String, newServer: String, mediaItems: [MediaItem], updatedAnswers: [String: String]) {
+    // -------------------------------------------
+    // Update user profile (previously overwrote everything)
+    // Now calls saveUserProfile() which does partial updates
+    // -------------------------------------------
+    func updateUserProfile(
+        newAge: String,
+        newRank: String,
+        newServer: String,
+        mediaItems: [MediaItem],
+        updatedAnswers: [String: String]
+    ) {
+        // Update the local user so the UI stays in sync
         user.age = newAge
         user.rank = newRank
         user.server = newServer
         user.mediaItems = mediaItems
         user.answers = updatedAnswers
 
+        // Saves to Firestore (partial update)
         saveUserProfile()
     }
 
+    // -------------------------------------------
     // Add a new media item and upload to Firebase Storage
+    // -------------------------------------------
     func addMedia(media: MediaItem) {
         guard let userId = user.id else { return }
 
         if media.type == .image {
-            uploadImage(urlString: media.url.absoluteString, path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
+            uploadImage(urlString: media.url.absoluteString,
+                        path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
                 self?.addMediaItem(type: .image, url: url)
             }
         } else if media.type == .video {
-            uploadVideo(urlString: media.url.absoluteString, path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
+            uploadVideo(urlString: media.url.absoluteString,
+                        path: "media/\(userId)/\(UUID().uuidString)") { [weak self] url in
                 self?.addMediaItem(type: .video, url: url)
             }
         }
     }
 
     private func addMediaItem(type: MediaType, url: URL) {
-        // Initialize mediaItems if nil, then append new media item
+        // Update local user
         user.mediaItems = (user.mediaItems ?? []) + [MediaItem(type: type, url: url)]
+        // Partial update to Firestore
         saveUserProfile()
     }
 
+    // -------------------------------------------
     // Upload an image to Firebase Storage
+    // -------------------------------------------
     func uploadImage(urlString: String, path: String, completion: @escaping (URL) -> Void) {
         let storageRef = Storage.storage().reference().child(path)
         guard let imageData = try? Data(contentsOf: URL(string: urlString)!) else { return }
@@ -108,7 +130,9 @@ class UserProfileViewModel: ObservableObject {
         }
     }
 
+    // -------------------------------------------
     // Upload a video to Firebase Storage
+    // -------------------------------------------
     func uploadVideo(urlString: String, path: String, completion: @escaping (URL) -> Void) {
         let storageRef = Storage.storage().reference().child(path)
         let videoURL = URL(string: urlString)!
@@ -130,15 +154,42 @@ class UserProfileViewModel: ObservableObject {
         }
     }
 
-    // Save the user profile to Firestore
+    // -------------------------------------------
+    // SAVE USER PROFILE - PARTIAL UPDATE
+    // Instead of setData(from: user), we do setData(..., merge: true)
+    // so we only overwrite the fields we specify, preserving others like "name".
+    // -------------------------------------------
     private func saveUserProfile() {
         guard let userId = user.id else { return }
-        do {
-            try db.collection("users").document(userId).setData(from: user)
-        } catch let error {
-            print("Error saving user profile: \(error)")
+
+        // Create a dictionary of the fields we want to ensure are updated.
+        let updatedData: [String: Any] = [
+            "name": user.name,
+            "rank": user.rank,
+            "imageName": user.imageName,
+            "age": user.age,
+            "server": user.server,
+            "answers": user.answers,
+            "hasAnsweredQuestions": user.hasAnsweredQuestions,
+            "mediaItems": user.mediaItems?.map { [
+                "type": $0.type.rawValue,
+                "url": $0.url.absoluteString
+            ]} ?? [],
+            "createdAt": user.createdAt ?? Timestamp(),
+            "hasSeenTutorial": user.hasSeenTutorial,
+            "profileUpdated": true // Set profileUpdated to true when updating
+        ]
+
+        let docRef = db.collection("users").document(userId)
+        docRef.setData(updatedData, merge: true) { error in
+            if let error = error {
+                print("Error saving user profile (partial update): \(error)")
+            } else {
+                print("Successfully updated user profile with partial data.")
+            }
         }
     }
+
 
     deinit {
         listener?.remove()  // Clean up Firestore listener
