@@ -8,12 +8,11 @@
 import Foundation
 import SwiftUI
 import UIKit
-import Firebase
-import FirebaseStorage
 
-enum ImageUploadError: Error {
-    case compressionFailed
-    case urlNil
+struct MediaItem: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var type: MediaType
+    var url: URL
 }
 
 enum MediaType: String, Codable, Equatable {
@@ -21,10 +20,21 @@ enum MediaType: String, Codable, Equatable {
     case video
 }
 
-struct MediaItem: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var type: MediaType
-    var url: URL
+struct ImagePicker: UIViewControllerRepresentable {
+    @Binding var selectedMediaItem: MediaItem?
+    
+    func makeUIViewController(context: UIViewControllerRepresentableContext<ImagePicker>) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.mediaTypes = ["public.image", "public.movie"] // Allow both images and videos
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: UIViewControllerRepresentableContext<ImagePicker>) {}
+    
+    func makeCoordinator() -> Coordinator {
+        return Coordinator(parent: self)
+    }
 }
 
 class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
@@ -35,9 +45,17 @@ class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerContro
     
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
         if let image = info[.originalImage] as? UIImage {
-            parent.selectedMediaItem = MediaItem(type: .image, url: saveToDocumentsDirectory(image: image)!)
+            if let savedURL = saveToDocumentsDirectory(image: image) {
+                parent.selectedMediaItem = MediaItem(type: .image, url: savedURL)
+                print("DEBUG: Image saved to \(savedURL)")
+            }
         } else if let videoURL = info[.mediaURL] as? URL {
-            parent.selectedMediaItem = MediaItem(type: .video, url: videoURL)
+            if let savedURL = saveVideoToDocumentsDirectory(videoURL: videoURL) {
+                parent.selectedMediaItem = MediaItem(type: .video, url: savedURL)
+                print("DEBUG: Video saved to \(savedURL)")
+            } else {
+                print("DEBUG: Failed to save video.")
+            }
         }
         picker.dismiss(animated: true)
     }
@@ -58,21 +76,18 @@ class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerContro
         }
         return nil
     }
-}
-
-struct ImagePicker: UIViewControllerRepresentable {
-    @Binding var selectedMediaItem: MediaItem?
     
-    func makeUIViewController(context: UIViewControllerRepresentableContext<ImagePicker>) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.mediaTypes = ["public.image", "public.movie"] // Allow both images and videos
-        return picker
-    }
-    
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: UIViewControllerRepresentableContext<ImagePicker>) {}
-    
-    func makeCoordinator() -> Coordinator {
-        return Coordinator(parent: self)
+    private func saveVideoToDocumentsDirectory(videoURL: URL) -> URL? {
+        let fileManager = FileManager.default
+        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let fileURL = documentsURL.appendingPathComponent(UUID().uuidString + ".mov")
+        
+        do {
+            try fileManager.copyItem(at: videoURL, to: fileURL)
+            return fileURL
+        } catch {
+            print("Error saving video to documents directory: \(error)")
+            return nil
+        }
     }
 }

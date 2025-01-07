@@ -375,9 +375,31 @@ struct ProfileView: View {
                 }
                 .padding(.vertical, 5)
             }
+            .onMove { indices, newOffset in
+                additionalMedia.move(fromOffsets: indices, toOffset: newOffset)
+                updateMediaOrderInFirestore() // Update the new order in Firestore
+            }
         }
         .padding(.horizontal)
+        .environment(\.editMode, .constant(.active)) // Enable reordering
     }
+    
+    private func updateMediaOrderInFirestore() {
+        guard let userID = viewModel.user.id else { return }
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(userID)
+
+        let mediaURLs = additionalMedia.map { ["type": $0.type.rawValue, "url": $0.url.absoluteString] }
+        userRef.updateData(["mediaItems": mediaURLs]) { error in
+            if let error = error {
+                print("Error updating media order in Firestore: \(error.localizedDescription)")
+            } else {
+                print("Successfully updated media order in Firestore.")
+            }
+        }
+    }
+
+
 
     private var deleteSelectedButton: some View {
         Group {
@@ -496,6 +518,8 @@ struct ProfileView: View {
                     // Upload new media and append to additionalMedia
                     let mediaItems = try await uploadNewMedia()
                     self.additionalMedia.append(contentsOf: mediaItems)
+                    updateMediaOrderInFirestore() // Update Firestore with the correct order
+
 
                     // PARTIAL UPDATE for media
                     let userRef = Firestore.firestore().collection("users").document(user.uid)

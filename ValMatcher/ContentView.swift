@@ -474,16 +474,20 @@ struct ContentView: View {
                     .resizable()
                     .frame(width: 100, height: 100)
                     .foregroundColor(.green)
-                    .transition(.opacity)
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    .animation(.easeInOut, value: result)
             } else if result == .passed {
                 Image(systemName: "xmark.circle.fill")
                     .resizable()
                     .frame(width: 100, height: 100)
                     .foregroundColor(.red)
-                    .transition(.opacity)
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    .animation(.easeInOut, value: result)
             }
         }
+        .zIndex(1) // Ensure this view is on top
     }
+
 
     private var userInfoView: some View {
         VStack(alignment: .leading, spacing: 20) {

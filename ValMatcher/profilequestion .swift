@@ -242,20 +242,24 @@ struct QuestionsView: View {
         if let selectedItem = selectedMediaItem {
             if !newMedia.contains(where: { $0.url == selectedItem.url }) {
                 newMedia.append(selectedItem)
+                print("DEBUG: Added media item - Type: \(selectedItem.type), URL: \(selectedItem.url)")
                 mediaErrorMessage = ""
             }
             selectedMediaItem = nil
         }
     }
 
+
     private func finishQuestionsAndSaveProfile() {
-        guard newMedia.count >= 3 else {
-            mediaErrorMessage = "You must upload at least 3 media items."
+        // Ensure there are at least 3 combined media items
+        let totalMediaCount = newMedia.count
+
+        guard totalMediaCount >= 3 else {
+            mediaErrorMessage = "You must upload at least 3 media items (images or videos combined)."
             return
         }
 
         isUploadingMedia = true
-
         let group = DispatchGroup()
         var uploadedMedia: [MediaItem] = []
 
@@ -265,8 +269,9 @@ struct QuestionsView: View {
                 switch result {
                 case .success(let url):
                     uploadedMedia.append(MediaItem(type: media.type, url: URL(string: url)!))
+                    print("DEBUG: Uploaded media - Type: \(media.type), URL: \(url)")
                 case .failure(let error):
-                    print("DEBUG: Failed to upload media: \(error.localizedDescription)")
+                    print("DEBUG: Failed to upload media - Type: \(media.type), Error: \(error.localizedDescription)")
                 }
                 group.leave()
             }
@@ -275,11 +280,19 @@ struct QuestionsView: View {
         group.notify(queue: .main) {
             isUploadingMedia = false
 
-            if uploadedMedia.count < 3 {
-                mediaErrorMessage = "Failed to upload all media items. Try again."
+            // Count uploaded media
+            let imageCount = uploadedMedia.filter { $0.type == .image }.count
+            let videoCount = uploadedMedia.filter { $0.type == .video }.count
+            let totalCount = imageCount + videoCount
+
+            print("DEBUG: Uploaded Media Count - Images: \(imageCount), Videos: \(videoCount), Total: \(totalCount)")
+
+            if totalCount < 3 {
+                mediaErrorMessage = "Failed to upload at least 3 media items (images or videos). Try again."
                 return
             }
 
+            // Save user profile with media
             userProfile.mediaItems = uploadedMedia
             userProfile.hasAnsweredQuestions = true
 
@@ -288,6 +301,7 @@ struct QuestionsView: View {
             }
         }
     }
+
 
     private func mediaThumbnailView(for media: MediaItem) -> some View {
         if media.type == .image {
