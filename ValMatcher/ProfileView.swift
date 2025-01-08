@@ -184,17 +184,34 @@ struct ProfileView: View {
         .disabled(newMedia.isEmpty)
     }
 
-    // New combined view for Add and Confirm buttons
     private var addMediaAndConfirmButtons: some View {
         HStack {
             Spacer()
-            addMediaButton
+            Button(action: {
+                if additionalMedia.count + newMedia.count < maxMediaCount {
+                    showingImagePicker = true
+                } else {
+                    print("ERROR: Cannot add more than \(maxMediaCount) media items.")
+                }
+            }) {
+                Label("Select Media", systemImage: "plus.circle.fill")
+                    .font(.custom("AvenirNext-Bold", size: 18))
+                    .foregroundColor(.white)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 20)
+                    .background(additionalMedia.count + newMedia.count < maxMediaCount ? Color.blue : Color.gray)
+                    .cornerRadius(8)
+                    .shadow(radius: 3)
+            }
+            .disabled(additionalMedia.count + newMedia.count >= maxMediaCount)
+            
             Spacer()
             confirmUploadButton
             Spacer()
         }
         .padding(.vertical, 15)
     }
+
 
     private var headerView: some View {
         HStack {
@@ -294,7 +311,6 @@ struct ProfileView: View {
     private var displayMediaList: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 15) {
-                Spacer()
                 ForEach(additionalMedia.indices, id: \.self) { index in
                     let media = additionalMedia[index]
                     VStack {
@@ -307,34 +323,74 @@ struct ProfileView: View {
                                 .shadow(radius: 5)
                         } else if media.type == .video {
                             ZStack {
+                                // Thumbnail for video
                                 VideoPlayer(player: AVPlayer(url: media.url))
                                     .frame(width: 100, height: 100)
-                                    .cornerRadius(10)
-                                    .clipped()
+                                    .aspectRatio(contentMode: .fill)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .onAppear {
+                                        // Debug video URL loading
+                                        print("DEBUG: Attempting to play video at URL: \(media.url)")
+                                        let player = AVPlayer(url: media.url)
+                                        player.play()
+                                    }
 
                                 Button(action: {
                                     selectedVideoURL = IdentifiableURL(url: media.url)
                                 }) {
-                                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                        .resizable()
-                                        .frame(width: 24, height: 24)
-                                        .padding(8)
-                                        .background(Color.black.opacity(0.7))
-                                        .clipShape(Circle())
+                                    Image(systemName: "play.circle.fill")
                                         .foregroundColor(.white)
+                                        .background(Color.black.opacity(0.5))
+                                        .clipShape(Circle())
                                 }
-                                .position(x: 80, y: 20)
+                                .position(x: 50, y: 50)
                             }
                             .cornerRadius(10)
                             .shadow(radius: 5)
                         }
                     }
                 }
-                Spacer()
             }
             .padding(.horizontal)
         }
     }
+
+    private func debugVideoPlayback(url: URL) {
+        print("DEBUG: Attempting playback of video at URL: \(url.absoluteString)")
+        let asset = AVAsset(url: url)
+        if asset.tracks.isEmpty {
+            print("ERROR: No playable tracks found in video asset. Check file encoding.")
+        } else {
+            print("DEBUG: Video tracks loaded successfully. Asset is playable.")
+        }
+    }
+    
+    private func debugVideoURLAccessibility(url: URL) {
+        print("DEBUG: Checking video URL accessibility - \(url.absoluteString)")
+        
+        let asset = AVAsset(url: url)
+        if asset.tracks.isEmpty {
+            print("ERROR: No tracks found in video asset. The video may be corrupted or in an unsupported format.")
+        } else {
+            print("DEBUG: Video asset loaded successfully with \(asset.tracks.count) track(s).")
+        }
+        
+        URLSession.shared.dataTask(with: url) { _, response, error in
+            if let error = error {
+                print("ERROR: Unable to access video URL: \(error.localizedDescription)")
+            } else if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+                print("ERROR: Received non-200 HTTP response: \(httpResponse.statusCode)")
+            } else {
+                print("DEBUG: Video URL is accessible.")
+            }
+        }.resume()
+    }
+
+
+
+    
+    
+
 
     private var editableMediaList: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -350,13 +406,25 @@ struct ProfileView: View {
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
                             .shadow(radius: 5)
                     } else if media.type == .video {
-                        VideoPlayer(player: AVPlayer(url: media.url))
-                            .frame(width: 100, height: 100)
-                            .aspectRatio(contentMode: .fill)
-                            .clipped()
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-                            .shadow(radius: 5)
+                        ZStack {
+                            VideoPlayer(player: AVPlayer(url: media.url))
+                                .frame(width: 100, height: 100)
+                                .aspectRatio(contentMode: .fill)
+                                .clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
+                                .shadow(radius: 5)
+                            
+                            Button(action: {
+                                selectedVideoURL = IdentifiableURL(url: media.url)
+                            }) {
+                                Image(systemName: "play.circle")
+                                    .foregroundColor(.white)
+                                    .background(Color.black.opacity(0.7))
+                                    .clipShape(Circle())
+                            }
+                            .position(x: 50, y: 50)
+                        }
                     }
 
                     Spacer()
@@ -377,12 +445,13 @@ struct ProfileView: View {
             }
             .onMove { indices, newOffset in
                 additionalMedia.move(fromOffsets: indices, toOffset: newOffset)
-                updateMediaOrderInFirestore() // Update the new order in Firestore
+                updateMediaOrderInFirestore() // Ensure the updated order is saved in Firestore
             }
         }
         .padding(.horizontal)
         .environment(\.editMode, .constant(.active)) // Enable reordering
     }
+
     
     private func updateMediaOrderInFirestore() {
         guard let userID = viewModel.user.id else { return }
@@ -398,6 +467,9 @@ struct ProfileView: View {
             }
         }
     }
+    
+    
+
 
 
 
@@ -475,7 +547,7 @@ struct ProfileView: View {
             } else {
                 print("Profile updated successfully.")
 
-                // Notify listeners of profile changes
+                // Reset profileUpdated flag in Firestore
                 DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
                     userRef.updateData(["profileUpdated": false]) { resetError in
                         if let resetError = resetError {
@@ -485,9 +557,18 @@ struct ProfileView: View {
                         }
                     }
                 }
+
+                // Exit edit mode and navigate back to ProfileView
+                DispatchQueue.main.async {
+                    self.isEditing = false
+                    self.presentationMode.wrappedValue.dismiss() // Correct usage
+                    print("DEBUG: Navigated back to ProfileView")
+                }
             }
         }
     }
+
+
 
 
     private func saveAnswersToFirestore() {
@@ -517,11 +598,21 @@ struct ProfileView: View {
                 do {
                     // Upload new media and append to additionalMedia
                     let mediaItems = try await uploadNewMedia()
-                    self.additionalMedia.append(contentsOf: mediaItems)
-                    updateMediaOrderInFirestore() // Update Firestore with the correct order
+                    
+                    // Avoid duplicate entries by checking for existing URLs
+                    let uniqueMediaItems = mediaItems.filter { newItem in
+                        !self.additionalMedia.contains(where: { $0.url == newItem.url })
+                    }
 
+                    self.additionalMedia.append(contentsOf: uniqueMediaItems) // Append only unique items
+                    updateMediaOrderInFirestore() // Save the new order in Firestore
 
-                    // PARTIAL UPDATE for media
+                    // Debug log for added media
+                    for mediaItem in uniqueMediaItems {
+                        debugVideoPlayback(url: mediaItem.url)
+                    }
+
+                    // PARTIAL UPDATE for media in Firestore
                     let userRef = Firestore.firestore().collection("users").document(user.uid)
                     let mediaDicts = self.additionalMedia.map { [
                         "type": $0.type.rawValue,
@@ -530,14 +621,9 @@ struct ProfileView: View {
 
                     try await userRef.setData(["mediaItems": mediaDicts], merge: true)
 
-                    // Update local user
+                    // Update local state
                     self.viewModel.user.mediaItems = self.additionalMedia
-                    self.newMedia.removeAll()
-
-                    // Confirm the media by adding them via addMediaItem
-                    for mediaItem in mediaItems {
-                        addMediaItem(type: mediaItem.type, url: mediaItem.url)
-                    }
+                    self.newMedia.removeAll() // Clear temporary new media
 
                     confirmedMediaCount = additionalMedia.count
                 } catch {
@@ -549,6 +635,11 @@ struct ProfileView: View {
             print("No authenticated user found")
         }
     }
+
+
+    
+
+
 
     private func addMediaItem(type: MediaType, url: URL) {
         guard let userId = viewModel.user.id else { return }
@@ -590,70 +681,109 @@ struct ProfileView: View {
             print("Error: Index out of bounds")
             return
         }
-        
+
         let mediaItem = additionalMedia[index]
-        additionalMedia.remove(at: index)
-        
-        // Update the Firestore document
-        removeMediaURLFromFirestore(url: mediaItem.url.absoluteString)
-        
+        print("DEBUG: Deleting media item: \(mediaItem.url.absoluteString), type: \(mediaItem.type.rawValue)")
+
         // Remove from Firebase Storage
         let storageRef = Storage.storage().reference(forURL: mediaItem.url.absoluteString)
         storageRef.delete { error in
             if let error = error {
                 print("Error deleting media from Firebase Storage: \(error.localizedDescription)")
             } else {
-                print("Media successfully deleted from Firebase Storage")
+                print("DEBUG: Media successfully deleted from Firebase Storage")
+                self.removeMediaURLFromFirestore(mediaItem: mediaItem)
             }
         }
-        
+
+        // Remove from local state
+        additionalMedia.remove(at: index)
         confirmedMediaCount = additionalMedia.count + newMedia.count
     }
 
-    private func removeMediaURLFromFirestore(url: String) {
+
+    private func removeMediaURLFromFirestore(mediaItem: MediaItem) {
         guard let userID = viewModel.user.id else { return }
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(userID)
 
+        let mediaDict = ["type": mediaItem.type.rawValue, "url": mediaItem.url.absoluteString]
         userRef.updateData([
-            "mediaItems": FieldValue.arrayRemove([["type": "image", "url": url]])
+            "mediaItems": FieldValue.arrayRemove([mediaDict])
+        ]) { error in
+            if let error = error {
+                print("Error removing media URL from Firestore: \(error.localizedDescription)")
+            } else {
+                print("DEBUG: Successfully removed media URL from Firestore")
+                // Synchronize local state with Firestore
+                self.additionalMedia.removeAll { $0.url == mediaItem.url }
+                self.viewModel.user.mediaItems = self.additionalMedia
+            }
+        }
+    }
+
+
+
+    private func deleteSelectedMedia() {
+        let indicesToDelete = Array(selectedMediaIndices).sorted(by: >) // Sort to avoid index errors
+        let mediaItemsToDelete = indicesToDelete.map { additionalMedia[$0] }
+
+        // Remove from local state
+        for index in indicesToDelete {
+            additionalMedia.remove(at: index)
+        }
+        selectedMediaIndices.removeAll()
+
+        // Remove each media item from Firebase
+        for mediaItem in mediaItemsToDelete {
+            deleteMediaFromStorageAndFirestore(mediaItem: mediaItem)
+        }
+
+        confirmedMediaCount = additionalMedia.count + newMedia.count
+    }
+
+
+    
+
+    private func deleteMediaFromStorageAndFirestore(mediaItem: MediaItem) {
+        print("DEBUG: Deleting media item from Storage and Firestore: \(mediaItem.url.absoluteString)")
+        
+        // Delete from Firebase Storage
+        let storageRef = Storage.storage().reference(forURL: mediaItem.url.absoluteString)
+        storageRef.delete { error in
+            if let error = error {
+                print("Error deleting media from Firebase Storage: \(error.localizedDescription)")
+            } else {
+                print("DEBUG: Media successfully deleted from Firebase Storage")
+                self.removeMediaURLFromFirestore(mediaItem: mediaItem)
+            }
+        }
+    }
+
+
+    private func removeMediaURLFromFirestore(url: String, type: MediaType) {
+        guard let userID = viewModel.user.id else { return }
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(userID)
+
+        // Remove the specific media URL and type
+        userRef.updateData([
+            "mediaItems": FieldValue.arrayRemove([["type": type.rawValue, "url": url]])
         ]) { error in
             if let error = error {
                 print("Error removing media URL from Firestore: \(error.localizedDescription)")
             } else {
                 print("Successfully removed media URL from Firestore")
+                // Update local state
+                self.additionalMedia.removeAll { $0.url.absoluteString == url }
+                self.viewModel.user.mediaItems = self.additionalMedia
             }
         }
     }
 
 
-    private func deleteSelectedMedia() {
-        let indicesToDelete = Array(selectedMediaIndices).sorted(by: >)
-        let mediaItemsToDelete = indicesToDelete.map { additionalMedia[$0] }
-        
-        for index in indicesToDelete {
-            additionalMedia.remove(at: index)
-        }
-        
-        selectedMediaIndices.removeAll()
-        
-        confirmedMediaCount = additionalMedia.count + newMedia.count
-        for mediaItem in mediaItemsToDelete {
-            deleteMediaFromStorageAndFirestore(mediaItem: mediaItem)
-        }
-    }
+    
 
-    private func deleteMediaFromStorageAndFirestore(mediaItem: MediaItem) {
-        let storageRef = Storage.storage().reference(forURL: mediaItem.url.absoluteString)
-        storageRef.delete { error in
-            if let error = error {
-                print("Error deleting media from storage: \(error.localizedDescription)")
-            } else {
-                print("Media deleted from storage")
-                removeMediaURLFromFirestore(url: mediaItem.url.absoluteString)
-            }
-        }
-    }
 
     
 
@@ -661,17 +791,37 @@ struct ProfileView: View {
         var uploadedMedia: [MediaItem] = []
 
         for media in newMedia {
-            if media.type == .image, let image = UIImage(contentsOfFile: media.url.path) {
+            if media.type == .image {
+                guard let image = UIImage(contentsOfFile: media.url.path) else {
+                    print("ERROR: Invalid image file.")
+                    continue
+                }
                 let url = try await uploadImageToFirebase(image: image)
                 uploadedMedia.append(MediaItem(type: .image, url: url))
             } else if media.type == .video {
+                let asset = AVAsset(url: media.url)
+                if asset.tracks.isEmpty {
+                    print("ERROR: Invalid video file. Skipping upload.")
+                    continue
+                }
                 let url = try await uploadVideoToFirebase(videoURL: media.url)
                 uploadedMedia.append(MediaItem(type: .video, url: url))
+            } else {
+                print("ERROR: Unsupported media type.")
             }
         }
-
         return uploadedMedia
     }
+
+    private func debugMediaType(for url: URL) {
+        let asset = AVAsset(url: url)
+        if asset.tracks.isEmpty {
+            print("ERROR: No playable tracks found. File may not be a valid video.")
+        } else {
+            print("DEBUG: Media contains \(asset.tracks.count) playable track(s).")
+        }
+    }
+
     
     private func uploadImageToFirebase(image: UIImage) async throws -> URL {
         guard let userId = viewModel.user.id else {
@@ -765,6 +915,21 @@ struct ProfileView: View {
             completion(asset.url)
         }
     }
+    
+    private func generateThumbnail(for url: URL) -> UIImage? {
+        let asset = AVAsset(url: url)
+        let imageGenerator = AVAssetImageGenerator(asset: asset)
+        imageGenerator.appliesPreferredTrackTransform = true
+
+        do {
+            let cgImage = try imageGenerator.copyCGImage(at: .zero, actualTime: nil)
+            return UIImage(cgImage: cgImage)
+        } catch {
+            print("DEBUG: Failed to generate thumbnail: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
 
     private func copyVideoToDocumentsDirectory(url: URL) -> URL? {
         let fileManager = FileManager.default
@@ -814,7 +979,7 @@ struct ProfileView: View {
                         if let type = itemData["type"],
                            let urlString = itemData["url"],
                            let url = URL(string: urlString),
-                           url.isPublicURL { // Ensure only valid public URLs are used
+                           url.isPublicURL {
                             if let mediaType = MediaType(rawValue: type) {
                                 let mediaItem = MediaItem(type: mediaType, url: url)
                                 fetchedMediaItems.append(mediaItem)
@@ -828,33 +993,41 @@ struct ProfileView: View {
         }
     }
 
+
 }
 
-// MARK: - FullScreenVideoPlayer
 struct FullScreenVideoPlayer: View {
     let url: URL
     @Environment(\.presentationMode) var presentationMode
 
-    // Create the AVPlayer instance
-    private var player: AVPlayer {
-        AVPlayer(url: url)
-    }
+    @State private var player: AVPlayer?
+    @State private var isLoading = true
 
     var body: some View {
         ZStack {
-            Color.black.edgesIgnoringSafeArea(.all) // Fullscreen black background
+            Color.black.edgesIgnoringSafeArea(.all)
 
-            // Use the player initialized earlier
-            VideoPlayer(player: player)
-                .edgesIgnoringSafeArea(.all) // Fullscreen video view
-                .onAppear {
-                    player.play() // Start video playback automatically
-                }
-                .onDisappear {
-                    player.pause() // Pause playback when the view disappears
-                }
+            if isLoading {
+                ProgressView("Loading video...")
+                    .foregroundColor(.white)
+                    .onAppear {
+                        loadVideo()
+                    }
+            } else if let player = player {
+                VideoPlayer(player: player)
+                    .onAppear {
+                        player.play()
+                        print("DEBUG: Video playback started.")
+                    }
+                    .onDisappear {
+                        player.pause()
+                        print("DEBUG: Video playback paused.")
+                    }
+            } else {
+                Text("Unable to load video")
+                    .foregroundColor(.red)
+            }
 
-            // Dismiss button to close fullscreen
             VStack {
                 HStack {
                     Spacer()
@@ -873,7 +1046,92 @@ struct FullScreenVideoPlayer: View {
             }
         }
     }
+
+    private func loadVideo() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let asset = AVAsset(url: url)
+            let playerItem = AVPlayerItem(asset: asset)
+
+            DispatchQueue.main.async {
+                self.player = AVPlayer(playerItem: playerItem)
+                self.isLoading = false
+            }
+        }
+    }
 }
+
+
+private func debugVideoURLAccessibility(url: URL) {
+    print("DEBUG: Checking video URL accessibility - \(url.absoluteString)")
+    
+    let asset = AVAsset(url: url)
+    if asset.tracks.isEmpty {
+        print("ERROR: No tracks found in video asset. The video may be corrupted or in an unsupported format.")
+    } else {
+        print("DEBUG: Video asset loaded successfully with \(asset.tracks.count) track(s).")
+    }
+    
+    URLSession.shared.dataTask(with: url) { _, response, error in
+        if let error = error {
+            print("ERROR: Unable to access video URL: \(error.localizedDescription)")
+        } else if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+            print("ERROR: Received non-200 HTTP response: \(httpResponse.statusCode)")
+        } else {
+            print("DEBUG: Video URL is accessible.")
+        }
+    }.resume()
+}
+
+
+private func debugVideoURL(url: URL) {
+    print("DEBUG: Checking video URL - \(url.absoluteString)")
+    let asset = AVAsset(url: url)
+    if asset.tracks.isEmpty {
+        print("ERROR: No tracks found in video asset. The file may be corrupted or in an unsupported format.")
+    } else {
+        print("DEBUG: Video tracks loaded successfully.")
+    }
+}
+
+
+
+
+private func generateVideoThumbnail(url: URL) -> UIImage? {
+    let asset = AVAsset(url: url)
+    let generator = AVAssetImageGenerator(asset: asset)
+    generator.appliesPreferredTrackTransform = true
+
+    do {
+        let cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
+        return UIImage(cgImage: cgImage)
+    } catch {
+        print("DEBUG: Failed to generate thumbnail for video: \(error)")
+        return nil
+    }
+}
+
+
+private func mediaThumbnailView(for media: MediaItem) -> some View {
+    VStack {
+        if media.type == .image {
+            KFImage(media.url)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 100, height: 100)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+        } else if media.type == .video {
+            VideoPlayerView(url: media.url)
+                .frame(width: 100, height: 100)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+}
+
+
+
+
+
+
 
 // Example Usage in a Parent View
 struct ParentView: View {

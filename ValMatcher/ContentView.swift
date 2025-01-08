@@ -68,6 +68,8 @@ struct ContentView: View {
     // New: to ensure the feed only loads once
     @State private var isDataLoaded = false
     @State private var userListener: ListenerRegistration?
+    @State private var selectedVideoURL: IdentifiableURL?
+
 
     enum InteractionResult {
         case liked
@@ -445,16 +447,56 @@ struct ContentView: View {
                                     self.likeAction()
                                 }
                         )
-                }
-
-                if let result = interactionResult {
-                    interactionResultView(result)
+                    
+                    if let result = interactionResult {
+                        interactionResultView(result)
+                    }
                 }
             }
             .padding([.horizontal, .bottom])
 
+            // Show user information
             userInfoView
                 .padding(.horizontal)
+
+            // Display media for the current user
+            if currentIndex < users.count, let mediaItems = users[currentIndex].mediaItems {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack {
+                        ForEach(mediaItems, id: \.url) { media in
+                            mediaThumbnailView(for: media)
+                                .frame(width: UIScreen.main.bounds.width - 40, height: 200)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .padding(.vertical, 5)
+                                .onTapGesture {
+                                    // Enable fullscreen playback when tapped
+                                    if media.type == .video {
+                                        selectedVideoURL = IdentifiableURL(url: media.url)
+                                    }
+                                }
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+    }
+
+    
+    // Media thumbnails for preview
+    private func mediaThumbnailView(for media: MediaItem) -> some View {
+        VStack {
+            if media.type == .image {
+                KFImage(media.url)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 100, height: 100)  // Fixed size
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            } else if media.type == .video {
+                VideoPlayer(player: AVPlayer(url: media.url))
+                    .frame(width: 100, height: 100)  // Fixed size
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
         }
     }
 
@@ -1595,24 +1637,37 @@ import SwiftUI
 import AVKit
 
 struct VideoPlayerView: View {
-    var url: URL
-    @State private var player: AVPlayer?
+    let url: URL
+    @State private var player: AVPlayer
+    @State private var showFullScreenPlayer = false
+
+    init(url: URL) {
+        self.url = url
+        self._player = State(initialValue: AVPlayer(url: url))
+    }
 
     var body: some View {
-        GeometryReader { geometry in
-            VideoPlayer(player: player)
+        ZStack {
+            VideoThumbnailView(url: url)
                 .onAppear {
-                    player = AVPlayer(url: url)
+                    player.seek(to: .zero)
+                    player.play()
                 }
                 .onDisappear {
-                    player?.pause()
+                    player.pause()
                 }
-                .frame(width: geometry.size.width, height: geometry.size.height)
-                .aspectRatio(contentMode: .fit)
-                .clipped()
+
+            VideoPlayer(player: player)
+                .opacity(0.01) // Invisible layer to enable tap-to-fullscreen
+                .onTapGesture {
+                    showFullScreenPlayer = true
+                }
+                .onAppear {
+                    player.play()
+                }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white, lineWidth: 2))
-        .shadow(radius: 5)
+        .fullScreenCover(isPresented: $showFullScreenPlayer) {
+            FullScreenVideoPlayer(url: url)
+        }
     }
 }

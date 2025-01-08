@@ -374,14 +374,31 @@ struct ImageThumbnailView: View {
 import AVKit
 struct VideoThumbnailView: View {
     let url: URL
+
     var body: some View {
-        ZStack {
-            // You can generate an actual thumbnail if desired, or use a simpler approach:
-            Color.black
-            Image(systemName: "play.rectangle.fill")
+        if let thumbnail = generateThumbnail(for: url) {
+            Image(uiImage: thumbnail)
                 .resizable()
-                .foregroundColor(.white)
-                .frame(width: 40, height: 30)
+                .aspectRatio(contentMode: .fill)
+        } else {
+            Image(systemName: "video")
+                .resizable()
+                .frame(width: 100, height: 100)
+                .foregroundColor(.gray)
+        }
+    }
+
+    private func generateThumbnail(for url: URL) -> UIImage? {
+        let asset = AVAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+
+        do {
+            let cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
+            return UIImage(cgImage: cgImage)
+        } catch {
+            print("DEBUG: Failed to generate thumbnail for video: \(error.localizedDescription)")
+            return nil
         }
     }
 }
