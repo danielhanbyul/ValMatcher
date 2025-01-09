@@ -1639,7 +1639,7 @@ import AVKit
 struct VideoPlayerView: View {
     let url: URL
     @State private var player: AVPlayer
-    @State private var showFullScreenPlayer = false
+    @State private var isHorizontalVideo = false
 
     init(url: URL) {
         self.url = url
@@ -1648,26 +1648,40 @@ struct VideoPlayerView: View {
 
     var body: some View {
         ZStack {
-            VideoThumbnailView(url: url)
-                .onAppear {
-                    player.seek(to: .zero)
-                    player.play()
-                }
-                .onDisappear {
-                    player.pause()
-                }
-
-            VideoPlayer(player: player)
-                .opacity(0.01) // Invisible layer to enable tap-to-fullscreen
-                .onTapGesture {
-                    showFullScreenPlayer = true
-                }
-                .onAppear {
-                    player.play()
-                }
+            GeometryReader { geometry in
+                VideoPlayer(player: player)
+                    .aspectRatio(contentMode: .fill) // Ensures video fills the container
+                    .frame(width: geometry.size.width, height: geometry.size.height) // Fill the container dimensions
+                    .clipped() // Crops any overflow (top/bottom for vertical videos)
+                    .onAppear {
+                        checkVideoOrientation()
+                        player.seek(to: .zero)
+                        player.play()
+                        addReplayObserver()
+                    }
+                    .onDisappear {
+                        player.pause()
+                    }
+            }
         }
-        .fullScreenCover(isPresented: $showFullScreenPlayer) {
-            FullScreenVideoPlayer(url: url)
+    }
+
+    private func checkVideoOrientation() {
+        let asset = AVAsset(url: url)
+        guard let track = asset.tracks(withMediaType: .video).first else { return }
+        let dimensions = track.naturalSize.applying(track.preferredTransform)
+        isHorizontalVideo = abs(dimensions.width) > abs(dimensions.height)
+    }
+
+    private func addReplayObserver() {
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { _ in
+            player.seek(to: .zero)
+            player.play()
         }
     }
 }
+

@@ -124,8 +124,9 @@ struct ProfileView: View {
             SettingsView(user: $viewModel.user, isSignedIn: $isSignedIn, isShowingLoginView: $isShowingLoginView)
         }
         .fullScreenCover(item: $selectedVideoURL) { item in
-            FullScreenVideoPlayer(url: item.url) // Fullscreen video playback
+            FullScreenVideoPlayer(url: item.url, isHorizontalVideo: checkVideoOrientation(for: item.url))
         }
+
         .onAppear {
             fetchMediaFromFirestore() // Fetch media from Firestore on view load
             initializeEditValues()
@@ -647,7 +648,7 @@ struct ProfileView: View {
         // Update local user in the viewModel
         viewModel.user.mediaItems = (viewModel.user.mediaItems ?? []) + [MediaItem(type: type, url: url)]
 
-        // Update Firestore with the new media item and set `profileUpdated` to true
+        // Update Firestore with the new media item and set profileUpdated to true
         let db = Firestore.firestore()
         db.collection("users").document(userId).updateData([
             "mediaItems": viewModel.user.mediaItems?.map { ["type": $0.type.rawValue, "url": $0.url.absoluteString] } ?? [],
@@ -660,7 +661,7 @@ struct ProfileView: View {
             }
         }
 
-        // Reset `profileUpdated` to false after a short delay
+        // Reset profileUpdated to false after a short delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             db.collection("users").document(userId).updateData([
                 "profileUpdated": false
@@ -996,11 +997,15 @@ struct ProfileView: View {
 
 }
 
+import SwiftUI
+import AVKit
+
 struct FullScreenVideoPlayer: View {
     let url: URL
+    let isHorizontalVideo: Bool
     @Environment(\.presentationMode) var presentationMode
-
     @State private var player: AVPlayer?
+    @State private var isRotated = false
     @State private var isLoading = true
 
     var body: some View {
@@ -1014,15 +1019,23 @@ struct FullScreenVideoPlayer: View {
                         loadVideo()
                     }
             } else if let player = player {
-                VideoPlayer(player: player)
-                    .onAppear {
-                        player.play()
-                        print("DEBUG: Video playback started.")
-                    }
-                    .onDisappear {
-                        player.pause()
-                        print("DEBUG: Video playback paused.")
-                    }
+                GeometryReader { geometry in
+                    VideoPlayer(player: player)
+                        .rotationEffect(isRotated ? .degrees(90) : .degrees(0))
+                        .frame(
+                            width: isRotated ? geometry.size.height : geometry.size.width,
+                            height: isRotated ? geometry.size.width : geometry.size.height
+                        )
+                        .position(x: geometry.size.width / 2, y: geometry.size.height / 2) // Center the video
+                        .clipped()
+                        .onAppear {
+                            player.play()
+                            addReplayObserver()
+                        }
+                        .onDisappear {
+                            player.pause()
+                        }
+                }
             } else {
                 Text("Unable to load video")
                     .foregroundColor(.red)
@@ -1030,7 +1043,6 @@ struct FullScreenVideoPlayer: View {
 
             VStack {
                 HStack {
-                    Spacer()
                     Button(action: {
                         presentationMode.wrappedValue.dismiss()
                     }) {
@@ -1041,6 +1053,23 @@ struct FullScreenVideoPlayer: View {
                             .clipShape(Circle())
                     }
                     .padding()
+
+                    Spacer()
+
+                    if isHorizontalVideo {
+                        Button(action: {
+                            withAnimation {
+                                isRotated.toggle()
+                            }
+                        }) {
+                            Image(systemName: "arrow.2.circlepath")
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.black.opacity(0.7))
+                                .clipShape(Circle())
+                        }
+                        .padding()
+                    }
                 }
                 Spacer()
             }
@@ -1058,7 +1087,22 @@ struct FullScreenVideoPlayer: View {
             }
         }
     }
+
+    private func addReplayObserver() {
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player?.currentItem,
+            queue: .main
+        ) { _ in
+            player?.seek(to: .zero)
+            player?.play()
+        }
+    }
 }
+
+
+
+
 
 
 private func debugVideoURLAccessibility(url: URL) {
@@ -1130,6 +1174,12 @@ private func mediaThumbnailView(for media: MediaItem) -> some View {
 
 
 
+private func checkVideoOrientation(for url: URL) -> Bool {
+    let asset = AVAsset(url: url)
+    guard let track = asset.tracks(withMediaType: .video).first else { return false }
+    let dimensions = track.naturalSize.applying(track.preferredTransform)
+    return abs(dimensions.width) > abs(dimensions.height)
+}
 
 
 
@@ -1142,7 +1192,7 @@ struct ParentView: View {
             selectedVideoURL = IdentifiableURL(url: URL(string: "https://example.com/video.mp4")!)
         }
         .fullScreenCover(item: $selectedVideoURL) { item in
-            FullScreenVideoPlayer(url: item.url) // Pass the URL to FullScreenVideoPlayer
+            FullScreenVideoPlayer(url: item.url, isHorizontalVideo: checkVideoOrientation(for: item.url)) // Pass the URL to FullScreenVideoPlayer
         }
     }
 }
