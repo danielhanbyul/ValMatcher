@@ -1636,10 +1636,14 @@ extension URL {
 import SwiftUI
 import AVKit
 
+import SwiftUI
+import AVKit
+
 struct VideoPlayerView: View {
     let url: URL
     @State private var player: AVPlayer
     @State private var isHorizontalVideo = false
+    @State private var showFullScreenPlayer = false
 
     init(url: URL) {
         self.url = url
@@ -1662,7 +1666,22 @@ struct VideoPlayerView: View {
                     .onDisappear {
                         player.pause()
                     }
+                    .onTapGesture {
+                        if isHorizontalVideo {
+                            showFullScreenPlayer = true // Open fullscreen for horizontal videos
+                        } else {
+                            // Toggle play/pause for vertical videos
+                            if player.timeControlStatus == .playing {
+                                player.pause()
+                            } else {
+                                player.play()
+                            }
+                        }
+                    }
             }
+        }
+        .fullScreenCover(isPresented: $showFullScreenPlayer) {
+            FullScreenVideoPlayer(url: url, isHorizontalVideo: isHorizontalVideo)
         }
     }
 
@@ -1671,7 +1690,7 @@ struct VideoPlayerView: View {
         let videoAspectRatio = isHorizontalVideo ? 16.0 / 9.0 : 9.0 / 16.0
         let viewAspectRatio = geometry.size.width / geometry.size.height
         let baseScale = max(viewAspectRatio / videoAspectRatio, 1.0)
-        return baseScale * 1.25 // Reduced zoom to 25% extra for both orientations
+        return baseScale * 1.15 // Adjust for slightly zoomed effect
     }
 
     private func checkVideoOrientation() {
