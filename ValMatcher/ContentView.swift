@@ -1650,9 +1650,9 @@ struct VideoPlayerView: View {
         ZStack {
             GeometryReader { geometry in
                 VideoPlayer(player: player)
-                    .aspectRatio(contentMode: .fill) // Ensures video fills the container
-                    .frame(width: geometry.size.width, height: geometry.size.height) // Fill the container dimensions
-                    .clipped() // Crops any overflow (top/bottom for vertical videos)
+                    .scaleEffect(calculateScale(geometry: geometry)) // Apply zoom for both orientations
+                    .frame(width: geometry.size.width, height: geometry.size.height) // Match container size
+                    .clipped() // Ensure no overflow
                     .onAppear {
                         checkVideoOrientation()
                         player.seek(to: .zero)
@@ -1664,6 +1664,14 @@ struct VideoPlayerView: View {
                     }
             }
         }
+    }
+
+    // Function to calculate scale for both horizontal and vertical videos
+    private func calculateScale(geometry: GeometryProxy) -> CGFloat {
+        let videoAspectRatio = isHorizontalVideo ? 16.0 / 9.0 : 9.0 / 16.0
+        let viewAspectRatio = geometry.size.width / geometry.size.height
+        let baseScale = max(viewAspectRatio / videoAspectRatio, 1.0)
+        return baseScale * 1.25 // Reduced zoom to 25% extra for both orientations
     }
 
     private func checkVideoOrientation() {
@@ -1684,4 +1692,3 @@ struct VideoPlayerView: View {
         }
     }
 }
-
