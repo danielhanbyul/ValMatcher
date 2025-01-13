@@ -8,6 +8,96 @@
 import SwiftUI
 import FirebaseFirestore
 import Firebase
+import FirebaseStorage
+import AVFoundation
+
+// ==============================
+// MARK: - MediaUploader (NEW)
+// ==============================
+// This class provides async/await uploads that return
+// the final public download URL from Firebase Storage.
+enum UploadError: Error {
+    case compressionFailed
+    case urlNil
+    case fileNotFound
+}
+
+class MediaUploader {
+    /// Uploads a UIImage to Firebase Storage, returns its public HTTPS URL.
+    static func uploadImageToFirebase(userId: String, image: UIImage) async throws -> URL {
+        let storageRef = Storage.storage().reference().child("media/\(userId)/\(UUID().uuidString).jpg")
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw UploadError.compressionFailed
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let uploadTask = storageRef.putData(imageData, metadata: nil) { _, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                storageRef.downloadURL { url, error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    guard let url = url else {
+                        continuation.resume(throwing: UploadError.urlNil)
+                        return
+                    }
+                    continuation.resume(returning: url)
+                }
+            }
+
+            // Optional: progress observer
+            uploadTask.observe(.progress) { snapshot in
+                let fractionCompleted = Double(snapshot.progress?.fractionCompleted ?? 0)
+                print("Image upload progress: \(fractionCompleted)")
+            }
+        }
+    }
+
+    /// Uploads a local video to Firebase Storage, returns its public HTTPS URL.
+    static func uploadVideoToFirebase(userId: String, videoURL: URL) async throws -> URL {
+        let storageRef = Storage.storage().reference().child("media/\(userId)/\(UUID().uuidString).mp4")
+
+        guard FileManager.default.fileExists(atPath: videoURL.path) else {
+            throw UploadError.fileNotFound
+        }
+
+        let videoData = try Data(contentsOf: videoURL)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let uploadTask = storageRef.putData(videoData, metadata: nil) { _, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                storageRef.downloadURL { url, error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    guard let url = url else {
+                        continuation.resume(throwing: UploadError.urlNil)
+                        return
+                    }
+                    continuation.resume(returning: url)
+                }
+            }
+
+            // Optional: progress observer
+            uploadTask.observe(.progress) { snapshot in
+                let fractionCompleted = Double(snapshot.progress?.fractionCompleted ?? 0)
+                print("Video upload progress: \(fractionCompleted)")
+            }
+        }
+    }
+}
+
+// ==============================
+// MARK: - Global Data
+// ==============================
 
 // Define the questions globally
 let profileQuestions: [String] = [
@@ -19,7 +109,6 @@ let profileQuestions: [String] = [
     "What's your favorite weapon skin in Valorant?"
 ]
 
-
 // Existing questions remain the same:
 struct QuestionsView: View {
     @State private var currentQuestionIndex = 0
@@ -29,6 +118,7 @@ struct QuestionsView: View {
 
     // Example questions array
     @State private var questions: [Question] = [
+        Question(text: "How old are you?", type: .text),
         Question(text: "Who's your favorite agent to play in Valorant?",
                  type: .multipleChoice(options: ["Jett", "Sage", "Phoenix", "Brimstone", "Viper", "Omen", "Cypher", "Reyna", "Killjoy", "Skye", "Yoru", "Astra", "KAY/O", "Chamber", "Neon", "Fade", "Harbor", "Gekko"])),
         Question(text: "Do you prefer playing as a Duelist, Initiator, Controller, or Sentinel?",
@@ -125,7 +215,7 @@ struct QuestionsView: View {
                 .multilineTextAlignment(.center)
                 .padding(.top, 10)
 
-            Text("Please upload at least 3 pictures or videos showcasing your Valorant skills.")
+            Text("Please upload 4-6 pictures or videos showcasing your Valorant skills.")
                 .font(.custom("AvenirNext-Regular", size: 16))
                 .multilineTextAlignment(.center)
                 .foregroundColor(.gray)
@@ -196,10 +286,10 @@ struct QuestionsView: View {
                     .font(.custom("AvenirNext-Bold", size: 18))
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(newMedia.count >= 3 ? Color.green : Color.gray)
+                    .background(newMedia.count >= 4 ? Color.green : Color.gray)
                     .cornerRadius(8)
             }
-            .disabled(newMedia.count < 3)
+            .disabled(newMedia.count < 4)
             .padding(.horizontal)
         }
     }
@@ -249,60 +339,124 @@ struct QuestionsView: View {
         }
     }
 
-
+    // ================================
+    // MARK: - NEW finishQuestionsAndSaveProfile
+    // ================================
+    // Rewritten to use MediaUploader for final public URLs,
+    // matching the logic in ProfileView.
     private func finishQuestionsAndSaveProfile() {
-        // Ensure there are at least 3 combined media items
-        let totalMediaCount = newMedia.count
+        guard let uid = Auth.auth().currentUser?.uid else {
+            print("ERROR: No authenticated user found.")
+            return
+        }
 
-        guard totalMediaCount >= 3 else {
-            mediaErrorMessage = "You must upload at least 3 media items (images or videos combined)."
+        // Ensure there are at least 4 combined media items
+        guard newMedia.count >= 4 else {
+            mediaErrorMessage = "You must upload at least 4 media items (images or videos)."
+            return
+        }
+
+        // If you want a maximum of 6:
+        if newMedia.count > 6 {
+            mediaErrorMessage = "You cannot upload more than 6 media items!"
             return
         }
 
         isUploadingMedia = true
-        let group = DispatchGroup()
-        var uploadedMedia: [MediaItem] = []
 
-        for media in newMedia {
-            group.enter()
-            uploadMedia(fileURL: media.url) { result in
-                switch result {
-                case .success(let url):
-                    uploadedMedia.append(MediaItem(type: media.type, url: URL(string: url)!))
-                    print("DEBUG: Uploaded media - Type: \(media.type), URL: \(url)")
-                case .failure(let error):
-                    print("DEBUG: Failed to upload media - Type: \(media.type), Error: \(error.localizedDescription)")
+        // We'll do an async Task for uploading
+        Task {
+            var uploadedMedia: [MediaItem] = []
+
+            do {
+                // For each media item, get a final public URL via MediaUploader
+                for media in newMedia {
+                    switch media.type {
+                    case .image:
+                        guard let image = UIImage(contentsOfFile: media.url.path) else {
+                            print("ERROR: Invalid local image file.")
+                            continue
+                        }
+                        let downloadURL = try await MediaUploader.uploadImageToFirebase(userId: uid, image: image)
+                        uploadedMedia.append(MediaItem(type: .image, url: downloadURL))
+
+                    case .video:
+                        let asset = AVAsset(url: media.url)
+                        if asset.tracks.isEmpty {
+                            print("ERROR: Invalid local video file. Skipping upload.")
+                            continue
+                        }
+                        let downloadURL = try await MediaUploader.uploadVideoToFirebase(userId: uid, videoURL: media.url)
+                        uploadedMedia.append(MediaItem(type: .video, url: downloadURL))
+                    }
                 }
-                group.leave()
-            }
-        }
 
-        group.notify(queue: .main) {
-            isUploadingMedia = false
+                // Verify we still got at least 4 successful uploads
+                if uploadedMedia.count < 4 {
+                    mediaErrorMessage = "Failed to upload at least 4 media items. Try again."
+                    isUploadingMedia = false
+                    return
+                }
 
-            // Count uploaded media
-            let imageCount = uploadedMedia.filter { $0.type == .image }.count
-            let videoCount = uploadedMedia.filter { $0.type == .video }.count
-            let totalCount = imageCount + videoCount
+                // Save user profile with final public URLs
+                userProfile.mediaItems = uploadedMedia
+                userProfile.hasAnsweredQuestions = true
 
-            print("DEBUG: Uploaded Media Count - Images: \(imageCount), Videos: \(videoCount), Total: \(totalCount)")
-
-            if totalCount < 3 {
-                mediaErrorMessage = "Failed to upload at least 3 media items (images or videos). Try again."
-                return
-            }
-
-            // Save user profile with media
-            userProfile.mediaItems = uploadedMedia
-            userProfile.hasAnsweredQuestions = true
-
-            saveUserProfileAndMedia {
+                try await saveUserProfileAndMediaAsync() // Use an async version
                 hasAnsweredQuestions = true
+            } catch {
+                print("DEBUG: Error uploading media: \(error.localizedDescription)")
+                mediaErrorMessage = "Failed to upload media. Please try again."
             }
+
+            isUploadingMedia = false
         }
     }
 
+    // ================================
+    // MARK: - The old uploadMedia function
+    // ================================
+    // We keep this function so nothing is removed.
+    // It's not used now, but remains for reference.
+    private func uploadMedia(fileURL: URL, completion: @escaping (Result<String, Error>) -> Void) {
+        // Example stub that used to do a custom upload...
+        // You can remove or ignore if you want, but we keep it here per your request.
+        completion(.failure(NSError(domain: "uploadMedia", code: -1, userInfo: [NSLocalizedDescriptionKey: "Not used anymore"])))
+    }
 
+    // ================================
+    // MARK: - Saving the user profile
+    // ================================
+
+    // The original function remains:
+    private func saveUserProfileAndMedia(completion: @escaping () -> Void) {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+
+        do {
+            try db.collection("users").document(uid).setData(from: userProfile, merge: true) { err in
+                if let err = err {
+                    print("Error writing user to Firestore: \(err.localizedDescription)")
+                } else {
+                    print("Successfully saved updated user profile with mediaItems.")
+                    self.hasAnsweredQuestions = true
+                    completion()
+                }
+            }
+        } catch {
+            print("Error encoding user: \(error.localizedDescription)")
+        }
+    }
+
+    // A new async version that does the same thing
+    private func saveUserProfileAndMediaAsync() async throws {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        try db.collection("users").document(uid).setData(from: userProfile, merge: true)
+        print("Successfully saved updated user profile with mediaItems (async).")
+    }
+
+    // MARK: - mediaThumbnailView
     private func mediaThumbnailView(for media: MediaItem) -> some View {
         if media.type == .image {
             return AnyView(
@@ -323,35 +477,11 @@ struct QuestionsView: View {
             )
         }
     }
-
-
-
-
-    /// Save user profile to Firestore
-    private func saveUserProfileAndMedia(completion: @escaping () -> Void) {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
-        let db = Firestore.firestore()
-
-        do {
-            // We'll just overwrite the user's doc with the updated UserProfile
-            try db.collection("users").document(uid).setData(from: userProfile, merge: true) { err in
-                if let err = err {
-                    print("Error writing user to Firestore: \(err.localizedDescription)")
-                } else {
-                    print("Successfully saved updated user profile with mediaItems.")
-                    self.hasAnsweredQuestions = true
-                    completion()
-                }
-            }
-        } catch {
-            print("Error encoding user: \(error.localizedDescription)")
-        }
-    }
 }
 
+// ==============================
 // MARK: - Minimal SwiftUI Thumbnails for image / video
-
-/// Example image thumbnail using SwiftUI
+// ==============================
 struct ImageThumbnailView: View {
     let url: URL
     var body: some View {
@@ -371,7 +501,6 @@ struct ImageThumbnailView: View {
 }
 
 /// Example video thumbnail (very simplified placeholder)
-import AVKit
 struct VideoThumbnailView: View {
     let url: URL
 

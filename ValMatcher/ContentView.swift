@@ -167,7 +167,7 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarLeading) {
                 Text("ValMatcher")
-                    .font(.title2)
+                    .font(.largeTitle)
                     .bold()
                     .foregroundColor(.white)
                     .padding(.top, 10)
@@ -265,54 +265,87 @@ struct ContentView: View {
 
                 guard let snapshot = snapshot else { return }
 
+                var addedUsers = [UserProfile]()
+                var updatedUsers = [UserProfile]()
+                var removedUserIDs = [String]()
+
                 snapshot.documentChanges.forEach { change in
                     guard let newUser = try? change.document.data(as: UserProfile.self),
                           let newUserID = newUser.id else {
-                        print("DEBUG: Skipping user due to invalid data.")
+                        print("DEBUG: Failed to parse user document \(change.document.documentID).")
                         return
                     }
 
-                    // Exclude current user and already interacted users
-                    guard newUserID != currentUserID, !self.interactedUsers.contains(newUserID) else {
-                        print("DEBUG: Skipping user \(newUserID) (current user or already interacted).")
+                    // Skip the current user
+                    if newUserID == currentUserID {
+                        print("DEBUG: Skipping current user \(newUserID).")
                         return
                     }
 
-                    guard newUser.hasAnsweredQuestions, !newUser.name.isEmpty else {
-                        print("DEBUG: Skipping incomplete profile for user \(newUserID).")
-                        return
-                    }
+                    switch change.type {
+                    case .added:
+                        // Add new user
+                        if !self.interactedUsers.contains(newUserID) {
+                            print("DEBUG: New user \(newUserID) added to feed.")
+                            addedUsers.append(newUser)
+                        }
 
-                    if change.type == .added {
-                        print("DEBUG: New user \(newUserID) added to feed.")
-                        self.users.append(newUser)
-                        self.users.sort(by: {
-                            ($0.createdAt?.dateValue() ?? Date()) < ($1.createdAt?.dateValue() ?? Date())
-                        })
-                    }
-
-                    if change.type == .modified {
+                    case .modified:
+                        // Update existing user or re-add if interacted previously
                         if let index = self.users.firstIndex(where: { $0.id == newUserID }) {
                             self.users[index] = newUser
                             print("DEBUG: Modified user \(newUserID) updated in feed.")
-                        } else {
+                        } else if !self.interactedUsers.contains(newUserID) {
                             print("DEBUG: Modified user \(newUserID) added back to feed.")
-                            self.users.append(newUser)
-                            self.users.sort(by: {
-                                ($0.createdAt?.dateValue() ?? Date()) < ($1.createdAt?.dateValue() ?? Date())
-                            })
+                            addedUsers.append(newUser)
                         }
-                    }
 
-                    if change.type == .removed {
-                        if let index = self.users.firstIndex(where: { $0.id == newUserID }) {
-                            self.users.remove(at: index)
-                            print("DEBUG: Removed user \(newUserID) from feed.")
-                        }
+                    case .removed:
+                        // Remove user from the feed
+                        removedUserIDs.append(newUserID)
+                        print("DEBUG: User \(newUserID) removed from feed.")
+                    default:
+                        break
                     }
                 }
+
+                // Update the feed
+                if !addedUsers.isEmpty {
+                    self.users.append(contentsOf: addedUsers)
+                }
+
+                if !removedUserIDs.isEmpty {
+                    self.users.removeAll { removedUserIDs.contains($0.id ?? "") }
+                }
+
+                // Sort by creation date
+                self.users.sort(by: {
+                    ($0.createdAt?.dateValue() ?? Date()) < ($1.createdAt?.dateValue() ?? Date())
+                })
+
+                print("DEBUG: Final user list count: \(self.users.count).")
             }
     }
+
+
+    
+    private func updateProfileInFirestore() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(currentUserID)
+
+        userRef.updateData([
+            "lastUpdated": Timestamp()
+        ]) { error in
+            if let error = error {
+                print("DEBUG: Error updating profile: \(error.localizedDescription)")
+            } else {
+                print("DEBUG: Profile updated successfully with new timestamp.")
+            }
+        }
+    }
+
+
 
 
 
@@ -680,7 +713,7 @@ struct ContentView: View {
 
             self.users = documents.compactMap { doc in
                 do {
-                    let user = try doc.data(as: UserProfile.self)
+                    var user = try doc.data(as: UserProfile.self)
                     guard let userID = user.id else { return nil }
 
                     // Exclude current user and already interacted users
@@ -690,20 +723,18 @@ struct ContentView: View {
                     }
 
                     // Validate media items
-                    guard let mediaItems = user.mediaItems, !mediaItems.isEmpty else {
-                        print("DEBUG: Skipping user \(userID) due to missing media.")
-                        return nil
-                    }
-
+                    let mediaItems = user.mediaItems ?? [] // Safely access media items
                     let validMedia = mediaItems.filter { $0.url.isPublicURL }
-                    guard !validMedia.isEmpty else {
-                        print("DEBUG: Skipping user \(userID) due to invalid media URLs.")
-                        return nil
+                    
+                    // Update the user's media items with validated ones
+                    user.mediaItems = validMedia
+                    
+                    // Optionally skip users with no valid media items
+                    if validMedia.isEmpty {
+                        print("DEBUG: User \(userID) has no valid media items, but keeping them in the feed.")
                     }
 
-                    var validatedUser = user
-                    validatedUser.mediaItems = validMedia
-                    return validatedUser
+                    return user
                 } catch {
                     print("DEBUG: Failed to parse user document \(doc.documentID): \(error.localizedDescription)")
                     return nil
@@ -714,6 +745,7 @@ struct ContentView: View {
             completion()
         }
     }
+
 
 
 
@@ -1623,6 +1655,8 @@ struct UserCardView: View {
         )
         .padding()
     }
+    
+    
 }
 
 // Custom Extension to Validate URLs
@@ -1710,4 +1744,34 @@ struct VideoPlayerView: View {
             player.play()
         }
     }
+    
+    private func configureAudioSession() {
+            let audioSession = AVAudioSession.sharedInstance()
+            do {
+                try audioSession.setCategory(.playback, mode: .moviePlayback, options: .mixWithOthers)
+                try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            } catch {
+                print("Failed to configure audio session: \(error.localizedDescription)")
+            }
+        }
+    
+    private func preloadVideo(url: URL, completion: @escaping (AVPlayer?) -> Void) {
+        let asset = AVAsset(url: url)
+        let keys = ["playable", "hasProtectedContent"]
+        asset.loadValuesAsynchronously(forKeys: keys) {
+            DispatchQueue.main.async {
+                for key in keys {
+                    var error: NSError?
+                    let status = asset.statusOfValue(forKey: key, error: &error)
+                    if status == .failed || status == .cancelled {
+                        print("DEBUG: Failed to load key \(key): \(error?.localizedDescription ?? "Unknown error")")
+                        completion(nil)
+                        return
+                    }
+                }
+                completion(AVPlayer(playerItem: AVPlayerItem(asset: asset)))
+            }
+        }
+    }
+
 }

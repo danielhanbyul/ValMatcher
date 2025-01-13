@@ -39,8 +39,10 @@ struct ProfileView: View {
 
     // Updated to use IdentifiableURL for full-screen video
     @State private var selectedVideoURL: IdentifiableURL?
+    @State private var thumbnailCache: [URL: UIImage] = [:]
 
-    let maxMediaCount = 3 // Limit to 3 media items
+
+    let maxMediaCount = 6 // Limit to 3 media items
     let maxVideoDuration: Double = 60.0
 
     var body: some View {
@@ -142,15 +144,42 @@ struct ProfileView: View {
                 KFImage(media.url)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 100, height: 100)  // Fixed size
+                    .frame(width: 100, height: 100)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
             } else if media.type == .video {
-                VideoPlayer(player: AVPlayer(url: media.url))
-                    .frame(width: 100, height: 100)  // Fixed size
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                if let cachedThumbnail = thumbnailCache[media.url] {
+                    Image(uiImage: cachedThumbnail)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 100, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                } else {
+                    ProgressView()
+                        .onAppear {
+                            _ = generateAndCacheThumbnail(for: media.url)
+                        }
+                }
             }
         }
     }
+
+    private func generateAndCacheThumbnail(for url: URL) -> UIImage? {
+        let asset = AVAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+
+        do {
+            let cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
+            let thumbnail = UIImage(cgImage: cgImage)
+            // Cache the thumbnail
+            thumbnailCache[url] = thumbnail
+            return thumbnail
+        } catch {
+            print("DEBUG: Failed to generate thumbnail: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
 
     private var addMediaButton: some View {
         Button(action: {
@@ -470,7 +499,7 @@ struct ProfileView: View {
     }
     
     
-
+    
 
 
 
