@@ -250,6 +250,7 @@ struct ContentView: View {
         }
     }
     
+    
 
     private func setUpUserFeedListener() {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
@@ -262,69 +263,72 @@ struct ContentView: View {
                     print("DEBUG: Error listening for user feed: \(error.localizedDescription).")
                     return
                 }
-
                 guard let snapshot = snapshot else { return }
 
                 var addedUsers = [UserProfile]()
-                var updatedUsers = [UserProfile]()
                 var removedUserIDs = [String]()
 
                 snapshot.documentChanges.forEach { change in
                     guard let newUser = try? change.document.data(as: UserProfile.self),
                           let newUserID = newUser.id else {
-                        print("DEBUG: Failed to parse user document \(change.document.documentID).")
+                        print("DEBUG: Failed to parse user doc \(change.document.documentID).")
                         return
                     }
 
-                    // Skip the current user
+                    // Skip if this doc belongs to me (on my device)
                     if newUserID == currentUserID {
-                        print("DEBUG: Skipping current user \(newUserID).")
+                        print("DEBUG: Skipping my own doc: \(newUserID)")
                         return
                     }
 
                     switch change.type {
                     case .added:
-                        // Add new user
                         if !self.interactedUsers.contains(newUserID) {
-                            print("DEBUG: New user \(newUserID) added to feed.")
+                            print("DEBUG: [Feed] Adding user \(newUserID).")
                             addedUsers.append(newUser)
                         }
-
                     case .modified:
-                        // Update existing user or re-add if interacted previously
                         if let index = self.users.firstIndex(where: { $0.id == newUserID }) {
+                            print("DEBUG: [Feed] Updating user \(newUserID) in place.")
                             self.users[index] = newUser
-                            print("DEBUG: Modified user \(newUserID) updated in feed.")
                         } else if !self.interactedUsers.contains(newUserID) {
-                            print("DEBUG: Modified user \(newUserID) added back to feed.")
+                            print("DEBUG: [Feed] Re-adding user \(newUserID).")
                             addedUsers.append(newUser)
                         }
-
                     case .removed:
-                        // Remove user from the feed
+                        print("DEBUG: [Feed] Removing user \(newUserID).")
                         removedUserIDs.append(newUserID)
-                        print("DEBUG: User \(newUserID) removed from feed.")
                     default:
                         break
                     }
                 }
 
-                // Update the feed
+                // Append or remove
                 if !addedUsers.isEmpty {
                     self.users.append(contentsOf: addedUsers)
                 }
-
                 if !removedUserIDs.isEmpty {
                     self.users.removeAll { removedUserIDs.contains($0.id ?? "") }
                 }
 
-                // Sort by creation date
+                // Sort
                 self.users.sort(by: {
                     ($0.createdAt?.dateValue() ?? Date()) < ($1.createdAt?.dateValue() ?? Date())
                 })
 
-                print("DEBUG: Final user list count: \(self.users.count).")
+                print("DEBUG: [Feed] Final user list count: \(self.users.count).")
             }
+    }
+
+
+
+    
+    private func isCurrentUser(_ userID: String) -> Bool {
+        // Compare userID to the currently authenticated user’s ID
+        guard let currentUser = Auth.auth().currentUser else {
+            return false
+        }
+        return userID == currentUser.uid
     }
 
 
@@ -383,7 +387,8 @@ struct ContentView: View {
         users.filter {
             !interactedUsers.contains($0.id ?? "") &&
             $0.id != Auth.auth().currentUser?.uid &&
-            $0.hasAnsweredQuestions && !$0.name.isEmpty
+//            $0.hasAnsweredQuestions &&
+            !$0.name.isEmpty
         }
     }
 
@@ -518,20 +523,85 @@ struct ContentView: View {
     
     // Media thumbnails for preview
     private func mediaThumbnailView(for media: MediaItem) -> some View {
-        VStack {
+        Group {
             if media.type == .image {
                 KFImage(media.url)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 100, height: 100)  // Fixed size
+                    .frame(width: 100, height: 100)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
             } else if media.type == .video {
-                VideoPlayer(player: AVPlayer(url: media.url))
-                    .frame(width: 100, height: 100)  // Fixed size
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                FeedVideoPlayerView(url: media.url)
+            } else {
+                EmptyView()
             }
         }
     }
+
+    
+    struct FeedVideoPlayerView: View {
+        let url: URL
+        @State private var player = AVPlayer()
+        @State private var isHorizontal = false
+        @State private var showFullScreenPlayer = false
+
+        init(url: URL) {
+            self.url = url
+            _player = State(initialValue: AVPlayer(url: url))
+        }
+
+        var body: some View {
+            ZStack {
+                GeometryReader { geo in
+                    VideoPlayer(player: player)
+                        .onAppear {
+                            checkOrientation()
+                            player.seek(to: .zero)
+                            player.play()
+                            addReplayObserver()
+                        }
+                        .onTapGesture {
+                            // If horizontal => open fullscreen
+                            if isHorizontal {
+                                showFullScreenPlayer = true
+                            } else {
+                                // Vertical => toggle play/pause
+                                if player.timeControlStatus == .playing {
+                                    player.pause()
+                                } else {
+                                    player.play()
+                                }
+                            }
+                        }
+                }
+            }
+            .frame(width: 100, height: 100) // or whatever size in your feed
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            // Fullscreen
+            .fullScreenCover(isPresented: $showFullScreenPlayer) {
+                FullScreenVideoPlayer(url: url, isHorizontalVideo: isHorizontal)
+            }
+        }
+
+        private func checkOrientation() {
+            let asset = AVAsset(url: url)
+            guard let track = asset.tracks(withMediaType: .video).first else { return }
+            let dims = track.naturalSize.applying(track.preferredTransform)
+            isHorizontal = abs(dims.width) > abs(dims.height)
+        }
+
+        private func addReplayObserver() {
+            NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: player.currentItem,
+                queue: .main
+            ) { _ in
+                player.seek(to: .zero)
+                player.play()
+            }
+        }
+    }
+
 
     private var noMoreUsersView: some View {
         VStack {
@@ -670,20 +740,27 @@ struct ContentView: View {
             }
             snapshot?.documentChanges.forEach { change in
                 if change.type == .added {
-                    if let newUser = try? change.document.data(as: UserProfile.self) {
-                        guard let newUserID = newUser.id,
-                              newUserID != currentUserID else { return }
-                        if !self.interactedUsers.contains(newUserID) &&
-                           !self.shownUserIDs.contains(newUserID) {
-                            self.users.append(newUser)
-                            self.shownUserIDs.insert(newUserID)
+                    do {
+                        let user = try change.document.data(as: UserProfile.self)
+                        guard let userID = user.id else { return }
+
+                        // Add the condition here
+                        if userID != currentUserID, !self.interactedUsers.contains(userID) {
+                            self.users.append(user)
+                            self.shownUserIDs.insert(userID)
+                            print("DEBUG: New user added: \(userID)")
+                        } else {
+                            print("DEBUG: Skipping user \(userID) - Current user or already interacted.")
                         }
+                    } catch {
+                        print("DEBUG: Error parsing new user document \(change.document.documentID): \(error.localizedDescription)")
                     }
                 }
             }
-            print("Users after listening for new additions: \(self.users.count)")
+            print("DEBUG: Users after listening for new additions: \(self.users.count)")
         }
     }
+
 
     func fetchAllUsers(completion: @escaping () -> Void) {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
@@ -693,63 +770,59 @@ struct ContentView: View {
         }
 
         let db = Firestore.firestore()
-
-        db.collection("users").getDocuments { (snapshot, error) in
+        db.collection("users").getDocuments { snapshot, error in
             if let error = error {
-                print("DEBUG: Firestore query failed with error: \(error.localizedDescription)")
+                print("DEBUG: Firestore query failed: \(error.localizedDescription)")
                 completion()
                 return
             }
 
-            print("DEBUG: Firestore query completed.")
-
-            guard let documents = snapshot?.documents else {
+            guard let docs = snapshot?.documents else {
                 print("DEBUG: No user documents found.")
                 completion()
                 return
             }
 
-            print("DEBUG: Fetched \(documents.count) user documents.")
+            var fetched: [UserProfile] = []
 
-            self.users = documents.compactMap { doc in
+            for doc in docs {
                 do {
                     var user = try doc.data(as: UserProfile.self)
-                    guard let userID = user.id else { return nil }
+                    guard let userID = user.id else { continue }
 
-                    // Exclude current user and already interacted users
-                    guard userID != currentUserID, !self.interactedUsers.contains(userID) else {
-                        print("DEBUG: Skipping user \(userID) (current user or already interacted).")
-                        return nil
+                    // Skip me if it's my doc on my device's feed
+                    if userID == currentUserID {
+                        // e.g., skip adding me to my own feed
+                        continue
                     }
 
-                    // Validate media items
-                    let mediaItems = user.mediaItems ?? [] // Safely access media items
+                    // Also skip if I've already interacted (liked/swiped)
+                    if self.interactedUsers.contains(userID) {
+                        print("DEBUG: Skipping \(userID) because they're in interactedUsers.")
+                        continue
+                    }
+
+                    // Else they're valid for the feed:
+                    // Optionally validate media items
+                    let mediaItems = user.mediaItems ?? []
                     let validMedia = mediaItems.filter { $0.url.isPublicURL }
-                    
-                    // Update the user's media items with validated ones
                     user.mediaItems = validMedia
-                    
-                    // Optionally skip users with no valid media items
-                    if validMedia.isEmpty {
-                        print("DEBUG: User \(userID) has no valid media items, but keeping them in the feed.")
-                    }
 
-                    return user
+                    // e.g. skipping if validMedia.isEmpty is optional
+                    // if validMedia.isEmpty { ... } else { ... }
+
+                    fetched.append(user)
+                    print("DEBUG: User added: \(userID)")
                 } catch {
-                    print("DEBUG: Failed to parse user document \(doc.documentID): \(error.localizedDescription)")
-                    return nil
+                    print("DEBUG: parse error for doc \(doc.documentID): \(error.localizedDescription)")
                 }
             }
 
+            self.users = fetched
             print("DEBUG: Final user list count: \(self.users.count)")
             completion()
         }
     }
-
-
-
-
-
 
     func deleteAccount() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
@@ -838,24 +911,21 @@ struct ContentView: View {
 
         for document in documents {
             do {
-                let userData = try document.data(as: UserProfile.self)
-                guard let userID = userData.id else {
+                let user = try document.data(as: UserProfile.self)
+                guard let userID = user.id else {
                     print("DEBUG: Skipping user - Missing user ID for document \(document.documentID)")
                     skippedUsers.append(document.documentID)
                     continue
                 }
 
-                // Check if the user matches the filters
-                if userID != currentUserID &&
-                    !self.interactedUsers.contains(userID) &&
-                    !self.shownUserIDs.contains(userID) {
-                    fetchedUsers.append(userData)
-                    print("DEBUG: User fetched: \(userID), Name: \(userData.name ?? "Unknown")")
+                // Add the condition here
+                if userID != currentUserID, !self.interactedUsers.contains(userID) {
+                    fetchedUsers.append(user)
+                    print("DEBUG: User fetched: \(userID), Name: \(user.name ?? "Unknown")")
                 } else {
-                    print("DEBUG: Skipping user \(userID) - Already interacted or shown")
+                    print("DEBUG: Skipping user \(userID) - Current user or already interacted.")
                     skippedUsers.append(userID)
                 }
-
             } catch {
                 print("DEBUG: Error decoding user \(document.documentID): \(error.localizedDescription)")
                 skippedUsers.append(document.documentID)
@@ -1589,32 +1659,53 @@ struct NotificationsView: View {
 }
 
 import SwiftUI
-import AVKit
 import Kingfisher
+import AVKit
 
 struct UserCardView: View {
     var user: UserProfile
     var newMedia: [MediaItem] = []
     @State private var currentMediaIndex = 0
-
-    // Combine and filter media items to ensure only valid public URLs are used
+    
+    // Dictionary of preloaded AVPlayers
+    @State private var videoPlayers: [URL: AVPlayer] = [:]
+    
+    // Combine the user's media with any newMedia, filtering for valid URLs
     private var allMediaItems: [MediaItem] {
         let mediaItems = (user.mediaItems ?? []) + newMedia
-        return mediaItems.filter { $0.url.isPublicURL } // Custom extension to validate URLs
+        return mediaItems.filter { $0.url.isPublicURL }
     }
 
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
+                // A paged TabView for swiping media
                 TabView(selection: $currentMediaIndex) {
                     ForEach(allMediaItems.indices, id: \.self) { index in
                         let mediaItem = allMediaItems[index]
                         ZStack {
                             if mediaItem.type == .video {
-                                VideoPlayerView(url: mediaItem.url)
+                                // 1) If we already have a preloaded AVPlayer:
+                                if let existingPlayer = videoPlayers[mediaItem.url] {
+                                    PreloadedVideoPlayerView(
+                                        player: existingPlayer,
+                                        url: mediaItem.url
+                                    )
                                     .cornerRadius(20)
                                     .padding(.horizontal, 10)
                                     .tag(index)
+                                } else {
+                                    // 2) Else show placeholder while the AVPlayer loads
+                                    Text("Loading video...")
+                                        .foregroundColor(.white)
+                                        .frame(
+                                            width: UIScreen.main.bounds.width * 0.9,
+                                            height: UIScreen.main.bounds.height * 0.5
+                                        )
+                                        .background(Color.black)
+                                        .cornerRadius(20)
+                                        .tag(index)
+                                }
                             } else {
                                 KFImage(mediaItem.url)
                                     .resizable()
@@ -1630,9 +1721,13 @@ struct UserCardView: View {
                         }
                     }
                 }
-                .tabViewStyle(PageTabViewStyle())
+                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .automatic))
+                // Disable default TabView animations for smoother swiping
+                .animation(.none, value: currentMediaIndex)
                 .frame(height: UIScreen.main.bounds.height * 0.5)
             }
+            
+            // Example user info area below the TabView
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Username: \(user.name)")
@@ -1654,17 +1749,143 @@ struct UserCardView: View {
                 .fill(Color.white.opacity(0.6))
         )
         .padding()
+        .onAppear {
+            preloadAllVideos()
+        }
+    }
+
+    // MARK: - Video Preloading
+    
+    /// Preload each video in 'allMediaItems' by asynchronously creating an AVPlayer
+    private func preloadAllVideos() {
+            for media in allMediaItems where media.type == .video {
+                // If we don’t already have a player cached:
+                if videoPlayers[media.url] == nil {
+                    Task {
+                        // Create the AVPlayer asynchronously
+                        if let player = await createPreloadedPlayer(for: media.url) {
+                            // Store it so that we never have to re-create it again
+                            DispatchQueue.main.async {
+                                videoPlayers[media.url] = player
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        /// Asynchronously load the required asset keys, create an AVPlayer
+        private func createPreloadedPlayer(for url: URL) async -> AVPlayer? {
+            let asset = AVAsset(url: url)
+            let requiredKeys = ["playable", "hasProtectedContent"]
+            
+            do {
+                // This new concurrency API loads the keys asynchronously
+                try await asset.loadValues(forKeys: requiredKeys)
+                
+                let item = AVPlayerItem(asset: asset)
+                let player = AVPlayer(playerItem: item)
+                
+                // We do not call player.play() here, we let the page’s onAppear do that
+                return player
+            } catch {
+                print("ERROR: Could not preload video for URL \(url): \(error.localizedDescription)")
+                return nil
+            }
+        }
+    }
+
+    // MARK: - PreloadedVideoPage
+    /// A single “page” in the TabView that uses a preloaded AVPlayer and auto-plays the video.
+    struct PreloadedVideoPage: View {
+        @StateObject private var viewModel = VideoPageViewModel()
+        
+        let player: AVPlayer
+        let url: URL
+        
+        var body: some View {
+            GeometryReader { geo in
+                VideoPlayer(player: player)
+                    .scaleEffect(viewModel.calculateScale(geometry: geo, isHorizontal: viewModel.isHorizontalVideo))
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+                    .cornerRadius(20)
+                    .padding(.horizontal, 10)
+                    .onAppear {
+                        // Once we appear, check orientation, play video
+                        viewModel.checkVideoOrientation(url)
+                        player.seek(to: .zero)
+                        player.play()
+                        viewModel.addReplayObserver(player: player)
+                    }
+                    .onDisappear {
+                        // Avoid playing multiple videos off-screen
+                        player.pause()
+                        // Optionally reset to the start
+                        player.seek(to: .zero)
+                    }
+                    .onTapGesture {
+                        // If horizontal => open fullscreen
+                        if viewModel.isHorizontalVideo {
+                            viewModel.showFullScreenPlayer = true
+                        } else {
+                            // If vertical => toggle play/pause
+                            if player.timeControlStatus == .playing {
+                                player.pause()
+                            } else {
+                                player.play()
+                            }
+                        }
+                    }
+                    .fullScreenCover(isPresented: $viewModel.showFullScreenPlayer) {
+                        FullScreenVideoPlayer(url: url, isHorizontalVideo: viewModel.isHorizontalVideo)
+                    }
+            }
+        }
+    }
+
+
+/// A view model for each video “page” to handle orientation logic and replay observer.
+final class VideoPageViewModel: ObservableObject {
+    @Published var isHorizontalVideo: Bool = false
+    @Published var showFullScreenPlayer: Bool = false
+    
+    func checkVideoOrientation(_ url: URL) {
+        let asset = AVAsset(url: url)
+        guard let track = asset.tracks(withMediaType: .video).first else { return }
+        let dims = track.naturalSize.applying(track.preferredTransform)
+        isHorizontalVideo = abs(dims.width) > abs(dims.height)
     }
     
+    func addReplayObserver(player: AVPlayer) {
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { _ in
+            player.seek(to: .zero)
+            player.play()
+        }
+    }
     
+    /// For a slight “zoom in” effect, similar to Instagram
+    func calculateScale(geometry: GeometryProxy, isHorizontal: Bool) -> CGFloat {
+        let videoAspectRatio = isHorizontal ? 16.0 / 9.0 : 9.0 / 16.0
+        let viewAspectRatio = geometry.size.width / geometry.size.height
+        let baseScale = max(viewAspectRatio / videoAspectRatio, 1.0)
+        return baseScale * 1.15
+    }
 }
 
-// Custom Extension to Validate URLs
+
+// Just keep your `URL.isPublicURL` check:
 extension URL {
     var isPublicURL: Bool {
-        return absoluteString.hasPrefix("https://")
+        absoluteString.hasPrefix("https://")
     }
 }
+
+
 
 
 import SwiftUI
@@ -1773,5 +1994,7 @@ struct VideoPlayerView: View {
             }
         }
     }
+    
+
 
 }

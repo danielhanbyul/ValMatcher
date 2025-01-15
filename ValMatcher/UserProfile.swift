@@ -21,7 +21,7 @@ struct UserProfile: Identifiable, Codable, Equatable {
     var mediaItems: [MediaItem]?
     var createdAt: Timestamp?
     var hasSeenTutorial: Bool // New property to track tutorial status
-    var profileUpdated: Bool // New property to track profile updates
+    var profileUpdated: Bool? // New property to track profile updates
 
     // Updated initializer with `profileUpdated` as an optional parameter
     init(id: String? = nil, name: String, rank: String, imageName: String, age: String, server: String, answers: [String: String], hasAnsweredQuestions: Bool, mediaItems: [MediaItem]? = nil, createdAt: Timestamp? = nil, hasSeenTutorial: Bool = false, profileUpdated: Bool = false) {

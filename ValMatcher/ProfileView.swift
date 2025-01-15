@@ -11,6 +11,8 @@ import FirebaseStorage
 import AVKit
 import PhotosUI
 import Kingfisher
+import FirebaseFirestoreSwift
+
 
 // Identifiable wrapper for URL
 struct IdentifiableURL: Identifiable {
@@ -1022,6 +1024,70 @@ struct ProfileView: View {
             }
         }
     }
+    
+    // In ProfileView (or a dedicated ViewModel), add a listener to "profileUpdated"
+    private func listenForProfileUpdates() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(currentUserID)
+        
+        userRef.addSnapshotListener { snapshot, error in
+            if let error = error {
+                print("DEBUG: Error listening for profile updates: \(error.localizedDescription)")
+                return
+            }
+            guard let data = snapshot?.data() else {
+                print("DEBUG: No data found in snapshot for user doc.")
+                return
+            }
+            
+            // Check profileUpdated
+            if let profileUpdated = data["profileUpdated"] as? Bool, profileUpdated == true {
+                print("DEBUG: profileUpdated is true. Fetching updated profile data...")
+
+                // 1. Fetch the updated profile
+                self.fetchUpdatedProfile(userID: currentUserID) { updatedProfile in
+                    // 2. Update the UI with the new data
+                    DispatchQueue.main.async {
+                        self.viewModel.user = updatedProfile
+                    }
+
+                    // 3. Reset the flag to false
+                    userRef.updateData(["profileUpdated": false]) { err in
+                        if let err = err {
+                            print("DEBUG: Error resetting profileUpdated: \(err.localizedDescription)")
+                        } else {
+                            print("DEBUG: profileUpdated was reset to false.")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func fetchUpdatedProfile(userID: String, completion: @escaping (UserProfile) -> Void) {
+        let db = Firestore.firestore()
+        db.collection("users").document(userID).getDocument { snapshot, error in
+            if let error = error {
+                print("DEBUG: Error fetching updated profile: \(error.localizedDescription)")
+                return
+            }
+            do {
+                if let user = try snapshot?.data(as: UserProfile.self) {
+                    print("DEBUG: Successfully fetched updated user: \(user.id ?? "(no ID)"), \(user.name ?? "(no name)")")
+                    completion(user)
+                } else {
+                    print("DEBUG: User profile document is empty or does not exist.")
+                }
+            } catch {
+                print("DEBUG: Error decoding updated user: \(error.localizedDescription)")
+            }
+        }
+    }
+
+
+    
+    
 
 
 }
@@ -1225,3 +1291,4 @@ struct ParentView: View {
         }
     }
 }
+

@@ -101,6 +101,7 @@ class MediaUploader {
 
 // Define the questions globally
 let profileQuestions: [String] = [
+    "how old are you?",
     "Who's your favorite agent to play in Valorant?",
     "Do you prefer playing as a Duelist, Initiator, Controller, or Sentinel?",
     "What’s your current rank in Valorant?",

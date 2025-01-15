@@ -254,4 +254,96 @@ class FirestoreManager: ObservableObject {
                 print("Loaded chats for user2: \(moreChats)")
             }
     }
+    
+    func listenForUserUpdates() {
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("DEBUG: Current user not authenticated.")
+            return
+        }
+        
+        db.collection("users").addSnapshotListener { [weak self] snapshot, error in
+            guard let self = self else { return }
+            if let error = error {
+                print("DEBUG: Error listening for user updates: \(error.localizedDescription)")
+                return
+            }
+
+            snapshot?.documentChanges.forEach { change in
+                let document = change.document
+                let userID = document.documentID
+                
+                switch change.type {
+                case .added:
+                    do {
+                        let newUser = try document.data(as: UserProfile.self)
+                        self.users.append(newUser)
+                        print("DEBUG: User added: \(newUser)")
+                    } catch {
+                        print("DEBUG: Error decoding new user: \(error)")
+                    }
+                    
+                case .modified:
+                    if let index = self.users.firstIndex(where: { $0.id == userID }) {
+                        do {
+                            let updatedUser = try document.data(as: UserProfile.self)
+                            
+                            // Check if `profileUpdated` is true
+                            if let profileUpdated = updatedUser.profileUpdated, profileUpdated {
+                                print("DEBUG: User \(userID) has profileUpdated == true, fetching fresh data.")
+                                self.fetchSingleUser(userID) { freshUser in
+                                    if let freshUser = freshUser {
+                                        self.users[index] = freshUser
+                                        
+                                        // Optionally reset `profileUpdated` in Firestore
+                                        self.db.collection("users").document(userID).updateData(["profileUpdated": false]) { error in
+                                            if let error = error {
+                                                print("DEBUG: Error resetting profileUpdated: \(error.localizedDescription)")
+                                            } else {
+                                                print("DEBUG: profileUpdated reset for user \(userID)")
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                self.users[index] = updatedUser
+                            }
+                        } catch {
+                            print("DEBUG: Error decoding modified user: \(error)")
+                        }
+                    }
+
+                case .removed:
+                    self.users.removeAll { $0.id == userID }
+                    print("DEBUG: User removed: \(userID)")
+                }
+            }
+        }
+    }
+    
+    func fetchSingleUser(_ userID: String, completion: @escaping (UserProfile?) -> Void) {
+        db.collection("users").document(userID).getDocument { snapshot, error in
+            if let error = error {
+                print("DEBUG: Error fetching user \(userID): \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+            
+            guard let document = snapshot, document.exists else {
+                print("DEBUG: User document \(userID) does not exist.")
+                completion(nil)
+                return
+            }
+            
+            do {
+                let user = try document.data(as: UserProfile.self)
+                print("DEBUG: Fetched single user: \(String(describing: user))")
+                completion(user)
+            } catch {
+                print("DEBUG: Error decoding user: \(error.localizedDescription)")
+                completion(nil)
+            }
+        }
+    }
+
+
 }

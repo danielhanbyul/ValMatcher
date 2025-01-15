@@ -189,6 +189,7 @@ class UserProfileViewModel: ObservableObject {
             }
         }
     }
+    
 
 
     deinit {
