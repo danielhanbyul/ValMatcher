@@ -8,66 +8,128 @@
 import SwiftUI
 import AVKit
 
-/// A View that shows a preloaded AVPlayer and toggles fullscreen for horizontal videos.
 struct PreloadedVideoPlayerView: View {
-    /// The preloaded, ready-to-play AVPlayer
-    let player: AVPlayer
-    
-    /// The original video URL, used for orientation checks
+    @State private var player: AVPlayer?
     let url: URL
     
     @State private var isHorizontalVideo = false
+    @State private var isVideoReady = false
     @State private var showFullScreenPlayer = false
+    
+    /// Whether we *want* to play the video right now
+    /// This is controlled externally by the parent view
+    let shouldPlay: Bool
     
     var body: some View {
         ZStack {
             GeometryReader { geometry in
-                VideoPlayer(player: player)
-                    .scaleEffect(calculateScale(geometry: geometry))
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .clipped()
-                    .onAppear {
-                        checkVideoOrientation()
-                        addReplayObserver()
-                        player.seek(to: .zero)
-                    }
-                    .onDisappear {
-                        // Pause the video when it goes offscreen
-                        player.pause()
-                        player.seek(to: .zero)
-                    }
-                    .onTapGesture {
-                        if isHorizontalVideo {
-                            // Pause inline playback when going fullscreen
-                            player.pause()
-                            showFullScreenPlayer = true
-                        } else {
-                            // Toggle play/pause for vertical videos
-                            if player.timeControlStatus == .playing {
-                                player.pause()
-                            } else {
-                                player.play()
+                Group {
+                    if let player = player, isVideoReady {
+                        VideoPlayer(player: player)
+                            .scaleEffect(calculateScale(geometry: geometry))
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .clipped()
+                            .onAppear {
+                                // If the parent says “play now”, do so
+                                if shouldPlay {
+                                    startVideoPlayback()
+                                }
                             }
-                        }
+                            .onChange(of: shouldPlay) { newValue in
+                                if newValue {
+                                    startVideoPlayback()
+                                } else {
+                                    stopVideoPlayback()
+                                }
+                            }
+                            .onDisappear {
+                                stopVideoPlayback()
+                            }
+                            .onTapGesture {
+                                handleTapGesture()
+                            }
+                    } else {
+                        // Placeholder while loading
+                        Color.black
+                            .overlay(
+                                ProgressView("Loading...")
+                                    .foregroundColor(.white)
+                            )
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .cornerRadius(20)
+                            .onAppear {
+                                preloadVideo()
+                            }
                     }
+                }
             }
         }
-        // Fullscreen cover for horizontal videos
         .fullScreenCover(isPresented: $showFullScreenPlayer) {
-            FullScreenVideoPlayer(url: url, isHorizontalVideo: isHorizontalVideo)
+            if let player = player {
+                FullScreenVideoPlayer(url: url, isHorizontalVideo: isHorizontalVideo)
+            }
         }
     }
     
-    // MARK: - Orientation, Replay, Scaling
+    // MARK: - Preload
+    
+    private func preloadVideo() {
+        // Preload the video asynchronously
+        Task {
+            let asset = AVAsset(url: url)
+            let requiredKeys = ["playable"]
+            
+            do {
+                try await asset.loadValues(forKeys: requiredKeys)
+                DispatchQueue.main.async {
+                    self.player = AVPlayer(playerItem: AVPlayerItem(asset: asset))
+                    self.isVideoReady = true
+                    checkVideoOrientation()
+                }
+            } catch {
+                print("Error preloading video for URL \(url): \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    // MARK: - Playback Control
+    
+    private func startVideoPlayback() {
+        guard let player = player else { return }
+        player.seek(to: .zero)
+        player.play()
+        addReplayObserver(to: player)
+    }
+    
+    private func stopVideoPlayback() {
+        guard let player = player else { return }
+        player.pause()
+        player.seek(to: .zero)
+    }
+    
+    private func handleTapGesture() {
+        guard let player = player else { return }
+        if isHorizontalVideo {
+            player.pause()
+            showFullScreenPlayer = true
+        } else {
+            if player.timeControlStatus == .playing {
+                player.pause()
+            } else {
+                player.play()
+            }
+        }
+    }
+    
+    // MARK: - Orientation & Replay
     
     private func checkVideoOrientation() {
-        let asset = AVAsset(url: url)
-        guard let track = asset.tracks(withMediaType: .video).first else { return }
+        guard let track = AVAsset(url: url).tracks(withMediaType: .video).first else { return }
         let dimensions = track.naturalSize.applying(track.preferredTransform)
         isHorizontalVideo = abs(dimensions.width) > abs(dimensions.height)
     }
     
-    private func addReplayObserver() {
+    private func addReplayObserver(to player: AVPlayer) {
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
@@ -82,6 +144,6 @@ struct PreloadedVideoPlayerView: View {
         let videoAspectRatio = isHorizontalVideo ? 16.0 / 9.0 : 9.0 / 16.0
         let viewAspectRatio = geometry.size.width / geometry.size.height
         let baseScale = max(viewAspectRatio / videoAspectRatio, 1.0)
-        return baseScale * 1.15 // Slight zoom effect
+        return baseScale * 1.15
     }
 }

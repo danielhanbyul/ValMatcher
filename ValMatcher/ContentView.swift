@@ -1676,17 +1676,16 @@ import SwiftUI
 import Kingfisher
 import AVKit
 
-// MARK: - UserCardView
 struct UserCardView: View {
     var user: UserProfile
     var newMedia: [MediaItem] = []
     
     @State private var currentMediaIndex = 0
     
-    // Dictionary of preloaded AVPlayers: [videoURL: AVPlayer]
+    /// Cache of preloaded players: [URL: AVPlayer]
     @State private var videoPlayers: [URL: AVPlayer] = [:]
     
-    // Combine the user's media with any newMedia, filtering for valid URLs
+    /// Combine the user’s media with any newMedia
     private var allMediaItems: [MediaItem] {
         let mediaItems = (user.mediaItems ?? []) + newMedia
         return mediaItems.filter { $0.url.isPublicURL }
@@ -1695,23 +1694,25 @@ struct UserCardView: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                // A paged TabView for swiping media
                 TabView(selection: $currentMediaIndex) {
                     ForEach(allMediaItems.indices, id: \.self) { index in
                         let mediaItem = allMediaItems[index]
+                        
                         ZStack {
                             if mediaItem.type == .video {
                                 if let existingPlayer = videoPlayers[mediaItem.url] {
-                                    // Use a specialized view that DOES NOT auto-play on appear
+                                    /// Only the current index's video gets "shouldPlay = true"
                                     PreloadedVideoPlayerView(
-                                        player: existingPlayer,
-                                        url: mediaItem.url
+                                        url: mediaItem.url,
+                                        shouldPlay: (index == currentMediaIndex)
+                                        // We pass in the same player if we want to be extra certain,
+                                        // but we'll rely on the internal preload logic.
+                                        // (We can remove `player:` from the subview if we want.)
                                     )
+                                    .tag(index)
                                     .cornerRadius(20)
                                     .padding(.horizontal, 10)
-                                    .tag(index)
                                 } else {
-                                    // Show a simple loading placeholder if the AVPlayer is still loading
                                     Text("Loading video...")
                                         .foregroundColor(.white)
                                         .frame(
@@ -1723,7 +1724,7 @@ struct UserCardView: View {
                                         .tag(index)
                                 }
                             } else {
-                                // Image media
+                                /// Image
                                 KFImage(mediaItem.url)
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
@@ -1739,27 +1740,11 @@ struct UserCardView: View {
                     }
                 }
                 .tabViewStyle(PageTabViewStyle(indexDisplayMode: .automatic))
-                // Disable default TabView animations for smoother swiping
                 .animation(.none, value: currentMediaIndex)
                 .frame(height: UIScreen.main.bounds.height * 0.5)
-                
-                // --- NEW: Only the current index video gets played; others are paused ---
-                .onChange(of: currentMediaIndex) { newIndex in
-                    // Pause all videos
-                    for (_, player) in videoPlayers {
-                        player.pause()
-                        player.seek(to: .zero) // Optionally reset them
-                    }
-                    // If the newly selected media is a video, play it
-                    let mediaItem = allMediaItems[newIndex]
-                    if mediaItem.type == .video,
-                       let thisPlayer = videoPlayers[mediaItem.url] {
-                        thisPlayer.play()
-                    }
-                }
             }
             
-            // Example user info area below
+            // Some user info below
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Username: \(user.name)")
@@ -1782,47 +1767,63 @@ struct UserCardView: View {
         )
         .padding()
         .onAppear {
+            /// Preload videos so they’re ready to go when the user swipes
             preloadAllVideos()
+        }
+        .onChange(of: currentMediaIndex) { newIndex in
+            /// No direct pause logic needed here, because each
+            /// PreloadedVideoPlayerView is controlling its own
+            /// playback based on “shouldPlay”.
+            /// The old page sees “shouldPlay=false” automatically.
         }
     }
     
     // MARK: - Video Preloading
         
-        /// Preload each video in 'allMediaItems' by asynchronously creating an AVPlayer
-        private func preloadAllVideos() {
+    /// Preload each video in 'allMediaItems' by asynchronously creating an AVPlayer
+    private func preloadAllVideos() {
             for media in allMediaItems where media.type == .video {
-                // If we don’t already have a player cached:
-                if videoPlayers[media.url] == nil {
-                    Task {
-                        if let player = await createPreloadedPlayer(for: media.url) {
-                            // Store it so that we never have to re-create it again
-                            DispatchQueue.main.async {
-                                videoPlayers[media.url] = player
-                            }
+                guard videoPlayers[media.url] == nil else { continue }
+                
+                Task {
+                    let asset = AVAsset(url: media.url)
+                    do {
+                        let requiredKeys = ["playable"]
+                        try await asset.loadValues(forKeys: requiredKeys)
+                        
+                        let avItem = AVPlayerItem(asset: asset)
+                        let player = AVPlayer(playerItem: avItem)
+                        
+                        /// Store it in the dictionary
+                        DispatchQueue.main.async {
+                            videoPlayers[media.url] = player
                         }
+                    } catch {
+                        print("ERROR: Preload failed for \(media.url): \(error.localizedDescription)")
                     }
                 }
             }
         }
-        
+    
     /// Asynchronously load the required asset keys, create an AVPlayer
-        private func createPreloadedPlayer(for url: URL) async -> AVPlayer? {
-            let asset = AVAsset(url: url)
-            let requiredKeys = ["playable", "hasProtectedContent"]
-            
-            do {
-                // Load the keys asynchronously
-                try await asset.loadValues(forKeys: requiredKeys)
-                let item = AVPlayerItem(asset: asset)
-                let player = AVPlayer(playerItem: item)
-                // NOTE: We do NOT call player.play() here. We'll only play once at the correct index
-                return player
-            } catch {
-                print("ERROR: Could not preload video for URL \(url): \(error.localizedDescription)")
-                return nil
-            }
+    private func createPreloadedPlayer(for url: URL) async -> AVPlayer? {
+        let asset = AVAsset(url: url)
+        let requiredKeys = ["playable", "hasProtectedContent"]
+        
+        do {
+            // Load the keys asynchronously
+            try await asset.loadValues(forKeys: requiredKeys)
+            let item = AVPlayerItem(asset: asset)
+            let player = AVPlayer(playerItem: item)
+            // NOTE: We do NOT call player.play() here. We'll only play once at the correct index
+            return player
+        } catch {
+            print("ERROR: Could not preload video for URL \(url): \(error.localizedDescription)")
+            return nil
         }
     }
+}
+
 
     // MARK: - PreloadedVideoPage
     /// A single “page” in the TabView that uses a preloaded AVPlayer and auto-plays the video.
