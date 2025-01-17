@@ -23,6 +23,7 @@ struct IdentifiableURL: Identifiable {
 struct ProfileView: View {
     @ObservedObject var viewModel: UserProfileViewModel
     @Binding var isSignedIn: Bool
+    var fetchAllUsers: (() -> Void)?
     @Environment(\.presentationMode) var presentationMode
     @State private var isEditing = false
     @State private var showingImagePicker = false
@@ -42,6 +43,7 @@ struct ProfileView: View {
     // Updated to use IdentifiableURL for full-screen video
     @State private var selectedVideoURL: IdentifiableURL?
     @State private var thumbnailCache: [URL: UIImage] = [:]
+    
 
 
     let maxMediaCount = 6 // Limit to 3 media items
@@ -199,10 +201,10 @@ struct ProfileView: View {
         .disabled(newMedia.count + confirmedMediaCount >= maxMediaCount)
     }
 
-    // Add Confirm button to trigger upload
     private var confirmUploadButton: some View {
         Button(action: {
-            saveMedia() // Trigger upload
+            saveMedia() // Trigger media upload
+            
         }) {
             Text("Confirm Upload")
                 .foregroundColor(.white)
@@ -267,7 +269,8 @@ struct ProfileView: View {
 
     private var saveButton: some View {
         Button(action: {
-            saveProfile()
+            saveProfile() // Trigger profile save
+            
         }) {
             Text("Save")
                 .foregroundColor(.white)
@@ -1092,21 +1095,22 @@ struct ProfileView: View {
 
 }
 
-import SwiftUI
-import AVKit
-
+// MARK: - FullScreenVideoPlayer
+/// For horizontal videos, we want to pause the inline video
+/// before going fullscreen, so the user doesn't hear both.
 struct FullScreenVideoPlayer: View {
     let url: URL
     let isHorizontalVideo: Bool
+    
     @Environment(\.presentationMode) var presentationMode
     @State private var player: AVPlayer?
     @State private var isRotated = false
     @State private var isLoading = true
-
+    
     var body: some View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
-
+            
             if isLoading {
                 ProgressView("Loading video...")
                     .foregroundColor(.white)
@@ -1121,7 +1125,7 @@ struct FullScreenVideoPlayer: View {
                             width: isRotated ? geometry.size.height : geometry.size.width,
                             height: isRotated ? geometry.size.width : geometry.size.height
                         )
-                        .position(x: geometry.size.width / 2, y: geometry.size.height / 2) // Center the video
+                        .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
                         .clipped()
                         .onAppear {
                             player.play()
@@ -1135,7 +1139,8 @@ struct FullScreenVideoPlayer: View {
                 Text("Unable to load video")
                     .foregroundColor(.red)
             }
-
+            
+            // A small close button + optional rotate button for horizontal
             VStack {
                 HStack {
                     Button(action: {
@@ -1148,9 +1153,9 @@ struct FullScreenVideoPlayer: View {
                             .clipShape(Circle())
                     }
                     .padding()
-
+                    
                     Spacer()
-
+                    
                     if isHorizontalVideo {
                         Button(action: {
                             withAnimation {
@@ -1170,27 +1175,30 @@ struct FullScreenVideoPlayer: View {
             }
         }
     }
-
+    
     private func loadVideo() {
+        // We can pause the inline player
+        // (In practice, you'd pass a closure from the parent to do this.)
+
         DispatchQueue.global(qos: .userInitiated).async {
             let asset = AVAsset(url: url)
             let playerItem = AVPlayerItem(asset: asset)
-
             DispatchQueue.main.async {
                 self.player = AVPlayer(playerItem: playerItem)
                 self.isLoading = false
             }
         }
     }
-
+    
     private func addReplayObserver() {
+        guard let player = self.player else { return }
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
-            object: player?.currentItem,
+            object: player.currentItem,
             queue: .main
         ) { _ in
-            player?.seek(to: .zero)
-            player?.play()
+            player.seek(to: .zero)
+            player.play()
         }
     }
 }

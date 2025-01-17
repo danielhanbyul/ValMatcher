@@ -20,10 +20,9 @@ struct UserProfile: Identifiable, Codable, Equatable {
     var hasAnsweredQuestions: Bool
     var mediaItems: [MediaItem]?
     var createdAt: Timestamp?
-    var hasSeenTutorial: Bool // New property to track tutorial status
-    var profileUpdated: Bool? // New property to track profile updates
+    var hasSeenTutorial: Bool
+    var profileUpdated: Bool?
 
-    // Updated initializer with `profileUpdated` as an optional parameter
     init(id: String? = nil, name: String, rank: String, imageName: String, age: String, server: String, answers: [String: String], hasAnsweredQuestions: Bool, mediaItems: [MediaItem]? = nil, createdAt: Timestamp? = nil, hasSeenTutorial: Bool = false, profileUpdated: Bool = false) {
         self.id = id
         self.name = name
@@ -37,5 +36,21 @@ struct UserProfile: Identifiable, Codable, Equatable {
         self.createdAt = createdAt ?? Timestamp() // Set createdAt to current timestamp if nil
         self.hasSeenTutorial = hasSeenTutorial // Default to `false` if not provided
         self.profileUpdated = profileUpdated // Default to `false` if not provided
+    }
+}
+
+extension UserProfile {
+    mutating func merge(with updatedUser: UserProfile) {
+        self.name = updatedUser.name.isEmpty ? self.name : updatedUser.name
+        self.rank = updatedUser.rank ?? self.rank
+        self.imageName = updatedUser.imageName ?? self.imageName
+        self.age = updatedUser.age.isEmpty ? self.age : updatedUser.age
+        self.server = updatedUser.server ?? self.server
+        self.answers = updatedUser.answers.isEmpty ? self.answers : updatedUser.answers
+        self.hasAnsweredQuestions = updatedUser.hasAnsweredQuestions
+        self.mediaItems = updatedUser.mediaItems ?? self.mediaItems
+        self.hasSeenTutorial = updatedUser.hasSeenTutorial
+        self.profileUpdated = updatedUser.profileUpdated ?? self.profileUpdated
+        self.createdAt = updatedUser.createdAt ?? self.createdAt
     }
 }

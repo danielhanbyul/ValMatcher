@@ -11,6 +11,7 @@ import FirebaseFirestore
 
 class UserFeedViewModel: ObservableObject {
     @Published var users: [UserProfile] = []
+    @Published var currentIndex: Int = 0
     private var listener: ListenerRegistration?
     
     /// Keep track so we only load once
@@ -54,6 +55,7 @@ class UserFeedViewModel: ObservableObject {
         
         listener = db.collection("users")
             .order(by: "createdAt", descending: false)
+//            .whereField("hasAnsweredQuestions", isEqualTo: true)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("Error listening for users: \(error.localizedDescription)")
@@ -73,8 +75,8 @@ class UserFeedViewModel: ObservableObject {
                     if self.interactedUsers.contains(userID) { continue }
 
                     // Include profileUpdated users but reset profileUpdated
-                    if user.profileUpdated == true {
-                        print("DEBUG: User \(userID) updated profile but included.")
+                    if let profileUpdated = user.profileUpdated, profileUpdated == true {
+                        print("DEBUG: Including user \(userID) with updated profile.")
                         self.resetProfileUpdatedFlag(for: userID)
                     }
 
@@ -84,8 +86,11 @@ class UserFeedViewModel: ObservableObject {
                             self.insertUserInCreationOrder(user)
                         }
                     case .modified:
+                        // Merge updates into the existing profile
                         if let index = self.users.firstIndex(where: { $0.id == userID }) {
-                            self.users[index] = user
+                            var existingUser = self.users[index]
+                            existingUser.merge(with: user)
+                            self.users[index] = existingUser
                             print("DEBUG: Updated user \(userID) in list.")
                         }
                     case .removed:
@@ -98,19 +103,19 @@ class UserFeedViewModel: ObservableObject {
             }
     }
 
-    // Helper to reset profileUpdated to false
+
+
     private func resetProfileUpdatedFlag(for userID: String) {
         let db = Firestore.firestore()
-        db.collection("users").document(userID).updateData([
-            "profileUpdated": false
-        ]) { error in
+        db.collection("users").document(userID).updateData(["profileUpdated": false]) { error in
             if let error = error {
-                print("Error resetting profileUpdated: \(error.localizedDescription)")
+                print("Error resetting profileUpdated flag: \(error.localizedDescription)")
             } else {
-                print("DEBUG: profileUpdated reset for user \(userID).")
+                print("DEBUG: Reset profileUpdated flag for user \(userID).")
             }
         }
     }
+
 
 
     private func insertUserInCreationOrder(_ newUser: UserProfile) {

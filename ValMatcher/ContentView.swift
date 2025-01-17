@@ -69,6 +69,7 @@ struct ContentView: View {
     @State private var isDataLoaded = false
     @State private var userListener: ListenerRegistration?
     @State private var selectedVideoURL: IdentifiableURL?
+    
 
 
     enum InteractionResult {
@@ -269,41 +270,49 @@ struct ContentView: View {
                 var removedUserIDs = [String]()
 
                 snapshot.documentChanges.forEach { change in
-                    guard let newUser = try? change.document.data(as: UserProfile.self),
-                          let newUserID = newUser.id else {
+                    guard let updatedUser = try? change.document.data(as: UserProfile.self),
+                          let updatedUserID = updatedUser.id else {
                         print("DEBUG: Failed to parse user doc \(change.document.documentID).")
                         return
                     }
 
                     // Skip if this doc belongs to me (on my device)
-                    if newUserID == currentUserID {
-                        print("DEBUG: Skipping my own doc: \(newUserID)")
+                    if updatedUserID == currentUserID {
+                        print("DEBUG: Skipping my own doc: \(updatedUserID)")
                         return
                     }
 
                     switch change.type {
                     case .added:
-                        if !self.interactedUsers.contains(newUserID) {
-                            print("DEBUG: [Feed] Adding user \(newUserID).")
-                            addedUsers.append(newUser)
+                        if !self.interactedUsers.contains(updatedUserID) {
+                            print("DEBUG: [Feed] Adding user \(updatedUserID).")
+                            addedUsers.append(updatedUser)
                         }
                     case .modified:
-                        if let index = self.users.firstIndex(where: { $0.id == newUserID }) {
-                            print("DEBUG: [Feed] Updating user \(newUserID) in place.")
-                            self.users[index] = newUser
-                        } else if !self.interactedUsers.contains(newUserID) {
-                            print("DEBUG: [Feed] Re-adding user \(newUserID).")
-                            addedUsers.append(newUser)
+                        // If this user is currently being viewed, skip updates
+                        if currentIndex < users.count,
+                           users[currentIndex].id == updatedUserID {
+                            print("DEBUG: Ignoring modifications for user currently on screen.")
+                            return
                         }
+
+                        // Update the user in the list or re-add them if necessary
+                        if let index = self.users.firstIndex(where: { $0.id == updatedUserID }) {
+                            self.users[index] = updatedUser
+                        } else if !self.interactedUsers.contains(updatedUserID) {
+                            print("DEBUG: Re-adding updated user \(updatedUserID).")
+                            self.users.append(updatedUser)
+                        }
+
                     case .removed:
-                        print("DEBUG: [Feed] Removing user \(newUserID).")
-                        removedUserIDs.append(newUserID)
+                        print("DEBUG: [Feed] Removing user \(updatedUserID).")
+                        removedUserIDs.append(updatedUserID)
                     default:
                         break
                     }
                 }
 
-                // Append or remove
+                // Append or remove users as necessary
                 if !addedUsers.isEmpty {
                     self.users.append(contentsOf: addedUsers)
                 }
@@ -311,7 +320,7 @@ struct ContentView: View {
                     self.users.removeAll { removedUserIDs.contains($0.id ?? "") }
                 }
 
-                // Sort
+                // Sort users
                 self.users.sort(by: {
                     ($0.createdAt?.dateValue() ?? Date()) < ($1.createdAt?.dateValue() ?? Date())
                 })
@@ -319,6 +328,9 @@ struct ContentView: View {
                 print("DEBUG: [Feed] Final user list count: \(self.users.count).")
             }
     }
+
+    
+    
 
 
 
@@ -762,13 +774,11 @@ struct ContentView: View {
     }
 
 
-    func fetchAllUsers(completion: @escaping () -> Void) {
+    func fetchAllUsers(includeCurrentUser: Bool = false, completion: @escaping () -> Void) {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
-            print("DEBUG: Current user is not authenticated.")
             completion()
             return
         }
-
         let db = Firestore.firestore()
         db.collection("users").getDocuments { snapshot, error in
             if let error = error {
@@ -790,39 +800,43 @@ struct ContentView: View {
                     var user = try doc.data(as: UserProfile.self)
                     guard let userID = user.id else { continue }
 
-                    // Skip me if it's my doc on my device's feed
-                    if userID == currentUserID {
-                        // e.g., skip adding me to my own feed
+                    // Optionally skip current user
+                    if userID == currentUserID && !includeCurrentUser {
                         continue
                     }
 
-                    // Also skip if I've already interacted (liked/swiped)
-                    if self.interactedUsers.contains(userID) {
-                        print("DEBUG: Skipping \(userID) because they're in interactedUsers.")
-                        continue
+                    // If the user was recently updated and meets feed criteria, re-add them
+                    if !self.interactedUsers.contains(userID) {
+                        fetched.append(user)
                     }
 
-                    // Else they're valid for the feed:
-                    // Optionally validate media items
-                    let mediaItems = user.mediaItems ?? []
-                    let validMedia = mediaItems.filter { $0.url.isPublicURL }
-                    user.mediaItems = validMedia
-
-                    // e.g. skipping if validMedia.isEmpty is optional
-                    // if validMedia.isEmpty { ... } else { ... }
-
-                    fetched.append(user)
-                    print("DEBUG: User added: \(userID)")
                 } catch {
-                    print("DEBUG: parse error for doc \(doc.documentID): \(error.localizedDescription)")
+                    print("DEBUG: parse error: \(error.localizedDescription)")
                 }
             }
 
-            self.users = fetched
-            print("DEBUG: Final user list count: \(self.users.count)")
+            // Now merge them instead of overwriting
+            for newUser in fetched {
+                if let index = self.users.firstIndex(where: { $0.id == newUser.id }) {
+                    self.users[index] = newUser
+                } else {
+                    self.users.append(newUser)
+                }
+            }
+
             completion()
         }
     }
+
+
+
+    func handleProfileUpdate() {
+        fetchAllUsers(includeCurrentUser: true) {
+            print("DEBUG: Refreshed user list, including current user after profile update.")
+            // Optionally trigger a UI update or reload ContentView here
+        }
+    }
+
 
     func deleteAccount() {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
@@ -1574,19 +1588,19 @@ struct ContentView: View {
     
 
     private func moveToNextUser() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.interactionResult = nil
-            self.currentIndex += 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.interactionResult = nil
+                self.currentIndex += 1
 
-            if self.currentIndex >= self.users.count {
-                self.currentIndex = 0
-                self.users.removeAll()
+                if self.currentIndex >= self.users.count {
+                    self.currentIndex = 0
+                    self.users.removeAll()
+                }
+
+                print("DEBUG: Current index moved to \(self.currentIndex). Total users remaining: \(self.users.count).")
+                UserDefaults.standard.set(self.currentIndex, forKey: "currentIndex")
             }
-
-            print("DEBUG: Current index moved to \(self.currentIndex). Total users remaining: \(self.users.count).")
-            UserDefaults.standard.set(self.currentIndex, forKey: "currentIndex")
         }
-    }
 
 
 
@@ -1662,12 +1676,14 @@ import SwiftUI
 import Kingfisher
 import AVKit
 
+// MARK: - UserCardView
 struct UserCardView: View {
     var user: UserProfile
     var newMedia: [MediaItem] = []
+    
     @State private var currentMediaIndex = 0
     
-    // Dictionary of preloaded AVPlayers
+    // Dictionary of preloaded AVPlayers: [videoURL: AVPlayer]
     @State private var videoPlayers: [URL: AVPlayer] = [:]
     
     // Combine the user's media with any newMedia, filtering for valid URLs
@@ -1675,7 +1691,7 @@ struct UserCardView: View {
         let mediaItems = (user.mediaItems ?? []) + newMedia
         return mediaItems.filter { $0.url.isPublicURL }
     }
-
+    
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
@@ -1685,8 +1701,8 @@ struct UserCardView: View {
                         let mediaItem = allMediaItems[index]
                         ZStack {
                             if mediaItem.type == .video {
-                                // 1) If we already have a preloaded AVPlayer:
                                 if let existingPlayer = videoPlayers[mediaItem.url] {
+                                    // Use a specialized view that DOES NOT auto-play on appear
                                     PreloadedVideoPlayerView(
                                         player: existingPlayer,
                                         url: mediaItem.url
@@ -1695,7 +1711,7 @@ struct UserCardView: View {
                                     .padding(.horizontal, 10)
                                     .tag(index)
                                 } else {
-                                    // 2) Else show placeholder while the AVPlayer loads
+                                    // Show a simple loading placeholder if the AVPlayer is still loading
                                     Text("Loading video...")
                                         .foregroundColor(.white)
                                         .frame(
@@ -1707,6 +1723,7 @@ struct UserCardView: View {
                                         .tag(index)
                                 }
                             } else {
+                                // Image media
                                 KFImage(mediaItem.url)
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
@@ -1725,9 +1742,24 @@ struct UserCardView: View {
                 // Disable default TabView animations for smoother swiping
                 .animation(.none, value: currentMediaIndex)
                 .frame(height: UIScreen.main.bounds.height * 0.5)
+                
+                // --- NEW: Only the current index video gets played; others are paused ---
+                .onChange(of: currentMediaIndex) { newIndex in
+                    // Pause all videos
+                    for (_, player) in videoPlayers {
+                        player.pause()
+                        player.seek(to: .zero) // Optionally reset them
+                    }
+                    // If the newly selected media is a video, play it
+                    let mediaItem = allMediaItems[newIndex]
+                    if mediaItem.type == .video,
+                       let thisPlayer = videoPlayers[mediaItem.url] {
+                        thisPlayer.play()
+                    }
+                }
             }
             
-            // Example user info area below the TabView
+            // Example user info area below
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Username: \(user.name)")
@@ -1753,16 +1785,15 @@ struct UserCardView: View {
             preloadAllVideos()
         }
     }
-
-    // MARK: - Video Preloading
     
-    /// Preload each video in 'allMediaItems' by asynchronously creating an AVPlayer
-    private func preloadAllVideos() {
+    // MARK: - Video Preloading
+        
+        /// Preload each video in 'allMediaItems' by asynchronously creating an AVPlayer
+        private func preloadAllVideos() {
             for media in allMediaItems where media.type == .video {
                 // If we don’t already have a player cached:
                 if videoPlayers[media.url] == nil {
                     Task {
-                        // Create the AVPlayer asynchronously
                         if let player = await createPreloadedPlayer(for: media.url) {
                             // Store it so that we never have to re-create it again
                             DispatchQueue.main.async {
@@ -1774,19 +1805,17 @@ struct UserCardView: View {
             }
         }
         
-        /// Asynchronously load the required asset keys, create an AVPlayer
+    /// Asynchronously load the required asset keys, create an AVPlayer
         private func createPreloadedPlayer(for url: URL) async -> AVPlayer? {
             let asset = AVAsset(url: url)
             let requiredKeys = ["playable", "hasProtectedContent"]
             
             do {
-                // This new concurrency API loads the keys asynchronously
+                // Load the keys asynchronously
                 try await asset.loadValues(forKeys: requiredKeys)
-                
                 let item = AVPlayerItem(asset: asset)
                 let player = AVPlayer(playerItem: item)
-                
-                // We do not call player.play() here, we let the page’s onAppear do that
+                // NOTE: We do NOT call player.play() here. We'll only play once at the correct index
                 return player
             } catch {
                 print("ERROR: Could not preload video for URL \(url): \(error.localizedDescription)")
