@@ -310,7 +310,7 @@ struct SignUpView: View {
             }
 
             let userData: [String: Any] = [
-                "id": uid,
+//                "id": uid,
                 "name": userName,
                 "email": email,
                 "rank": "Unranked",

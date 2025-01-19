@@ -13,6 +13,11 @@ struct MediaItem: Identifiable, Codable, Equatable {
     var id = UUID()
     var type: MediaType
     var url: URL
+    
+    // Exclude `id` from Firestore encoding/decoding
+    private enum CodingKeys: String, CodingKey {
+        case type, url
+    }
 }
 
 enum MediaType: String, Codable, Equatable {

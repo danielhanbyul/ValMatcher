@@ -254,80 +254,121 @@ struct ContentView: View {
     
 
     private func setUpUserFeedListener() {
-        guard let currentUserID = Auth.auth().currentUser?.uid else { return }
+        guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("DEBUG: setUpUserFeedListener - currentUserID is nil, aborting.")
+            return
+        }
+
         let db = Firestore.firestore()
+        print("DEBUG: setUpUserFeedListener - Adding snapshot listener on users collection...")
 
         userListener = db.collection("users")
             .order(by: "createdAt", descending: false)
             .addSnapshotListener { snapshot, error in
+
                 if let error = error {
-                    print("DEBUG: Error listening for user feed: \(error.localizedDescription).")
+                    print("DEBUG: setUpUserFeedListener - Error from Firestore: \(error.localizedDescription)")
                     return
                 }
-                guard let snapshot = snapshot else { return }
 
+                guard let snapshot = snapshot else {
+                    print("DEBUG: setUpUserFeedListener - No snapshot returned, aborting.")
+                    return
+                }
+
+                print("DEBUG: setUpUserFeedListener - Snapshot has \(snapshot.documents.count) total docs.")
                 var addedUsers = [UserProfile]()
                 var removedUserIDs = [String]()
 
                 snapshot.documentChanges.forEach { change in
-                    guard let updatedUser = try? change.document.data(as: UserProfile.self),
-                          let updatedUserID = updatedUser.id else {
-                        print("DEBUG: Failed to parse user doc \(change.document.documentID).")
-                        return
-                    }
+                    print("""
+                    ---------------------------
+                    DEBUG: Document change -> type: \(change.type), docID: \(change.document.documentID)
+                    data: \(change.document.data())
+                    ---------------------------
+                    """)
 
-                    // Skip if this doc belongs to me (on my device)
-                    if updatedUserID == currentUserID {
-                        print("DEBUG: Skipping my own doc: \(updatedUserID)")
-                        return
-                    }
-
-                    switch change.type {
-                    case .added:
-                        if !self.interactedUsers.contains(updatedUserID) {
-                            print("DEBUG: [Feed] Adding user \(updatedUserID).")
-                            addedUsers.append(updatedUser)
+                    // Attempt decoding
+                    do {
+                        let updatedUser = try change.document.data(as: UserProfile.self)
+                        guard let updatedUserID = updatedUser.id else {
+                            print("DEBUG: Decoded user has nil 'id' => skipping user. (Doc: \(change.document.documentID))")
+                            return
                         }
-                    case .modified:
-                        // If this user is currently being viewed, skip updates
-                        if currentIndex < users.count,
-                           users[currentIndex].id == updatedUserID {
-                            print("DEBUG: Ignoring modifications for user currently on screen.")
+                        print("DEBUG: Decoded user \(updatedUserID). name: \(String(describing: updatedUser.name)), rank: \(String(describing: updatedUser.rank))")
+
+                        // Optionally skip if doc belongs to me
+                        if updatedUserID == currentUserID {
+                            print("DEBUG: Skipping doc since user is me: \(updatedUserID)")
                             return
                         }
 
-                        // Update the user in the list or re-add them if necessary
-                        if let index = self.users.firstIndex(where: { $0.id == updatedUserID }) {
-                            self.users[index] = updatedUser
-                        } else if !self.interactedUsers.contains(updatedUserID) {
-                            print("DEBUG: Re-adding updated user \(updatedUserID).")
-                            self.users.append(updatedUser)
+                        switch change.type {
+                        case .added:
+                            // Check if already in self.interactedUsers
+                            if self.interactedUsers.contains(updatedUserID) {
+                                print("DEBUG: [Feed] doc ADDED => \(updatedUserID) is in interactedUsers => skipping.")
+                            } else {
+                                print("DEBUG: [Feed] doc ADDED => appending user \(updatedUserID).")
+                                addedUsers.append(updatedUser)
+                            }
+
+                        case .modified:
+                            // If this user is the one on screen
+                            if currentIndex < self.users.count,
+                               self.users[currentIndex].id == updatedUserID {
+                                print("DEBUG: [Feed] doc MODIFIED => ignoring because user is currently on screen => skipping.")
+                                return
+                            }
+
+                            // If they're already in the array, update them
+                            if let index = self.users.firstIndex(where: { $0.id == updatedUserID }) {
+                                print("DEBUG: [Feed] doc MODIFIED => updating existing user at index \(index).")
+                                self.users[index] = updatedUser
+                            } else if !self.interactedUsers.contains(updatedUserID) {
+                                print("DEBUG: [Feed] doc MODIFIED => user not in array, adding user \(updatedUserID).")
+                                self.users.append(updatedUser)
+                            } else {
+                                print("DEBUG: [Feed] doc MODIFIED => user is in interactedUsers => skipping.")
+                            }
+
+                        case .removed:
+                            print("DEBUG: [Feed] doc REMOVED => userID=\(updatedUserID). Removing from local array.")
+                            removedUserIDs.append(updatedUserID)
+
+                        default:
+                            print("DEBUG: [Feed] doc change type was \(change.type). Not explicitly handled.")
                         }
 
-                    case .removed:
-                        print("DEBUG: [Feed] Removing user \(updatedUserID).")
-                        removedUserIDs.append(updatedUserID)
-                    default:
-                        break
+                    } catch let decodingError as DecodingError {
+                        print("DEBUG: [Feed] DecodingError for doc \(change.document.documentID): \(decodingError)")
+                        print("DEBUG: Raw data => \(change.document.data())")
+
+                    } catch {
+                        print("DEBUG: [Feed] Unexpected error decoding doc \(change.document.documentID): \(error)")
+                        print("DEBUG: Raw data => \(change.document.data())")
                     }
                 }
 
-                // Append or remove users as necessary
+                // Add newly discovered users
                 if !addedUsers.isEmpty {
+                    print("DEBUG: [Feed] Appending \(addedUsers.count) newly added user(s).")
                     self.users.append(contentsOf: addedUsers)
                 }
+
+                // Remove any that were removed
                 if !removedUserIDs.isEmpty {
+                    print("DEBUG: [Feed] Removing \(removedUserIDs.count) user(s) from local array.")
                     self.users.removeAll { removedUserIDs.contains($0.id ?? "") }
                 }
 
-                // Sort users
-                self.users.sort(by: {
-                    ($0.createdAt?.dateValue() ?? Date()) < ($1.createdAt?.dateValue() ?? Date())
-                })
+                // Re-sort
+                self.users.sort { ($0.createdAt?.dateValue() ?? Date()) < ($1.createdAt?.dateValue() ?? Date()) }
 
-                print("DEBUG: [Feed] Final user list count: \(self.users.count).")
+                print("DEBUG: [Feed] Final self.users count => \(self.users.count)")
             }
     }
+
 
     
     
@@ -776,57 +817,82 @@ struct ContentView: View {
 
     func fetchAllUsers(includeCurrentUser: Bool = false, completion: @escaping () -> Void) {
         guard let currentUserID = Auth.auth().currentUser?.uid else {
+            print("DEBUG: fetchAllUsers => currentUserID is nil, returning early.")
             completion()
             return
         }
         let db = Firestore.firestore()
+        print("DEBUG: fetchAllUsers => about to getDocuments from 'users' collection...")
+
         db.collection("users").getDocuments { snapshot, error in
             if let error = error {
-                print("DEBUG: Firestore query failed: \(error.localizedDescription)")
+                print("DEBUG: fetchAllUsers => Error from Firestore: \(error.localizedDescription)")
                 completion()
                 return
             }
 
             guard let docs = snapshot?.documents else {
-                print("DEBUG: No user documents found.")
+                print("DEBUG: fetchAllUsers => No documents found.")
                 completion()
                 return
             }
+
+            print("DEBUG: fetchAllUsers => retrieved \(docs.count) user docs from Firestore.")
 
             var fetched: [UserProfile] = []
 
             for doc in docs {
                 do {
-                    var user = try doc.data(as: UserProfile.self)
-                    guard let userID = user.id else { continue }
-
-                    // Optionally skip current user
-                    if userID == currentUserID && !includeCurrentUser {
+                    let user = try doc.data(as: UserProfile.self)
+                    guard let userID = user.id else {
+                        print("DEBUG: fetchAllUsers => user doc \(doc.documentID) has nil 'id', skipping.")
                         continue
                     }
 
-                    // If the user was recently updated and meets feed criteria, re-add them
-                    if !self.interactedUsers.contains(userID) {
-                        fetched.append(user)
+                    // Optionally skip current user
+                    if userID == currentUserID && !includeCurrentUser {
+                        print("DEBUG: fetchAllUsers => skipping currentUser (docID=\(doc.documentID)).")
+                        continue
                     }
 
+                    // Check if in interactedUsers
+                    if self.interactedUsers.contains(userID) {
+                        print("DEBUG: fetchAllUsers => skipping user \(userID) => in interactedUsers.")
+                        continue
+                    }
+
+                    print("DEBUG: fetchAllUsers => docID=\(doc.documentID), decoded userID=\(userID), name=\(user.name ?? "Unknown") => adding to 'fetched' array.")
+                    fetched.append(user)
+
+                } catch let decodingError as DecodingError {
+                    print("DEBUG: fetchAllUsers => DecodingError for docID=\(doc.documentID): \(decodingError)")
+                    print("DEBUG: Raw doc data => \(doc.data())")
+
                 } catch {
-                    print("DEBUG: parse error: \(error.localizedDescription)")
+                    print("DEBUG: fetchAllUsers => Other error decoding docID=\(doc.documentID): \(error.localizedDescription)")
+                    print("DEBUG: Raw doc data => \(doc.data())")
                 }
             }
 
-            // Now merge them instead of overwriting
+            // Now you can merge them or just set them, depending on your logic
+            print("DEBUG: fetchAllUsers => total fetched (before merging): \(fetched.count)")
+
+            // For example, you might do:
             for newUser in fetched {
                 if let index = self.users.firstIndex(where: { $0.id == newUser.id }) {
+                    print("DEBUG: fetchAllUsers => updating existing user at index \(index) => userID=\(newUser.id ?? "")")
                     self.users[index] = newUser
                 } else {
+                    print("DEBUG: fetchAllUsers => appending new userID=\(newUser.id ?? "")")
                     self.users.append(newUser)
                 }
             }
 
+            // done
             completion()
         }
     }
+
 
 
 
