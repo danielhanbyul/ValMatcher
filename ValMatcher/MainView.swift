@@ -50,15 +50,17 @@ struct MainView: View {
                             QuestionsView(
                                 userProfile: Binding(
                                     get: {
-                                        self.currentUser ?? UserProfile(id: "",
-                                                                        name: "",
-                                                                        rank: "",
-                                                                        imageName: "",
-                                                                        age: "",
-                                                                        server: "",
-                                                                        answers: [:],
-                                                                        hasAnsweredQuestions: false,
-                                                                        mediaItems: [])
+                                        self.currentUser ?? UserProfile(
+                                            id: "",
+                                            name: "",
+                                            rank: "",
+                                            imageName: "",
+                                            age: 0,  // Fixed to be an integer
+                                            server: "",
+                                            answers: [:],
+                                            hasAnsweredQuestions: false,
+                                            mediaItems: []
+                                        )
                                     },
                                     set: { self.currentUser = $0 }
                                 ),
@@ -126,12 +128,24 @@ struct MainView: View {
                             return nil
                         }
 
+                        // Handle age conversion safely
+                        let ageValue = data["age"]
+                        let userAge: Int
+
+                        if let ageInt = ageValue as? Int {
+                            userAge = ageInt
+                        } else if let ageString = ageValue as? String, let ageConverted = Int(ageString) {
+                            userAge = ageConverted
+                        } else {
+                            userAge = 0  // Default to 0 if parsing fails
+                        }
+
                         self.currentUser = UserProfile(
                             id: document.documentID,
                             name: data["name"] as? String ?? "",
                             rank: data["rank"] as? String ?? "",
                             imageName: data["imageName"] as? String ?? "",
-                            age: data["age"] as? String ?? "",
+                            age: userAge,  // Fixed conversion issue
                             server: data["server"] as? String ?? "",
                             answers: data["answers"] as? [String: String] ?? [:],
                             hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false,

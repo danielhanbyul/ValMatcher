@@ -70,7 +70,10 @@ class UserProfileViewModel: ObservableObject {
         updatedAnswers: [String: String]
     ) {
         // Update the local user so the UI stays in sync
-        user.age = newAge
+        if let ageInt = Int(newAge) {
+            user.age = ageInt
+        }
+
         user.rank = newRank
         user.server = newServer
         user.mediaItems = mediaItems

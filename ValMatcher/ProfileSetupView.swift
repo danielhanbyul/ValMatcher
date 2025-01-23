@@ -109,7 +109,7 @@ struct ProfileSetupView_Previews: PreviewProvider {
             name: "Preview User",
             rank: "Gold 3",
             imageName: "preview",
-            age: "24",
+            age: 24,
             server: "NA",
             answers: [:],
             hasAnsweredQuestions: false,

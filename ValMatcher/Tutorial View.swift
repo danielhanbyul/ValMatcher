@@ -19,9 +19,10 @@ struct TutorialView: View {
     @State private var cardToInstructionsSpacing: CGFloat = 0.19  // Percentage of screen height
 
     let tutorialCards: [UserProfile] = [
-        UserProfile(id: "1", name: "User1", rank: "Silver", imageName: "", age: "21", server: "NA", answers: [:], hasAnsweredQuestions: true, mediaItems: []),
-        UserProfile(id: "2", name: "User2", rank: "Gold", imageName: "", age: "24", server: "EU", answers: [:], hasAnsweredQuestions: true, mediaItems: [])
+        UserProfile(id: "1", name: "User1", rank: "Silver", imageName: "", age: 21, server: "NA", answers: [:], hasAnsweredQuestions: true, mediaItems: []),
+        UserProfile(id: "2", name: "User2", rank: "Gold", imageName: "", age: 24, server: "EU", answers: [:], hasAnsweredQuestions: true, mediaItems: [])
     ]
+
 
     var body: some View {
         GeometryReader { geometry in

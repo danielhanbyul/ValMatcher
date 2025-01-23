@@ -60,7 +60,7 @@ struct MatchNotificationView_Previews: PreviewProvider {
             name: "Alice",
             rank: "Bronze 1",
             imageName: "alice", // Make sure this matches an existing image in your assets
-            age: "21",
+            age: 21,
             server: "NA",
             answers: [:],
             hasAnsweredQuestions: true,

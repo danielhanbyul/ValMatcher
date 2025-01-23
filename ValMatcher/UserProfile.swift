@@ -14,7 +14,7 @@ struct UserProfile: Identifiable, Codable, Equatable {
     var name: String
     var rank: String?
     var imageName: String?
-    var age: String
+    var age: Int
     var server: String?
     var answers: [String: String]
     var hasAnsweredQuestions: Bool
@@ -23,7 +23,7 @@ struct UserProfile: Identifiable, Codable, Equatable {
     var hasSeenTutorial: Bool
     var profileUpdated: Bool?
 
-    init(id: String? = nil, name: String, rank: String, imageName: String, age: String, server: String, answers: [String: String], hasAnsweredQuestions: Bool, mediaItems: [MediaItem]? = nil, createdAt: Timestamp? = nil, hasSeenTutorial: Bool = false, profileUpdated: Bool = false) {
+    init(id: String? = nil, name: String, rank: String, imageName: String, age: Int, server: String, answers: [String: String], hasAnsweredQuestions: Bool, mediaItems: [MediaItem]? = nil, createdAt: Timestamp? = nil, hasSeenTutorial: Bool = false, profileUpdated: Bool = false) {
         self.id = id
         self.name = name
         self.rank = rank
@@ -44,7 +44,7 @@ extension UserProfile {
         self.name = updatedUser.name.isEmpty ? self.name : updatedUser.name
         self.rank = updatedUser.rank ?? self.rank
         self.imageName = updatedUser.imageName ?? self.imageName
-        self.age = updatedUser.age.isEmpty ? self.age : updatedUser.age
+        self.age = updatedUser.age > 0 ? updatedUser.age : self.age
         self.server = updatedUser.server ?? self.server
         self.answers = updatedUser.answers.isEmpty ? self.answers : updatedUser.answers
         self.hasAnsweredQuestions = updatedUser.hasAnsweredQuestions

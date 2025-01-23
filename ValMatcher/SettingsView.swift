@@ -47,12 +47,13 @@ struct SettingsView_Previews: PreviewProvider {
                 name: "",
                 rank: "",
                 imageName: "",
-                age: "",
+                age: 0, // Change empty string to a default integer value
                 server: "",
                 answers: [:],
                 hasAnsweredQuestions: false,
-                mediaItems: []  // Replace `additionalImages` with `mediaItems`
-            )),
+                mediaItems: []
+            ))
+,
             isSignedIn: .constant(true),
             isShowingLoginView: .constant(false)
         )

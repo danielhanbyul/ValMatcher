@@ -146,13 +146,25 @@ struct LoginView: View {
                     return MediaItem(type: url.contains(".mp4") ? .video : .image, url: URL(string: url)!)
                 }
 
+                // Handling age safely, ensuring it's retrieved as an Int
+                var userAge: Int = 0
+                if let ageValue = data["age"] {
+                    if let ageInt = ageValue as? Int {
+                        userAge = ageInt
+                    } else if let ageString = ageValue as? String, let ageConverted = Int(ageString) {
+                        userAge = ageConverted
+                    } else {
+                        print("DEBUG: Invalid age format in Firestore")
+                    }
+                }
+
                 DispatchQueue.main.async {
                     self.currentUser = UserProfile(
                         id: document.documentID,
                         name: data["name"] as? String ?? "",
                         rank: data["rank"] as? String ?? "",
                         imageName: data["imageName"] as? String ?? "",
-                        age: data["age"] as? String ?? "",
+                        age: userAge,  // Updated to use the safely converted age
                         server: data["server"] as? String ?? "",
                         answers: data["answers"] as? [String: String] ?? [:],
                         hasAnsweredQuestions: data["hasAnsweredQuestions"] as? Bool ?? false,
@@ -164,6 +176,7 @@ struct LoginView: View {
             }
         }
     }
+
 }
 
 struct LoginView_Previews: PreviewProvider {

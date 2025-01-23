@@ -313,12 +313,25 @@ struct QuestionsView: View {
             selectedOption = ""
         } else {
             questions[currentQuestionIndex].answer = answer
-            userProfile.answers[currentQ.text] = answer
+            
+            // Check if this is the age question and save it as an integer
+            if currentQ.text.lowercased().contains("how old are you") {
+                if let ageValue = Int(answer) {
+                    userProfile.age = ageValue
+                } else {
+                    errorMessage = "Please enter a valid number for your age."
+                    return
+                }
+            } else {
+                userProfile.answers[currentQ.text] = answer
+            }
+
             answer = ""
         }
 
         currentQuestionIndex += 1
     }
+
 
     private func isValidAnswer(for question: Question) -> Bool {
         switch question.type {
@@ -340,11 +353,6 @@ struct QuestionsView: View {
         }
     }
 
-    // ================================
-    // MARK: - NEW finishQuestionsAndSaveProfile
-    // ================================
-    // Rewritten to use MediaUploader for final public URLs,
-    // matching the logic in ProfileView.
     private func finishQuestionsAndSaveProfile() {
         guard let uid = Auth.auth().currentUser?.uid else {
             print("ERROR: No authenticated user found.")
@@ -403,8 +411,19 @@ struct QuestionsView: View {
                 userProfile.mediaItems = uploadedMedia
                 userProfile.hasAnsweredQuestions = true
 
-                try await saveUserProfileAndMediaAsync() // Use an async version
+                // Additional processing for profile questions (e.g., age)
+                if let ageString = userProfile.answers["how old are you?"], let ageValue = Int(ageString) {
+                    userProfile.age = ageValue
+                } else {
+                    print("DEBUG: Age answer is missing or invalid.")
+                }
+
+                // Save updated profile data
+                try await saveUserProfileAndMediaAsync()
+
                 hasAnsweredQuestions = true
+                print("DEBUG: User profile saved successfully.")
+
             } catch {
                 print("DEBUG: Error uploading media: \(error.localizedDescription)")
                 mediaErrorMessage = "Failed to upload media. Please try again."
@@ -413,6 +432,7 @@ struct QuestionsView: View {
             isUploadingMedia = false
         }
     }
+
 
     // ================================
     // MARK: - The old uploadMedia function
