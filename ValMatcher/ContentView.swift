@@ -99,6 +99,8 @@ struct ContentView: View {
                     }
                 }
             }
+            
+            
 
             if showInAppMatchNotification {
                 ZStack {
@@ -249,6 +251,14 @@ struct ContentView: View {
                 print("DEBUG: isInChatView set to false, currentChatID reset to nil")
             }
         }
+    }
+    
+    private func adjustedSpacing() -> CGFloat {
+        return UIDevice.current.userInterfaceIdiom == .pad ? 40 : 20
+    }
+
+    private func adjustedPadding() -> CGFloat {
+        return UIDevice.current.userInterfaceIdiom == .pad ? 60 : 40
     }
     
     
@@ -551,25 +561,25 @@ struct ContentView: View {
                 .padding(.horizontal)
 
             // Display media for the current user
-            if currentIndex < users.count, let mediaItems = users[currentIndex].mediaItems {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack {
-                        ForEach(mediaItems, id: \.url) { media in
-                            mediaThumbnailView(for: media)
-                                .frame(width: UIScreen.main.bounds.width - 40, height: 200)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .padding(.vertical, 5)
-                                .onTapGesture {
-                                    // Enable fullscreen playback when tapped
-                                    if media.type == .video {
-                                        selectedVideoURL = IdentifiableURL(url: media.url)
-                                    }
-                                }
-                        }
-                    }
-                }
-                .padding(.horizontal)
-            }
+//            if currentIndex < users.count, let mediaItems = users[currentIndex].mediaItems {
+//                ScrollView(.horizontal, showsIndicators: false) {
+//                    HStack {
+//                        ForEach(mediaItems, id: \.url) { media in
+//                            mediaThumbnailView(for: media)
+//                                .frame(width: UIScreen.main.bounds.width - 40, height: 200)
+//                                .clipShape(RoundedRectangle(cornerRadius: 10))
+//                                .padding(.vertical, 5)
+//                                .onTapGesture {
+//                                    // Enable fullscreen playback when tapped
+//                                    if media.type == .video {
+//                                        selectedVideoURL = IdentifiableURL(url: media.url)
+//                                    }
+//                                }
+//                        }
+//                    }
+//                }
+//                .padding(.horizontal)
+//            }
         }
     }
 
@@ -613,9 +623,13 @@ struct ContentView: View {
                             player.play()
                             addReplayObserver()
                         }
+                        .onDisappear {
+                            player.pause()
+                            }
                         .onTapGesture {
                             // If horizontal => open fullscreen
                             if isHorizontal {
+                                player.pause()
                                 showFullScreenPlayer = true
                             } else {
                                 // Vertical => toggle play/pause
@@ -873,6 +887,9 @@ struct ContentView: View {
                     print("DEBUG: Raw doc data => \(doc.data())")
                 }
             }
+            
+            fetched.shuffle()
+                    print("DEBUG: fetchAllUsers => shuffled users count: \(fetched.count)")
 
             // Now you can merge them or just set them, depending on your logic
             print("DEBUG: fetchAllUsers => total fetched (before merging): \(fetched.count)")
@@ -1888,6 +1905,15 @@ struct UserCardView: View {
             return nil
         }
     }
+    
+    // ✅ Dynamically adjust card size for iPads
+        private func adjustedCardWidth() -> CGFloat {
+            return UIDevice.current.userInterfaceIdiom == .pad ? UIScreen.main.bounds.width * 0.7 : UIScreen.main.bounds.width * 0.9
+        }
+
+        private func adjustedCardHeight() -> CGFloat {
+            return UIDevice.current.userInterfaceIdiom == .pad ? UIScreen.main.bounds.height * 0.6 : UIScreen.main.bounds.height * 0.5
+        }
 }
 
 
@@ -2033,8 +2059,38 @@ struct VideoPlayerView: View {
         }
         .fullScreenCover(isPresented: $showFullScreenPlayer) {
             FullScreenVideoPlayer(url: url, isHorizontalVideo: isHorizontalVideo)
+                .onAppear {
+                    if UIDevice.current.userInterfaceIdiom == .pad {
+                        DispatchQueue.main.async {
+                            if let delegate = UIApplication.shared.delegate as? AppDelegate {
+                                delegate.orientationLock = .all
+                                UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
+                            }
+                        }
+                    }
+                }
+                .onDisappear {
+                    if UIDevice.current.userInterfaceIdiom == .pad {
+                        DispatchQueue.main.async {
+                            if let delegate = UIApplication.shared.delegate as? AppDelegate {
+                                delegate.orientationLock = .portrait
+                                UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
+                            }
+                        }
+                    }
+                }
         }
+
     }
+    
+    // ✅ Adjusts video size based on device type
+        private func adjustedWidth(for geometry: GeometryProxy) -> CGFloat {
+            return UIDevice.current.userInterfaceIdiom == .pad ? geometry.size.width * 0.9 : geometry.size.width
+        }
+
+        private func adjustedHeight(for geometry: GeometryProxy) -> CGFloat {
+            return UIDevice.current.userInterfaceIdiom == .pad ? geometry.size.height * 0.9 : geometry.size.height
+        }
 
     // Function to calculate scale for both horizontal and vertical videos
     private func calculateScale(geometry: GeometryProxy) -> CGFloat {

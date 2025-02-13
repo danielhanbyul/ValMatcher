@@ -2,20 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleDisplayName</key>
 	<string>ValMatcher</string>
 	<key>CFBundleExecutable</key>
 	<string>ValMatcher</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
 	<string>ValMatcher</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.0</string>
+	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1.0</string>
 	<key>INFOPLIST_FILE</key>
@@ -36,17 +36,11 @@
 	<string>LaunchScreen.storyboard</string>
 	<key>UIRequiresFullScreen</key>
 	<true/>
-	<key>UIStatusBarStyle</key>
-	<string></string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 </dict>
 </plist>

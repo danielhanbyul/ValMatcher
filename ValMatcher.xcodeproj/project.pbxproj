@@ -124,6 +124,7 @@
 		A9634DC52D1A3A6F009ED28F /* addnotifsSentTomatches.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = addnotifsSentTomatches.swift; sourceTree = "<group>"; };
 		A9634DC72D1BA45A009ED28F /* test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = test.swift; sourceTree = "<group>"; };
 		A96F022E2C760E7600567DC6 /* NotificationViewBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationViewBanner.swift; sourceTree = "<group>"; };
+		A96FDB2C2D5C0EE600FA6310 /* ValMatcher copy-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = "ValMatcher copy-Info.plist"; path = "/Users/danielhan/Documents/ValMatcher/ValMatcher copy-Info.plist"; sourceTree = "<absolute>"; };
 		A971C76E2C4C6C6200E9634A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A97966442CC72514009BDD11 /* Tutorial View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tutorial View.swift"; sourceTree = "<group>"; };
 		A984D4DA2C1A222800BB75DB /* MatchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchView.swift; sourceTree = "<group>"; };
@@ -208,6 +209,7 @@
 				A9551CCC2C12BAF50002AF0B /* ValMatcherUITests */,
 				A9551CB02C12BAF30002AF0B /* Products */,
 				A941173F2C84598800DD70FD /* Frameworks */,
+				A96FDB2C2D5C0EE600FA6310 /* ValMatcher copy-Info.plist */,
 			);
 			sourceTree = "<group>";
 		};
@@ -646,7 +648,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ValMatcher/ValMatcher.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "\"ValMatcher/Preview Content\"";
 				DEVELOPMENT_TEAM = ZLKH77N9TP;
 				ENABLE_PREVIEWS = YES;
@@ -662,9 +664,13 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourname.ValMatcher;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -678,7 +684,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ValMatcher/ValMatcher.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "\"ValMatcher/Preview Content\"";
 				DEVELOPMENT_TEAM = ZLKH77N9TP;
 				ENABLE_PREVIEWS = YES;
@@ -694,9 +700,13 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourname.ValMatcher;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

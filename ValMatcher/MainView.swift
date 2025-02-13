@@ -10,15 +10,18 @@ import Firebase
 
 struct MainView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    
     @State private var currentUser: UserProfile? = nil
     @State private var isSignedIn = false
     @State private var hasAnsweredQuestions = false
     @State private var isShowingLoginView = true
     @State private var isTutorialSeen: Bool = false // Assume false until confirmed
     @State private var isLoading = true // To handle loading state
+    
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             if isLoading {
                 Text("Loading...")
                     .font(.title)
@@ -184,6 +187,27 @@ struct MainView: View {
                 print("Tutorial completion saved.")
                 UserDefaults.standard.set(true, forKey: "isTutorialSeen")
             }
+        }
+    }
+}
+
+extension View {
+    func applyiPadFullScreenFix() -> some View {
+        self.modifier(iPadFullScreenModifier())
+    }
+}
+
+struct iPadFullScreenModifier: ViewModifier {
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+
+    func body(content: Content) -> some View {
+        if horizontalSizeClass == .regular {
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black.edgesIgnoringSafeArea(.all))
+                .navigationBarHidden(true) // Hide sidebar effect on iPad
+        } else {
+            content
         }
     }
 }

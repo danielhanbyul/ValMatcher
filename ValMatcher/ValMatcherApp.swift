@@ -90,11 +90,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
     // MARK: - Notification Permissions
     private func checkNotificationPermissions() {
-        print("DEBUG: Checking notification permissions.")
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             switch settings.authorizationStatus {
             case .notDetermined:
-                print("DEBUG: Notifications not determined. Requesting permissions.")
+                // Request permissions
                 self.requestNotificationPermission()
             case .denied:
                 print("DEBUG: Notifications are denied.")
@@ -107,7 +106,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 
     private func requestNotificationPermission() {
-        print("DEBUG: Requesting notification permissions.")
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
                 print("ERROR: Failed to request notification permissions: \(error.localizedDescription)")
@@ -122,13 +120,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         }
     }
 
+
     // MARK: - APNs Registration
-    func application(_ application: UIApplication,
-                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         print("DEBUG: Successfully registered for remote notifications.")
         Messaging.messaging().apnsToken = deviceToken
         print("DEBUG: APNs token passed to Firebase.")
     }
+
 
     func application(_ application: UIApplication,
                      didFailToRegisterForRemoteNotificationsWithError error: Error) {
@@ -218,10 +217,16 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 
     // MARK: - Orientation Lock
-    func application(_ application: UIApplication,
-                     supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
-        return self.orientationLock
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            // Default to portrait for iPad, but allow all orientations for full-screen video
+            return self.orientationLock == .all ? .all : .portrait
+        } else {
+            return self.orientationLock // iPhone remains unchanged
+        }
     }
+
+    
 }
 
 // MARK: - Extend AppDelegate for "addNotificationsSentToMatches" if needed
