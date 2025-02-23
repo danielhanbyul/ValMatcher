@@ -197,20 +197,25 @@ struct DMHomeView: View {
             if isEditing {
                 toggleSelection(for: match.id ?? "")
             } else {
+                // Guard against an invalid chat ID
+                guard let validChatID = match.id, !validChatID.isEmpty else {
+                    print("DEBUG: Chat ID is invalid, aborting navigation.")
+                    return
+                }
                 self.selectedMatch = match
-                if let matchID = match.id {
-                    self.currentChatID = matchID
-                    self.isInChatView = true
-                    self.isChatActive = true
-                    print("DEBUG: User selected matchID: \(matchID)")
-                    
-                    // Only mark messages as read for this specific chat
-                    if let index = matches.firstIndex(where: { $0.id == matchID }), matches[index].hasUnreadMessages == true {
-                        markMessagesAsRead(for: match) // This only affects the current chat
-                    }
+                self.currentChatID = validChatID
+                self.isInChatView = true
+                self.isChatActive = true
+                print("DEBUG: User selected matchID: \(validChatID)")
+                
+                // Only mark messages as read for this specific chat
+                if let index = matches.firstIndex(where: { $0.id == validChatID }),
+                   matches[index].hasUnreadMessages == true {
+                    markMessagesAsRead(for: match)
                 }
             }
         }
+
         .background(
             isEditing && selectedMatches.contains(match.id ?? "") ?
             Color.gray.opacity(0.3) : Color.black.opacity(0.7)
@@ -347,43 +352,47 @@ struct DMHomeView: View {
             db.collection("matches").whereField("user1", isEqualTo: currentUserID),
             db.collection("matches").whereField("user2", isEqualTo: currentUserID)
         ]
-
+        
+        // Listen to changes on both queries
         for query in queries {
             query.addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("Error in real-time listener: \(error.localizedDescription)")
                     return
                 }
-
+                
                 guard let documents = snapshot?.documents else { return }
-
-                var tempMatches: [String: Chat] = [:] // Temporary dictionary for deduplication
-                let dispatchGroup = DispatchGroup()
-
+                
+                // Process each document from the snapshot
                 for document in documents {
                     do {
-                        var match = try document.data(as: Chat.self)
-                        dispatchGroup.enter()
-                        self.updateUnreadMessageCount(for: match, currentUserID: currentUserID) { updatedMatch in
-                            if let matchID = updatedMatch.id {
-                                tempMatches[matchID] = updatedMatch
+                        let match = try document.data(as: Chat.self)
+                        if let matchID = match.id {
+                            // Try to find the existing match in the array
+                            if let index = self.matches.firstIndex(where: { $0.id == matchID }) {
+                                // Update existing match
+                                self.matches[index] = match
+                            } else {
+                                // Insert new match
+                                self.matches.append(match)
                             }
-                            dispatchGroup.leave()
                         }
                     } catch {
                         print("Error decoding match: \(error.localizedDescription)")
                     }
                 }
-
-                dispatchGroup.notify(queue: .main) {
-                    self.matches = Array(tempMatches.values).sorted {
-                        ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) > ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
-                    }
-                    print("DEBUG: Real-time matches updated and sorted, total: \(self.matches.count)")
+                
+                // Sort the matches array after processing changes
+                self.matches.sort {
+                    ($0.lastMessageTimestamp?.dateValue() ?? Date.distantPast) >
+                    ($1.lastMessageTimestamp?.dateValue() ?? Date.distantPast)
                 }
+                
+                print("DEBUG: Real-time matches updated, total: \(self.matches.count)")
             }
         }
     }
+
 
 
     private func updateUnreadMessageCount(for match: Chat, currentUserID: String, completion: @escaping (Chat) -> Void) {
