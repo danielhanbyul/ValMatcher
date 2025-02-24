@@ -10,6 +10,7 @@ import Firebase
 import UserNotifications
 import FirebaseMessaging
 import UIKit
+import FirebaseFunctions
 
 @main
 struct ValMatcherApp: App {
@@ -433,55 +434,30 @@ class AppState: ObservableObject {
                 return
             }
             // Actually send via FCM
-            self.sendPushNotification(to: fcmToken, title: "Match Found!", body: body)
+            self.sendPushNotificationViaCloudFunction(to: fcmToken, title: "Match Found!", body: body)
         }
     }
 
-    // MARK: - FCM HTTPS call
-    private func sendPushNotification(to fcmToken: String, title: String, body: String) {
-        let urlString = "https://fcm.googleapis.com/fcm/send"
-        guard let url = URL(string: urlString) else { return }
+    
 
-        // TODO: Replace with your actual Server Key from the Firebase Console
-        let serverKey = "YOUR_SERVER_KEY_HERE"
-
-        let notification: [String: Any] = [
-            "to": fcmToken,
-            "notification": [
-                "title": title,
-                "body": body,
-                "sound": "default"
-            ],
-            "data": [
-                "match": "yes"
-            ]
+    // MARK: - Cloud Function call for push notifications (New)
+    private func sendPushNotificationViaCloudFunction(to fcmToken: String, title: String, body: String) {
+        let data: [String: Any] = [
+            "fcmToken": fcmToken,
+            "title": title,
+            "body": body
         ]
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("key=\(serverKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: notification, options: [])
-
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        
+        // Call the Cloud Function named "sendPushNotification"
+        Functions.functions().httpsCallable("sendPushNotification").call(data) { result, error in
             if let error = error {
-                print("DEBUG: Error sending push notification: \(error.localizedDescription)")
-                return
-            }
-            if let httpResponse = response as? HTTPURLResponse {
-                if httpResponse.statusCode == 200 {
-                    print("DEBUG: Push notification sent successfully to token: \(fcmToken)")
-                } else {
-                    print("DEBUG: Push notification failed with status: \(httpResponse.statusCode)")
-                    if let data = data,
-                       let responseString = String(data: data, encoding: .utf8) {
-                        print("DEBUG: Response: \(responseString)")
-                    }
-                }
+                print("DEBUG: Error calling Cloud Function: \(error.localizedDescription)")
+            } else if let resultData = result?.data as? [String: Any] {
+                print("DEBUG: Cloud Function result: \(resultData)")
             }
         }
-        task.resume()
     }
+
 
     // MARK: - (Optional) If you still want a SwiftUI in-app alert for *other* use cases
     func showMatchNotification(message: String) {

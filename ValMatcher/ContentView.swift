@@ -12,6 +12,7 @@ import AVKit
 import FirebaseAnalytics
 import UserNotifications
 import Kingfisher
+import FirebaseFunctions
 
 struct MessageListener {
     let listener: ListenerRegistration
@@ -1104,7 +1105,12 @@ struct ContentView: View {
                     } else {
                         self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: true)
                         if UIApplication.shared.applicationState != .active {
-                            self.sendPushNotification(for: matchID)
+                            // Fetch latest message data and then send push notification via Cloud Function
+                            self.fetchLatestMessageData(for: matchID) { fcmToken, title, body in
+                                if let token = fcmToken, let title = title, let body = body {
+                                    self.sendPushNotificationViaCloudFunction(to: token, title: title, body: body)
+                                }
+                            }
                         }
                     }
                 }
@@ -1127,7 +1133,11 @@ struct ContentView: View {
                     } else {
                         self.processSnapshot(snapshot: snapshot, currentUserID: currentUserID, isUser1: false)
                         if UIApplication.shared.applicationState != .active {
-                            self.sendPushNotification(for: matchID)
+                            self.fetchLatestMessageData(for: matchID) { fcmToken, title, body in
+                                if let token = fcmToken, let title = title, let body = body {
+                                    self.sendPushNotificationViaCloudFunction(to: token, title: title, body: body)
+                                }
+                            }
                         }
                     }
                 }
@@ -1136,6 +1146,57 @@ struct ContentView: View {
 
         self.unreadMessagesListener = ListenerRegistrationGroup(listeners: listeners)
     }
+
+    // NEW: Helper to fetch the latest message data and recipient's FCM token
+    private func fetchLatestMessageData(for matchID: String, completion: @escaping (String?, String?, String?) -> Void) {
+        let db = Firestore.firestore()
+        // Fetch the latest message from the match's "messages" subcollection
+        db.collection("matches").document(matchID).collection("messages")
+            .order(by: "timestamp", descending: true)
+            .limit(to: 1)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error fetching latest message: \(error.localizedDescription)")
+                    completion(nil, nil, nil)
+                    return
+                }
+                guard let document = snapshot?.documents.first else {
+                    completion(nil, nil, nil)
+                    return
+                }
+                let data = document.data()
+                let messageText = data["content"] as? String ?? "New message"
+                let senderName = data["senderName"] as? String ?? "Someone"
+                let title = "New Message from \(senderName)"
+                let body = messageText
+
+                // Now fetch the match document to determine recipient's user ID
+                db.collection("matches").document(matchID).getDocument { matchSnapshot, error in
+                    guard let matchData = matchSnapshot?.data(),
+                          let user1 = matchData["user1"] as? String,
+                          let user2 = matchData["user2"] as? String,
+                          let currentUserID = Auth.auth().currentUser?.uid
+                    else {
+                        completion(nil, nil, nil)
+                        return
+                    }
+                    // Determine the recipient: the user in the match that is NOT the current user
+                    let recipientUserID = (currentUserID == user1) ? user2 : user1
+                    // Fetch the recipient's FCM token from the "users" collection
+                    db.collection("users").document(recipientUserID).getDocument { userDoc, error in
+                        guard let userData = userDoc?.data(),
+                              let fcmToken = userData["fcmToken"] as? String, !fcmToken.isEmpty
+                        else {
+                            print("Error: Unable to fetch recipient FCM token for userID \(recipientUserID)")
+                            completion(nil, nil, nil)
+                            return
+                        }
+                        completion(fcmToken, title, body)
+                    }
+                }
+            }
+    }
+
 
     private func sendPushNotification(for matchID: String) {
         guard let currentUserID = Auth.auth().currentUser?.uid else { return }
@@ -1547,56 +1608,30 @@ struct ContentView: View {
             }
             if let fcmToken = data["fcmToken"] as? String, !fcmToken.isEmpty {
                 let message = "\(matchedUserName) has matched with you!"
-                self.sendPushNotification(to: fcmToken, title: "It's a Match!", body: message)
+                self.sendPushNotificationViaCloudFunction(to: fcmToken, title: "It's a Match!", body: message)
             } else {
                 print("No FCM token found for user \(userID)")
             }
         }
     }
 
-    private func sendPushNotification(to fcmToken: String, title: String, body: String) {
-        let urlString = "https://fcm.googleapis.com/fcm/send"
-        let url = URL(string: urlString)!
-        let serverKey = "AIzaSyA-Eew48TEhrZnX80C8lyYcKkuYRx0hNME"
 
-        let notification: [String: Any] = [
-            "to": fcmToken,
-            "notification": [
-                "title": title,
-                "body": body,
-                "sound": "default"
-            ],
-            "data": [
-                "match": "yes"
-            ]
+    private func sendPushNotificationViaCloudFunction(to fcmToken: String, title: String, body: String) {
+        let data: [String: Any] = [
+            "fcmToken": fcmToken,
+            "title": title,
+            "body": body
         ]
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("key=\(serverKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: notification, options: [])
-
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        
+        Functions.functions().httpsCallable("sendPushNotification").call(data) { result, error in
             if let error = error {
-                print("Error sending push notification: \(error.localizedDescription)")
-                return
-            }
-            if let httpResponse = response as? HTTPURLResponse {
-                print("Push notification HTTP response status code: \(httpResponse.statusCode)")
-                if httpResponse.statusCode != 200 {
-                    print("Push notification failed with status code: \(httpResponse.statusCode)")
-                    if let data = data,
-                       let responseString = String(data: data, encoding: .utf8) {
-                        print("Response data: \(responseString)")
-                    }
-                } else {
-                    print("Push notification sent successfully to token: \(fcmToken)")
-                }
+                print("DEBUG: Error calling Cloud Function: \(error.localizedDescription)")
+            } else if let resultData = result?.data as? [String: Any] {
+                print("DEBUG: Cloud Function result: \(resultData)")
             }
         }
-        task.resume()
     }
+
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,

@@ -239,13 +239,13 @@ class ChatViewModel: ObservableObject {
                     print("Error updating chat timestamp: \(error.localizedDescription)")
                 } else {
                     // Successfully sent message, now send push notification to recipient
-                    self?.sendPushNotification(toRecipient: self?.matchID ?? "", message: messageToSend)
+                    self?.sendPushNotificationViaCloudFunction(toRecipient: self?.matchID ?? "", message: messageToSend)
                 }
             }
         }
     }
 
-    private func sendPushNotification(toRecipient recipientID: String, message: String) {
+    private func sendPushNotificationViaCloudFunction(toRecipient recipientID: String, message: String) {
         let db = Firestore.firestore()
 
         // Fetch the recipient's FCM token from Firestore
