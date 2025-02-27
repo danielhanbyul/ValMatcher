@@ -75,6 +75,7 @@ struct DMHomeView: View {
                 destination: ChatView(
                     matchID: selectedMatch?.id ?? "",
                     recipientName: getRecipientName(for: selectedMatch),
+                    recipientUserID: selectedMatch?.recipientUserID ?? "", // Add this line
                     isInChatView: $isInChatView,
                     unreadMessageCount: $totalUnreadMessages
                 )
@@ -96,6 +97,7 @@ struct DMHomeView: View {
             ) {
                 EmptyView()
             }
+
 
         }
         .navigationBarTitle("Messages", displayMode: .inline)

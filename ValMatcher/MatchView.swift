@@ -21,7 +21,11 @@ struct MatchView: View {
     var body: some View {
         ZStack {
             if navigateToChat, let newMatchID = newMatchID, let matchedUser = matchedUser {
-                NavigationLink(destination: DM(matchID: newMatchID, recipientName: matchedUser.name), isActive: $navigateToChat) {
+                NavigationLink(destination: DM(
+                    matchID: newMatchID,
+                    recipientName: matchedUser.name,
+                    recipientUserID: matchedUser.id ?? ""
+                ), isActive: $navigateToChat) {
                     EmptyView()
                 }
             }

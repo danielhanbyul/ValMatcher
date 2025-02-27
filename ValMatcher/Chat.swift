@@ -14,7 +14,7 @@ struct Chat: Codable, Identifiable, Hashable {
     var hasUnreadMessages: Bool?
     var recipientName: String?
     var timestamp: Timestamp?
-    var lastMessageTimestamp: Timestamp?  // Add this to track the latest message timestamp
+    var lastMessageTimestamp: Timestamp?
     var user1: String?
     var user1Image: String?
     var user1Name: String?
@@ -23,7 +23,13 @@ struct Chat: Codable, Identifiable, Hashable {
     var user2Name: String?
     var unreadMessages: [String: Int]?
     var lastMessageSenderID: String?
+
+    // Determine recipientUserID dynamically
+    var recipientUserID: String {
+        return Auth.auth().currentUser?.uid == user1 ? user2 ?? "" : user1 ?? ""
+    }
 }
+
 
 
 extension Chat {
